@@ -145,10 +145,11 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
    - Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter.
 2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
    - Bevor du den Tag [TICKET_CREATED] am Ende deiner Antwort ausgibst, musst du alle notwendigen Informationen vollständig gesammelt haben.
-   - Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer (Raum) eine ZWINGENDE Pflichtangabe! Falls die Raumnummer im Chatverlauf fehlt, frage ZUERST gezielt danach (z. B. "In welchem Raum befindest du dich?").
+   - Raumnummer (Raum): Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer eine ZWINGENDE Pflichtangabe! Frage ZUERST gezielt danach, falls sie fehlt.
+   - Fehlermeldung: Frage den Benutzer ZWINGEND, ob eine Fehlermeldung auf dem Bildschirm angezeigt wird und wie diese lautet. Der Benutzer muss entweder die genaue Fehlermeldung nennen oder explizit bestätigen, dass es keine Fehlermeldung gibt (z. B. "Nein, keine Fehlermeldung, das Bild bleibt einfach schwarz"). Erst wenn diese Angabe (Fehlermeldung oder Bestätigung, dass keine existiert) vorliegt, sind die Voraussetzungen erfüllt.
 3. NEGATIV-REGEL (WICHTIG):
-   - Wenn du noch auf die Rückmeldung des Benutzers wartest, ob ein Lösungsschritt funktioniert hat, oder wenn du nach dem Raum oder Fehlerdetails fragst, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
-   - Der Tag [TICKET_CREATED] darf ausschließlich und ZWINGEND nur dann gesendet werden, wenn die Fehlerdiagnose abgeschlossen ist, alle Informationen (inkl. Raum) vorliegen und das Ticket JETZT FINAL erstellt werden soll.`;
+   - Wenn du noch auf die Rückmeldung des Benutzers wartest (ob ein Lösungsschritt funktioniert hat, welcher Raum betroffen ist oder ob es eine Fehlermeldung gibt), darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
+   - Der Tag [TICKET_CREATED] darf ausschließlich und ZWINGEND nur dann gesendet werden, wenn die Fehlerdiagnose abgeschlossen ist, alle Informationen (inkl. Raum und Fehlermeldungs-Status) vollständig vorliegen und das Ticket JETZT FINAL erstellt werden soll.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
