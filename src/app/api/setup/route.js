@@ -8,7 +8,27 @@ import crypto from 'crypto';
  */
 export async function GET() {
   const required = isSetupRequired();
-  return NextResponse.json({ setupRequired: required });
+  
+  let idpConfigPublic = null;
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'idp_config'").get();
+    if (row) {
+      const parsed = JSON.parse(row.value);
+      idpConfigPublic = {
+        redirectUrl: parsed.redirectUrl || null,
+        logoutText: parsed.logoutText || null
+      };
+    }
+  } catch (e) {
+    console.error('Fehler beim Laden der öffentlichen IdP-Einstellungen:', e);
+  }
+
+  return NextResponse.json({ 
+    setupRequired: required,
+    config: {
+      idp_config: idpConfigPublic
+    }
+  });
 }
 
 /**
