@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { generateChatResponse } from '@/lib/gemini';
+import { generateChatResponse, generateTicketTitle } from '@/lib/gemini';
 import fs from 'fs';
 import path from 'path';
 
@@ -151,9 +151,15 @@ export async function POST(request) {
 
     // 5. Auf Ticket-Erstellung prüfen
     let ticketCreated = false;
+    let proposedTitle = null;
     if (aiResponse.includes('[TICKET_CREATED]')) {
       ticketCreated = true;
       aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
+      try {
+        proposedTitle = await generateTicketTitle(chatHistory);
+      } catch (err) {
+        console.error('Fehler bei der proposedTitle-Generierung:', err);
+      }
     }
 
     // 6. Botnachricht speichern
@@ -175,7 +181,8 @@ export async function POST(request) {
 
     return NextResponse.json({
       text: aiResponse,
-      ticketCreated
+      ticketCreated,
+      proposedTitle
     });
 
   } catch (err) {

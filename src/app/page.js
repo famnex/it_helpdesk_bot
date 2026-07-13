@@ -233,7 +233,7 @@ export default function CustomerChatPage() {
  
       // Falls die KI ein Ticket triggert
       if (data.ticketCreated) {
-        setPendingTicketTitle(userText || 'Support-Anfrage über Chat-Assistent');
+        setPendingTicketTitle(data.proposedTitle || userText || 'Support-Anfrage über Chat-Assistent');
         if (user) {
           // Wenn eingeloggt, aktive Bestätigung anfordern
           setShowConfirmTicket(true);

@@ -135,11 +135,16 @@ Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins
   } else {
     ticketInstruction = `
 REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
-1. Du darfst dem Benutzer die Erstellung eines IT-Support-Tickets NUR DANN anbieten und den Tag [TICKET_CREATED] NUR DANN am Ende deiner Antwort mitsenden, wenn du ALLE notwendigen Informationen vollständig gesammelt hast.
-2. Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer (Raum) eine ZWINGENDE Pflichtangabe!
-3. Falls die Raumnummer noch nicht im bisherigen Chatverlauf genannt wurde, frage ZUERST gezielt danach (z. B. "In welchem Raum befindest du dich?").
-4. WARNUNG: Wenn du noch auf die Antwort des Benutzers bezüglich des Raums oder der Fehlerdetails wartest (d.h. wenn du eine Frage an ihn stellst), darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
-5. Der Tag [TICKET_CREATED] darf ausschließlich und ZWINGEND nur dann gesendet werden, wenn die Raumnummer und alle Details geklärt sind und du bereit bist, das Ticket JETZT FINAL zu erstellen.`;
+1. BIETE ein Support-Ticket NUR in folgenden Fällen an:
+   - Der vorgeschlagene Lösungsweg wurde vom Benutzer ausprobiert und hat nicht funktioniert oder wurde explizit abgelehnt (z. B. "Das funktioniert nicht", "Hilft nicht", "Es geht immer noch nicht").
+   - Der Benutzer fordert explizit die Erstellung eines Tickets.
+   - Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter.
+2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
+   - Bevor du den Tag [TICKET_CREATED] am Ende deiner Antwort ausgibst, musst du alle notwendigen Informationen vollständig gesammelt haben.
+   - Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer (Raum) eine ZWINGENDE Pflichtangabe! Falls die Raumnummer im Chatverlauf fehlt, frage ZUERST gezielt danach (z. B. "In welchem Raum befindest du dich?").
+3. NEGATIV-REGEL (WICHTIG):
+   - Wenn du noch auf die Rückmeldung des Benutzers wartest, ob ein Lösungsschritt funktioniert hat, oder wenn du nach dem Raum oder Fehlerdetails fragst, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
+   - Der Tag [TICKET_CREATED] darf ausschließlich und ZWINGEND nur dann gesendet werden, wenn die Fehlerdiagnose abgeschlossen ist, alle Informationen (inkl. Raum) vorliegen und das Ticket JETZT FINAL erstellt werden soll.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
