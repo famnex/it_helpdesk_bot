@@ -4,8 +4,8 @@ module.exports = {
       name: 'it-helpdesk',
       script: 'node_modules/next/dist/bin/next',
       args: 'start',
-      instances: 'max', // or 1
-      exec_mode: 'cluster', // or 'fork'
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         PORT: 3000,
         NODE_ENV: 'production',
