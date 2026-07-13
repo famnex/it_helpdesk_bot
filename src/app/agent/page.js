@@ -122,10 +122,18 @@ export default function AgentDashboardPage() {
             <span className="font-semibold">{user?.name || user?.email} ({user?.role === 'admin' ? 'Admin' : 'Agent'})</span>
           </Link>
 
+          <Link
+            href="/"
+            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-comments text-sky-400"></i>
+            <span>Zum Chat-Frontend</span>
+          </Link>
+
           {user?.role === 'admin' && (
             <Link 
               href="/admin"
-              className="bg-slate-850 hover:bg-slate-800 text-violet-300 border border-violet-500/20 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all"
+              className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all"
             >
               <i className="fa-solid fa-gears mr-1"></i>
               Admin-Bereich

@@ -476,6 +476,14 @@ export default function AdminDashboardPage() {
             <span className="font-semibold">{user?.name || user?.email}</span>
           </Link>
 
+          <Link
+            href="/"
+            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-comments text-sky-400"></i>
+            <span>Zum Chat-Frontend</span>
+          </Link>
+
           <Link 
             href="/agent"
             className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all"
