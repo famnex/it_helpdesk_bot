@@ -39,11 +39,12 @@ export default function AdminDashboardPage() {
 
   // Settings States
   const [smtpConfig, setSmtpConfig] = useState({ host: '', port: 1025, user: '', pass: '', secure: false, sender: '' });
-  const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '' });
+  const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
   const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const [logoutLabel, setLogoutLabel] = useState('Abmelden');
 
   // Update States
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -59,6 +60,9 @@ export default function AdminDashboardPage() {
           router.push('/login');
         } else {
           setUser(data.user);
+          if (data.logoutText) {
+            setLogoutLabel(data.logoutText);
+          }
           loadAllData();
         }
       })
@@ -485,7 +489,7 @@ export default function AdminDashboardPage() {
             className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
           >
             <i className="fa-solid fa-right-from-bracket"></i>
-            <span>Abmelden</span>
+            <span>{logoutLabel}</span>
           </button>
         </div>
       </header>
@@ -999,6 +1003,16 @@ export default function AdminDashboardPage() {
                     type="url" 
                     value={idpConfig.redirectUrl}
                     onChange={(e) => setIdpConfig({ ...idpConfig, redirectUrl: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Abmelden-Button Text (Alternativtext für SSO)</label>
+                  <input 
+                    type="text" 
+                    value={idpConfig.logoutText || ''}
+                    onChange={(e) => setIdpConfig({ ...idpConfig, logoutText: e.target.value })}
+                    placeholder="z.B. Zurück zur MSO-Cloud"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
                 </div>

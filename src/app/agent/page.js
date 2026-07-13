@@ -10,6 +10,7 @@ export default function AgentDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('active'); // 'active', 'mine', 'unassigned', 'closed'
+  const [logoutLabel, setLogoutLabel] = useState('Abmelden');
   const router = useRouter();
 
   useEffect(() => {
@@ -21,6 +22,9 @@ export default function AgentDashboardPage() {
           router.push('/login');
         } else {
           setUser(data.user);
+          if (data.logoutText) {
+            setLogoutLabel(data.logoutText);
+          }
           loadData();
         }
       })
@@ -133,7 +137,7 @@ export default function AgentDashboardPage() {
             className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
           >
             <i className="fa-solid fa-right-from-bracket"></i>
-            <span>Abmelden</span>
+            <span>{logoutLabel}</span>
           </button>
         </div>
       </header>

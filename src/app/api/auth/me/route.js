@@ -10,14 +10,26 @@ export async function GET() {
     return NextResponse.json({ user: null });
   }
 
+  // IdP-Logout-Alternativtext abfragen
+  let logoutText = 'Abmelden';
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('idp_config');
+    if (row) {
+      const config = JSON.parse(row.value);
+      if (config.logoutText) logoutText = config.logoutText;
+    }
+  } catch (e) {
+    // ignorieren
+  }
+
   try {
     const user = db.prepare('SELECT id, email, role, name, avatar_url as avatarUrl FROM users WHERE id = ?').get(sessionUser.id);
     if (user && user.avatarUrl && !user.avatarUrl.startsWith('/helpdesk')) {
       user.avatarUrl = `/helpdesk${user.avatarUrl}`;
     }
-    return NextResponse.json({ user });
+    return NextResponse.json({ user, logoutText });
   } catch (err) {
     console.error('Fehler bei /api/auth/me:', err);
-    return NextResponse.json({ user: sessionUser });
+    return NextResponse.json({ user: sessionUser, logoutText });
   }
 }
