@@ -338,12 +338,17 @@ export default function CustomerChatPage() {
 
   const handleSuggestionClick = (s) => {
     if (s.action === 'create_ticket') {
-      setPendingTicketTitle('Neues Support-Ticket');
-      if (user) {
-        setShowConfirmTicket(true);
-      } else {
-        setShowEmailPrompt(true);
-      }
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'user',
+          text: 'Ich möchte ein Support-Ticket erstellen.'
+        },
+        {
+          sender: 'bot',
+          text: 'Gerne helfe ich dir beim Erstellen eines Support-Tickets.\n\nBitte beschreibe mir kurz dein Problem:\n1. Welches System oder Gerät ist betroffen? (z. B. Moodle, MSO-WLAN, PC im Raum X)\n2. Welche Fehlermeldung oder welches Verhalten tritt auf?\n3. Lade bei Bedarf ein Foto/Screenshot über das Büroklammer-Symbol hoch.\n\nSobald du mir geantwortet hast, werde ich alle Daten sammeln und dir anbieten, das Ticket zu erstellen.'
+        }
+      ]);
     } else {
       handleSend(null, s.query);
     }
@@ -622,92 +627,6 @@ export default function CustomerChatPage() {
         {/* Input Area */}
         <div className="p-4 bg-slate-900 border-t border-slate-800 relative shrink-0">
           
-          {/* Modal Ticket Bestätigung (für angemeldete Nutzer) */}
-          {showConfirmTicket && (
-            <div className="absolute inset-0 bg-slate-950/95 flex items-center justify-center p-4 z-30 animate-fade-in">
-              <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl text-sky-500">
-                    <i className="fa-solid fa-circle-question text-xl"></i>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Support-Ticket erstellen?</h3>
-                    <p className="text-[10px] text-slate-400">Bestätige die Erstellung des IT-Tickets.</p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-350 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  Möchtest du ein Ticket mit folgendem Betreff für dich erstellen?<br/>
-                  <strong className="text-white mt-1.5 block">"{pendingTicketTitle}"</strong>
-                </p>
-                <div className="flex gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowConfirmTicket(false)}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
-                  >
-                    Abbrechen
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={async () => {
-                      setShowConfirmTicket(false);
-                      await createTicketDirectly(pendingTicketTitle, user.email);
-                    }}
-                    className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold"
-                  >
-                    Ja, Ticket erstellen
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
- 
-          {/* Modal E-Mail Prompt bei Ticket-Erstellung (Gäste) */}
-          {showEmailPrompt && (
-            <div className="absolute inset-0 bg-slate-950/95 flex items-center justify-center p-4 z-30 animate-fade-in">
-              <form onSubmit={handleCreateGuestTicket} className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl text-amber-500">
-                    <i className="fa-solid fa-circle-question text-xl"></i>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">E-Mail für IT-Ticket benötigt</h3>
-                    <p className="text-[10px] text-slate-400">Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.</p>
-                  </div>
-                </div>
- 
-                <div className="space-y-3">
-                  <input 
-                    type="email"
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="deine.adresse@schule.de"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
-                    required
-                    disabled={ticketCreationLoading}
-                  />
-                  <div className="flex gap-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setShowEmailPrompt(false)}
-                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold"
-                      disabled={ticketCreationLoading}
-                    >
-                      Abbrechen
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
-                      disabled={ticketCreationLoading}
-                    >
-                      {ticketCreationLoading ? 'Erstelle...' : 'Ticket erstellen'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          )}
- 
           <form onSubmit={handleSend} className="max-w-4xl mx-auto flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
             
             {/* Foto-Vorschau */}
@@ -774,7 +693,92 @@ export default function CustomerChatPage() {
         </div>
  
       </main>
- 
+
+      {/* Modal Ticket Bestätigung (für angemeldete Nutzer, global positioniert) */}
+      {showConfirmTicket && (
+        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl text-sky-500">
+                <i className="fa-solid fa-circle-question text-xl"></i>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Support-Ticket erstellen?</h3>
+                <p className="text-[10px] text-slate-400">Bestätige die Erstellung des IT-Tickets.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-350 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+              Möchtest du ein Ticket mit folgendem Betreff für dich erstellen?<br/>
+              <strong className="text-white mt-1.5 block">"{pendingTicketTitle}"</strong>
+            </p>
+            <div className="flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => setShowConfirmTicket(false)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Abbrechen
+              </button>
+              <button 
+                type="button" 
+                onClick={async () => {
+                  setShowConfirmTicket(false);
+                  await createTicketDirectly(pendingTicketTitle, user.email);
+                }}
+                className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold"
+              >
+                Ja, Ticket erstellen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal E-Mail Prompt bei Ticket-Erstellung (Gäste, global positioniert) */}
+      {showEmailPrompt && (
+        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <form onSubmit={handleCreateGuestTicket} className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl text-amber-500">
+                <i className="fa-solid fa-circle-question text-xl"></i>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">E-Mail für IT-Ticket benötigt</h3>
+                <p className="text-[10px] text-slate-400">Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <input 
+                type="email"
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                placeholder="deine.adresse@schule.de"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                required
+                disabled={ticketCreationLoading}
+              />
+              <div className="flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEmailPrompt(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold"
+                  disabled={ticketCreationLoading}
+                >
+                  Abbrechen
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
+                  disabled={ticketCreationLoading}
+                >
+                  {ticketCreationLoading ? 'Erstelle...' : 'Ticket erstellen'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
