@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schul-Support KI - Lernfähiges System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0ea5e9', // Schul-Blau (Sky)
+                        secondary: '#475569',
+                        bot: '#f0f9ff',
+                        user: '#bae6fd',
+                        ticket: '#fef3c7',
+                        success: '#dcfce3',
+                        teacher: '#8b5cf6' // Violett für Lehrer/Admin-Modus
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #94a3b8;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* Markdown Styles */
+        .markdown-body p { margin-bottom: 0.5rem; }
+        .markdown-body strong { font-weight: 600; color: inherit; }
+        .markdown-body ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.5rem; }
+        .markdown-body ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.5rem; }
+        .markdown-body p:last-child { margin-bottom: 0; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-border {
+            0% { border-color: #8b5cf6; box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+            70% { border-color: #c4b5fd; box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); }
+            100% { border-color: #8b5cf6; box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+        .teacher-mode-active {
+            animation: pulse-border 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen font-sans overflow-hidden flex flex-col relative transition-colors duration-500" id="body-container">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center transition-opacity duration-300">
+        <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p class="mt-4 text-gray-600 font-medium" id="loading-text">Lade Campus-System...</p>
+    </div>
+
+    <!-- Top Navigation -->
+    <header class="bg-white shadow-sm border-b px-6 py-3 flex justify-between items-center shrink-0 z-20 relative">
+        <div class="flex items-center gap-3">
+            <div id="app-icon" class="bg-primary text-white p-2 rounded-lg transition-colors duration-300">
+                <i class="fa-solid fa-graduation-cap text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-800" id="app-title">Smart Campus IT</h1>
+                <p class="text-[10px] text-gray-500 font-medium tracking-wide" id="app-subtitle">KI SUPPORT SYSTEM</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4 text-gray-600">
+            <div class="hidden md:flex items-center gap-2 text-sm bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <span class="text-green-700 font-medium text-xs">Gedächtnis aktiv</span>
+            </div>
+            <div class="w-px h-6 bg-gray-300 hidden md:block"></div>
+            
+            <!-- Role Toggle -->
+            <div class="flex items-center bg-gray-100 p-1 rounded-lg text-xs font-medium cursor-pointer relative" id="role-toggle">
+                <div id="role-bg" class="absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded shadow-sm transition-all duration-300"></div>
+                <div id="btn-student" class="px-3 py-1.5 z-10 text-gray-800 transition-colors w-20 text-center">Schüler</div>
+                <div id="btn-teacher" class="px-3 py-1.5 z-10 text-gray-400 transition-colors w-28 text-center flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-user-tie"></i> Lehrer
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        
+        <!-- Left Sidebar (Context: DB & Tickets) -->
+        <aside class="w-full md:w-80 bg-white border-r flex flex-col shrink-0 hidden md:flex transition-all duration-300">
+            
+            <!-- Tab Navigation (Sidebar) -->
+            <div class="flex border-b text-sm font-medium text-gray-500 bg-slate-50">
+                <button id="tab-tickets" class="flex-1 py-3 text-primary border-b-2 border-primary bg-white">Tickets</button>
+                <button id="tab-knowledge" class="flex-1 py-3 hover:text-gray-700 hidden items-center justify-center gap-2">
+                    <i class="fa-solid fa-brain"></i> Gedächtnis
+                </button>
+            </div>
+
+            <!-- View: Tickets -->
+            <div id="view-tickets" class="flex-1 flex flex-col overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="text-sm font-bold text-gray-700 flex justify-between items-center">
+                        Meine Support-Tickets
+                        <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" id="ticket-count">0</span>
+                    </h3>
+                </div>
+                <div class="p-4 overflow-y-auto flex-1 space-y-3" id="ticket-list">
+                    <div id="no-tickets-msg" class="text-xs text-gray-400 italic text-center py-4">Bisher keine Support-Tickets erstellt.</div>
+                </div>
+            </div>
+
+            <!-- View: Knowledge Base (Teacher Only) -->
+            <div id="view-knowledge" class="flex-1 flex flex-col overflow-hidden hidden bg-violet-50/30">
+                <div class="p-4 border-b bg-violet-100/50">
+                    <h3 class="text-sm font-bold text-violet-800 flex justify-between items-center">
+                        Aktives KI-Gedächtnis
+                        <span class="bg-violet-200 text-violet-700 text-xs px-2 py-0.5 rounded-full" id="knowledge-count">0</span>
+                    </h3>
+                    <p class="text-[10px] text-violet-600 mt-1 leading-tight">
+                        Diese Lösungen nutzt die KI aktiv bei Antworten. Bringe ihr neues Wissen über den Chat bei (z.B. "Merke dir...").
+                    </p>
+                </div>
+                <div class="p-4 overflow-y-auto flex-1 space-y-3" id="knowledge-list">
+                    <div id="no-knowledge-msg" class="text-xs text-gray-400 italic text-center py-4">Das Gedächtnis ist leer. Trainiere die KI im Chat!</div>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- Chat Area -->
+        <section class="flex-1 flex flex-col bg-white relative">
+            <!-- Chat Header -->
+            <div class="p-4 border-b flex items-center justify-between bg-white shadow-sm z-10" id="chat-header">
+                <div class="flex items-center gap-3">
+                    <div id="bot-avatar" class="w-10 h-10 rounded-full bg-bot flex items-center justify-center text-primary text-xl relative border border-blue-100 transition-colors duration-300">
+                        <i class="fa-solid fa-robot"></i>
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-gray-800" id="bot-name">Campus KI-Assistent</h2>
+                        <p class="text-xs text-gray-500" id="bot-status">Antwortet als Schüler-Support</p>
+                    </div>
+                </div>
+                <button id="clear-chat-btn" class="text-xs text-red-500 hover:bg-red-50 px-3 py-1.5 rounded border border-red-200 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can"></i> Verlauf
+                </button>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 scroll-smooth" id="chat-container">
+                <div class="flex justify-center mb-4">
+                    <span class="text-xs text-gray-400 bg-gray-200 px-3 py-1 rounded-full">Gespeicherter Verlauf</span>
+                </div>
+            </div>
+
+            <!-- Typing indicator container -->
+            <div id="typing-container" class="bg-slate-50 px-4 pb-2 hidden">
+                <div class="flex gap-3 max-w-[85%] animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-8 h-8 rounded-full bg-bot border border-blue-100 flex items-center justify-center text-primary shrink-0 mt-1">
+                        <i class="fa-solid fa-robot text-sm"></i>
+                    </div>
+                    <div class="bg-white border border-gray-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center">
+                        <div class="typing-indicator flex">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <div class="p-4 bg-white border-t relative" id="input-area">
+                <div id="teacher-hint" class="hidden absolute -top-8 left-0 right-0 text-center">
+                    <span class="bg-violet-100 text-violet-700 text-[10px] font-bold px-3 py-1 rounded-t-lg border border-violet-200 border-b-0">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> TRAININGS-MODUS AKTIV
+                    </span>
+                </div>
+                <div id="input-wrapper" class="flex items-end gap-2 bg-gray-50 border rounded-2xl p-2 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                    <textarea 
+                        id="chat-input"
+                        class="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-2 text-sm text-gray-700 placeholder-gray-400 outline-none" 
+                        placeholder="Beschreibe dein Problem..."
+                        rows="1"
+                    ></textarea>
+                    <button id="send-btn" class="p-2 bg-primary text-white hover:bg-blue-600 transition-colors rounded-full shrink-0 w-10 h-10 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Firebase Logic & Chat App -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const apiKey = ""; // Canvas injected
+        
+        // DOM Elements
+        const inputField = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatContainer = document.getElementById('chat-container');
+        const typingContainer = document.getElementById('typing-container');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        
+        // Role UI Elements
+        const roleToggle = document.getElementById('role-toggle');
+        const roleBg = document.getElementById('role-bg');
+        const btnStudent = document.getElementById('btn-student');
+        const btnTeacher = document.getElementById('btn-teacher');
+        const inputWrapper = document.getElementById('input-wrapper');
+        const teacherHint = document.getElementById('teacher-hint');
+        const appIcon = document.getElementById('app-icon');
+        const botAvatar = document.getElementById('bot-avatar');
+        const botStatus = document.getElementById('bot-status');
+        const appSubtitle = document.getElementById('app-subtitle');
+        
+        // Sidebar UI Elements
+        const tabTickets = document.getElementById('tab-tickets');
+        const tabKnowledge = document.getElementById('tab-knowledge');
+        const viewTickets = document.getElementById('view-tickets');
+        const viewKnowledge = document.getElementById('view-knowledge');
+        const ticketList = document.getElementById('ticket-list');
+        const ticketCount = document.getElementById('ticket-count');
+        const knowledgeList = document.getElementById('knowledge-list');
+        const knowledgeCount = document.getElementById('knowledge-count');
+        const noTicketsMsg = document.getElementById('no-tickets-msg');
+        const noKnowledgeMsg = document.getElementById('no-knowledge-msg');
+
+        // State
+        let db, auth, currentUser, appId;
+        let isWaitingForResponse = false;
+        let currentRole = 'student'; // 'student' or 'teacher'
+        let messagesState = [];
+        let ticketsState = [];
+        let knowledgeState = [];
+
+        // Toggle Role Logic
+        roleToggle.addEventListener('click', () => {
+            currentRole = currentRole === 'student' ? 'teacher' : 'student';
+            updateUIRole();
+        });
+
+        function updateUIRole() {
+            if (currentRole === 'teacher') {
+                // UI changes for Teacher
+                roleBg.style.left = 'calc(50% - 2px)';
+                roleBg.style.width = 'calc(50% + 2px)';
+                btnTeacher.classList.replace('text-gray-400', 'text-violet-700');
+                btnStudent.classList.replace('text-gray-800', 'text-gray-400');
+                
+                // Colors & Styling
+                appIcon.className = 'bg-violet-600 text-white p-2 rounded-lg transition-colors duration-300';
+                botAvatar.className = 'w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 text-xl relative border border-violet-200 transition-colors duration-300 teacher-mode-active';
+                sendBtn.className = 'p-2 bg-violet-600 text-white hover:bg-violet-700 transition-colors rounded-full shrink-0 w-10 h-10 flex items-center justify-center disabled:opacity-50';
+                inputWrapper.className = 'flex items-end gap-2 bg-violet-50/50 border-violet-200 border rounded-2xl p-2 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-500 transition-all shadow-inner';
+                
+                teacherHint.classList.remove('hidden');
+                tabKnowledge.style.display = 'flex'; // Show knowledge tab
+                botStatus.innerText = 'Admin-Modus: Bereit zu lernen';
+                appSubtitle.innerText = 'WISSENSDATENBANK & SUPPORT';
+                inputField.placeholder = 'Chatte oder trainiere (z.B. "Merke dir: ...")';
+                
+                // Switch tab automatically to knowledge base
+                switchTab('knowledge');
+
+            } else {
+                // UI changes for Student
+                roleBg.style.left = '4px';
+                roleBg.style.width = 'calc(50% - 4px)';
+                btnStudent.classList.replace('text-gray-400', 'text-gray-800');
+                btnTeacher.classList.replace('text-violet-700', 'text-gray-400');
+                
+                // Colors & Styling
+                appIcon.className = 'bg-primary text-white p-2 rounded-lg transition-colors duration-300';
+                botAvatar.className = 'w-10 h-10 rounded-full bg-bot flex items-center justify-center text-primary text-xl relative border border-blue-100 transition-colors duration-300';
+                sendBtn.className = 'p-2 bg-primary text-white hover:bg-blue-600 transition-colors rounded-full shrink-0 w-10 h-10 flex items-center justify-center disabled:opacity-50';
+                inputWrapper.className = 'flex items-end gap-2 bg-gray-50 border rounded-2xl p-2 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all';
+                
+                teacherHint.classList.add('hidden');
+                tabKnowledge.style.display = 'none'; // Hide knowledge tab
+                botStatus.innerText = 'Antwortet als Schüler-Support';
+                appSubtitle.innerText = 'KI SUPPORT SYSTEM';
+                inputField.placeholder = 'Beschreibe dein Problem...';
+                
+                // Switch tab automatically back to tickets
+                switchTab('tickets');
+            }
+        }
+
+        // Tab Switching Logic
+        tabTickets.addEventListener('click', () => switchTab('tickets'));
+        tabKnowledge.addEventListener('click', () => switchTab('knowledge'));
+
+        function switchTab(tab) {
+            if (tab === 'tickets') {
+                viewTickets.classList.remove('hidden');
+                viewKnowledge.classList.add('hidden');
+                tabTickets.className = 'flex-1 py-3 text-primary border-b-2 border-primary bg-white transition-all';
+                tabKnowledge.className = 'flex-1 py-3 hover:text-gray-700 flex items-center justify-center gap-2 transition-all';
+            } else {
+                viewTickets.classList.add('hidden');
+                viewKnowledge.classList.remove('hidden');
+                tabKnowledge.className = 'flex-1 py-3 text-violet-700 border-b-2 border-violet-600 bg-violet-50 transition-all flex items-center justify-center gap-2';
+                tabTickets.className = 'flex-1 py-3 hover:text-gray-700 transition-all bg-slate-50';
+            }
+        }
+
+        // Initialize Cloud Storage (Firebase)
+        async function initStorage() {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // RULE 3: Auth First
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        setupListeners();
+                        loadingOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    }
+                });
+            } catch (e) {
+                console.error("Storage Error:", e);
+                loadingOverlay.innerHTML = "<p class='text-red-500 font-bold'>Fehler beim Laden.</p>";
+            }
+        }
+
+        // Listen for Database Changes
+        function setupListeners() {
+            if (!currentUser) return;
+
+            // 1. Messages Listener (Private)
+            const messagesRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages');
+            onSnapshot(messagesRef, (snapshot) => {
+                const msgs = [];
+                snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+                msgs.sort((a, b) => a.timestamp - b.timestamp);
+                messagesState = msgs;
+                if (msgs.length === 0) addInitialGreeting();
+                else renderMessages();
+            });
+
+            // 2. Tickets Listener (Private)
+            const ticketsRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tickets');
+            onSnapshot(ticketsRef, (snapshot) => {
+                const tks = [];
+                snapshot.forEach(d => tks.push({ id: d.id, ...d.data() }));
+                tks.sort((a, b) => b.timestamp - a.timestamp);
+                ticketsState = tks;
+                renderTickets();
+            });
+
+            // 3. Knowledge Base Listener (Public/App-wide)
+            // Using public collection so the knowledge is shared/global for this app instance
+            const knowledgeRef = collection(db, 'artifacts', appId, 'public', 'data', 'knowledge');
+            onSnapshot(knowledgeRef, (snapshot) => {
+                const kbase = [];
+                snapshot.forEach(d => kbase.push({ id: d.id, ...d.data() }));
+                kbase.sort((a, b) => b.timestamp - a.timestamp);
+                knowledgeState = kbase;
+                renderKnowledge();
+            });
+        }
+
+        // UI Renderers
+        async function addInitialGreeting() {
+            const text = "Hallo! Ich bin der KI-Assistent. Beschreibe dein Problem. Wenn wir keine Lösung finden, erstelle ich ein Ticket für die IT.\n\n*(Tipp: Als Lehrer kannst du mir im Chat auch neues Wissen beibringen!)*";
+            await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages'), {
+                text: text, sender: 'bot', isMarkdown: true, timestamp: Date.now()
+            });
+        }
+
+        function renderMessages() {
+            chatContainer.innerHTML = `<div class="flex justify-center mb-4"><span class="text-xs text-gray-400 bg-gray-200 px-3 py-1 rounded-full">Gespeicherter Verlauf</span></div>`;
+            
+            messagesState.forEach(msg => {
+                if(msg.type === 'ticket_ui') {
+                    chatContainer.insertAdjacentHTML('beforeend', generateTicketUIHTML(msg.ticketId));
+                    return;
+                }
+                if(msg.type === 'learned_ui') {
+                    chatContainer.insertAdjacentHTML('beforeend', generateLearnedUIHTML(msg.problem));
+                    return;
+                }
+
+                const time = new Date(msg.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                let messageContent = msg.isMarkdown ? marked.parse(msg.text) : msg.text.replace(/\n/g, '<br>');
+                const isUser = msg.sender === 'user';
+                
+                // Color formatting based on context (if bot replied in teacher mode, make it slightly violet)
+                const botBg = msg.isTeacherContext ? 'bg-violet-50 border border-violet-200 text-violet-900' : 'bg-white border border-gray-200 text-gray-700';
+                const botAvatarColor = msg.isTeacherContext ? 'bg-violet-100 text-violet-600 border-violet-200' : 'bg-bot text-primary border-blue-100';
+
+                const html = `
+                    <div class="flex gap-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse' : ''} animate-[fadeIn_0.3s_ease-out] mb-4 group">
+                        <div class="w-8 h-8 rounded-full ${isUser ? 'bg-gray-200 text-gray-500' : botAvatarColor} flex items-center justify-center shrink-0 mt-1">
+                            <i class="fa-${isUser ? 'regular fa-user' : 'solid fa-robot'} text-sm"></i>
+                        </div>
+                        <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full">
+                            <div class="${isUser ? 'bg-primary text-white rounded-tr-none' : botBg + ' rounded-tl-none markdown-body'} p-3 rounded-2xl shadow-sm text-sm overflow-hidden">
+                                ${messageContent}
+                            </div>
+                            <span class="text-[10px] text-gray-400 mt-1 mx-1">${time} Uhr</span>
+                        </div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', html);
+            });
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function renderTickets() {
+            ticketCount.innerText = ticketsState.length;
+            ticketList.innerHTML = '';
+            if (ticketsState.length === 0) {
+                noTicketsMsg.style.display = 'block';
+                ticketList.appendChild(noTicketsMsg);
+                return;
+            }
+            noTicketsMsg.style.display = 'none';
+            ticketsState.forEach(tk => {
+                const time = new Date(tk.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                const html = `
+                    <div class="bg-white border rounded-lg p-3 shadow-sm border-l-4 border-l-orange-400 animate-[fadeIn_0.5s_ease-out] mb-3 relative group">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-xs font-mono text-gray-500">${tk.ticketId}</span>
+                            <span class="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Offen</span>
+                        </div>
+                        <h4 class="text-sm font-medium text-gray-800">${tk.title}</h4>
+                        <p class="text-[10px] text-gray-500 mt-1">Erstellt: ${time}</p>
+                    </div>
+                `;
+                ticketList.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function renderKnowledge() {
+            knowledgeCount.innerText = knowledgeState.length;
+            knowledgeList.innerHTML = '';
+            if (knowledgeState.length === 0) {
+                noKnowledgeMsg.style.display = 'block';
+                knowledgeList.appendChild(noKnowledgeMsg);
+                return;
+            }
+            noKnowledgeMsg.style.display = 'none';
+            
+            knowledgeState.forEach(k => {
+                const html = `
+                    <div class="bg-white border border-violet-100 rounded-lg p-3 shadow-sm relative group mb-3">
+                        <button onclick="window.deleteKnowledge('${k.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition-colors hidden group-hover:block" title="Wissen löschen">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                        <div class="flex items-center gap-2 text-xs font-bold text-violet-700 mb-1">
+                            <i class="fa-solid fa-lightbulb"></i> Problem:
+                        </div>
+                        <p class="text-xs text-gray-700 font-medium mb-2">${k.problem}</p>
+                        <div class="flex items-center gap-2 text-xs font-bold text-green-600 mb-1">
+                            <i class="fa-solid fa-check"></i> Lösung:
+                        </div>
+                        <p class="text-xs text-gray-600">${k.solution}</p>
+                    </div>
+                `;
+                knowledgeList.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        // Delete Knowledge Function (exposed to window for onclick)
+        window.deleteKnowledge = async (id) => {
+            if(!currentUser || currentRole !== 'teacher') return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'knowledge', id));
+            } catch (error) {
+                console.error("Error deleting knowledge:", error);
+            }
+        };
+
+        // Custom UI Elements in Chat
+        function generateTicketUIHTML(ticketId) {
+            return `
+                <div class="flex justify-center my-4 w-full">
+                    <div class="bg-ticket border border-orange-200 p-4 rounded-xl max-w-md w-full shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>
+                        <div class="flex items-start gap-3">
+                            <div class="text-orange-500 mt-1 bg-orange-100 p-2 rounded-full"><i class="fa-solid fa-ticket-simple text-lg"></i></div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="text-sm font-bold text-gray-800">Support-Ticket erstellt</h4>
+                                    <span class="text-xs font-mono font-bold text-orange-600">${ticketId}</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-1">Das Problem wurde an die IT-Admins eskaliert.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateLearnedUIHTML(problemDesc) {
+            return `
+                <div class="flex justify-center my-4 w-full">
+                    <div class="bg-green-50 border border-green-200 p-3 rounded-xl max-w-md w-full shadow-sm relative overflow-hidden flex items-center gap-3">
+                        <div class="text-green-600 bg-green-100 p-2 rounded-full shrink-0"><i class="fa-solid fa-brain text-lg"></i></div>
+                        <div>
+                            <h4 class="text-sm font-bold text-green-800">Neues Wissen gespeichert!</h4>
+                            <p class="text-xs text-green-700 line-clamp-1 mt-0.5">Gelöst: ${problemDesc}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Gemini API Builder
+        async function fetchGeminiResponse() {
+            // 1. Compile the Knowledge Base into the prompt
+            let knowledgeString = "";
+            if (knowledgeState.length > 0) {
+                knowledgeString = "\n\nDEINE WISSENSDATENBANK (WICHTIG: Nutze diese Lösungen zwingend, wenn das Problem dazu passt!):\n";
+                knowledgeState.forEach(k => {
+                    knowledgeString += `- WENN PROBLEM: "${k.problem}" DANN LÖSUNG: "${k.solution}"\n`;
+                });
+            } else {
+                knowledgeString = "\n\nDeine Wissensdatenbank ist aktuell leer.";
+            }
+
+            // 2. Adjust prompt based on role
+            let roleInstructions = "";
+            if (currentRole === 'teacher') {
+                roleInstructions = `
+Du sprichst aktuell mit einem LEHRER / ADMINISTRATOR. 
+Er darf dir neues Wissen beibringen. 
+WENN er dir eine Anweisung gibt wie "Merke dir...", "Lerne Folgendes..." oder dir eine neue Lösung für ein Problem nennt:
+1. Bedanke dich für das neue Wissen.
+2. ZWINGEND: Am GANZ ENNEN deiner Antwort musst du exakt diesen Tag anfügen: [LEARNED: Kurze Problembeschreibung ||| Detaillierte Lösung]
+Beispiel-Ausgabe am Ende: [LEARNED: Smartboard flackert ||| HDMI-Kabel an Port 2 umstecken]`;
+            } else {
+                roleInstructions = `
+Du sprichst aktuell mit einem SCHÜLER. Er darf KEIN neues Wissen anlegen. 
+Wenn du keine Lösung in der Wissensdatenbank findest, biete an ein Ticket zu erstellen.
+WENN ein Ticket erstellt werden soll, schreibe ZWINGEND am Ende deiner Antwort: [TICKET_CREATED]`;
+            }
+
+            const basePrompt = `Du bist ein freundlicher IT-Support-Chatbot für eine Schule. Halte deine Antworten kurz und übersichtlich.`;
+            const finalPrompt = basePrompt + knowledgeString + "\n\n" + roleInstructions;
+
+            // 3. Build Chat History
+            const contents = messagesState
+                .filter(m => m.type !== 'ticket_ui' && m.type !== 'learned_ui')
+                .slice(-10) // Only send last 10 messages to save tokens
+                .map(msg => ({
+                    role: msg.sender === 'user' ? 'user' : 'model',
+                    parts: [{ text: msg.text }]
+                }));
+
+            const payload = {
+                contents: contents,
+                systemInstruction: { parts: [{ text: finalPrompt }] }
+            };
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error('API Request failed');
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (error) {
+                console.error("Gemini Error:", error);
+                return "Entschuldigung, meine Serververbindung klemmt gerade.";
+            }
+        }
+
+        // Handle Send
+        async function handleSend() {
+            const text = inputField.value.trim();
+            if (!text || isWaitingForResponse || !currentUser) return;
+
+            // UI Reset
+            inputField.value = '';
+            inputField.style.height = '40px';
+            
+            // Save User Message
+            await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages'), {
+                text: text, sender: 'user', isMarkdown: false, timestamp: Date.now()
+            });
+
+            // Loading state
+            isWaitingForResponse = true;
+            sendBtn.disabled = true;
+            typingContainer.classList.remove('hidden');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Fetch AI
+            let aiResponse = await fetchGeminiResponse();
+
+            typingContainer.classList.add('hidden');
+            isWaitingForResponse = false;
+            sendBtn.disabled = false;
+            
+            // --- Parse Actions from AI ---
+            let createTicket = false;
+            let learnedKnowledge = null;
+
+            if (aiResponse.includes('[TICKET_CREATED]')) {
+                createTicket = true;
+                aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
+            }
+
+            // Regex to find [LEARNED: problem ||| solution]
+            const learnRegex = /\[LEARNED:\s*(.*?)\s*\|\|\|\s*(.*?)\]/s;
+            const learnMatch = aiResponse.match(learnRegex);
+            
+            if (learnMatch && currentRole === 'teacher') {
+                learnedKnowledge = {
+                    problem: learnMatch[1].trim(),
+                    solution: learnMatch[2].trim()
+                };
+                aiResponse = aiResponse.replace(learnRegex, '').trim(); // Remove the tag from output
+            }
+
+            // Save Bot Message
+            await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages'), {
+                text: aiResponse, 
+                sender: 'bot', 
+                isMarkdown: true, 
+                timestamp: Date.now(),
+                isTeacherContext: currentRole === 'teacher' // Style differently if teacher
+            });
+
+            // Handle Ticket Action
+            if (createTicket) {
+                const newTicketId = `#TK-${Math.floor(1000 + Math.random() * 9000)}`;
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'tickets'), {
+                    ticketId: newTicketId, title: "Chat-Eskalation", timestamp: Date.now()
+                });
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages'), {
+                    type: 'ticket_ui', ticketId: newTicketId, timestamp: Date.now() + 1
+                });
+            }
+
+            // Handle Learn Action
+            if (learnedKnowledge) {
+                // Save to public knowledge base
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'knowledge'), {
+                    problem: learnedKnowledge.problem,
+                    solution: learnedKnowledge.solution,
+                    timestamp: Date.now()
+                });
+                // Add visual confirmation in chat
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'messages'), {
+                    type: 'learned_ui', problem: learnedKnowledge.problem, timestamp: Date.now() + 2
+                });
+            }
+
+            inputField.focus();
+        }
+
+        // Clear Chat History
+        clearChatBtn.addEventListener('click', async () => {
+            if(!currentUser) return;
+            for (const msg of messagesState) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'messages', msg.id));
+            }
+        });
+
+        // Event Listeners
+        sendBtn.addEventListener('click', handleSend);
+        inputField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+        });
+        inputField.addEventListener('input', function() {
+            this.style.height = '40px'; this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        initStorage();
+    </script>
+</body>
+</html>

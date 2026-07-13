@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0ea5e9;
+  --color-secondary: #475569;
+  --color-bot: #f0f9ff;
+  --color-user: #bae6fd;
+  --color-ticket: #fef3c7;
+  --color-success: #dcfce3;
+  --color-agent: #8b5cf6;
+}
+
+/* Custom CSS Helpers */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Typing Indicator Animation */
+.typing-indicator span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #94a3b8;
+  border-radius: 50%;
+  margin: 0 2px;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Markdown Styles inside knowledge base */
+.markdown-content p {
+  margin-bottom: 0.75rem;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content ul, .markdown-content ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-content ul {
+  list-style-type: disc;
+}
+.markdown-content ol {
+  list-style-type: decimal;
+}
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+.markdown-content strong {
+  font-weight: 700;
+  color: #fff;
+}
+.markdown-content code {
+  font-family: monospace;
+  background-color: #0f172a;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+.markdown-content a {
+  color: #38bdf8;
+  text-decoration: underline;
+  font-weight: 500;
+}
+.markdown-content a:hover {
+  color: #7dd3fc;
+}

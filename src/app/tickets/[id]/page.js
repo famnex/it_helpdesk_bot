@@ -1,0 +1,224 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+
+export default function CustomerTicketDetailPage() {
+  const { id } = useParams();
+  const [ticket, setTicket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [replyText, setReplyText] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const messagesEndRef = useRef(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Session prüfen
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.user || data.user.role !== 'customer') {
+          router.push('/');
+        } else {
+          loadTicketDetails();
+        }
+      })
+      .catch(() => {
+        router.push('/');
+      });
+  }, [id]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const loadTicketDetails = async () => {
+    try {
+      const res = await fetch(`/api/tickets/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTicket(data.ticket);
+        setMessages(data.messages || []);
+      } else {
+        router.push('/tickets');
+      }
+    } catch (err) {
+      console.error('Fehler beim Laden der Ticket-Details:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendReply = async (e) => {
+    e.preventDefault();
+    if (!replyText.trim() || isSending) return;
+
+    setIsSending(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: replyText })
+      });
+      if (res.ok) {
+        setReplyText('');
+        // Verlauf neu laden
+        await loadTicketDetails();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Senden der Antwort.');
+      }
+    } catch (err) {
+      console.error('Fehler beim Senden der Antwort:', err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center flex-col gap-4">
+        <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Lade Ticket...</p>
+      </div>
+    );
+  }
+
+  if (!ticket) return null;
+
+  // Status Badge bestimmen
+  let statusLabel = 'Offen';
+  let statusClass = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+  if (ticket.status === 'assigned') {
+    statusLabel = 'Zugeordnet';
+    statusClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20';
+  } else if (ticket.status === 'closed') {
+    statusLabel = 'Gelöst';
+    statusClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans h-screen overflow-hidden">
+      
+      {/* Header */}
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 relative">
+        <div className="flex items-center gap-3">
+          <Link href="/tickets" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-700 transition-colors flex items-center justify-center">
+            <i className="fa-solid fa-arrow-left"></i>
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold text-white max-w-xs sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">Ticket ID: <span className="font-mono">{ticket.id}</span></p>
+          </div>
+        </div>
+      </header>
+
+      {/* Ticket Body & Messages Area */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        
+        {/* Chat Verlauf */}
+        <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20">
+          
+          {/* Nachrichtenhistorie */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            
+            {/* Lösungsbox oben anzeigen, falls geschlossen */}
+            {ticket.status === 'closed' && ticket.solution && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto flex items-start gap-4 mb-2 animate-fade-in">
+                <div className="text-emerald-500 bg-emerald-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-circle-check text-xl"></i></div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-200">Dieses Ticket wurde als gelöst markiert</h4>
+                  <p className="text-xs font-bold text-slate-300 mt-2">Bestätigte Lösung:</p>
+                  <p className="text-xs text-slate-400 mt-1 bg-slate-950 p-3 rounded-lg border border-slate-800">{ticket.solution}</p>
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg, index) => {
+              const isCustomer = msg.senderRole === 'customer';
+              const isSystem = msg.senderRole === 'system';
+              
+              if (isSystem) {
+                return (
+                  <div key={index} className="flex justify-center">
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
+                      {msg.text}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div 
+                  key={index} 
+                  className={`flex gap-3 max-w-[80%] ${isCustomer ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
+                >
+                  <div className={`w-8 h-8 rounded-xl ${isCustomer ? 'bg-slate-700 text-slate-300' : 'bg-violet-500/10 border border-violet-500/20 text-violet-400'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
+                    <i className={`fa-solid fa-${isCustomer ? 'user' : 'user-tie'} text-xs`}></i>
+                  </div>
+                  <div className={`flex flex-col ${isCustomer ? 'items-end' : 'items-start'} max-w-full`}>
+                    <div 
+                      className={`${isCustomer ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
+                    >
+                      {msg.text}
+                    </div>
+                    <span className="text-[9px] text-slate-500 mt-1 mx-1">
+                      {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Antworten Form */}
+          {ticket.status !== 'closed' ? (
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
+              <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex items-end gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
+                <textarea 
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendReply(e);
+                    }
+                  }}
+                  placeholder="Antworte dem IT-Support..."
+                  rows="1"
+                  className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-3 text-sm text-slate-200 placeholder-slate-600 outline-none"
+                  disabled={isSending}
+                />
+                <button 
+                  type="submit"
+                  disabled={!replyText.trim() || isSending}
+                  className="p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md"
+                >
+                  <i className="fa-solid fa-paper-plane text-sm"></i>
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
+              <i className="fa-solid fa-lock mr-1.5"></i>
+              Das Ticket ist geschlossen und schreibgeschützt.
+            </div>
+          )}
+
+        </main>
+
+      </div>
+
+    </div>
+  );
+}
