@@ -34,9 +34,11 @@ export async function GET() {
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
                t.chat_id as chatId,
-               t.created_at as createdAt, t.updated_at as updatedAt
+               t.created_at as createdAt, t.updated_at as updatedAt,
+               cu.name as creatorName
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
+        LEFT JOIN users cu ON t.creator_email = cu.email
         ORDER BY t.created_at DESC
       `).all();
     }

@@ -206,7 +206,18 @@ export default function AgentTicketDetailPage() {
               <h1 className="text-sm font-bold text-white max-w-xs sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Ticket ID: <span className="font-mono">{ticket.id}</span> | Ersteller: <span className="font-semibold text-slate-300">{ticket.creatorEmail}</span></p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400 mt-0.5">
+              <span>Ticket ID: <span className="font-mono">{ticket.id}</span></span>
+              <div className="flex items-center gap-1.5">
+                <span>Ersteller:</span>
+                <div className="inline-flex flex-col leading-none">
+                  {ticket.creatorName && (
+                    <span className="font-bold text-white text-[10px] mb-0.5">{ticket.creatorName}</span>
+                  )}
+                  <span className="text-slate-400 font-mono text-[9px]">{ticket.creatorEmail}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

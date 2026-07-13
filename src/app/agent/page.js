@@ -269,7 +269,14 @@ export default function AgentDashboardPage() {
                             Aktualisiert: {new Date(tk.updatedAt || tk.createdAt).toLocaleString('de-DE')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs font-medium text-slate-400">{tk.creatorEmail}</td>
+                        <td className="px-6 py-4 text-xs">
+                          <div className="flex flex-col">
+                            {tk.creatorName && (
+                              <span className="font-bold text-white block mb-0.5">{tk.creatorName}</span>
+                            )}
+                            <span className="font-medium text-slate-500 font-mono text-[10px]">{tk.creatorEmail}</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
                         </td>
