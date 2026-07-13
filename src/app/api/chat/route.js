@@ -122,6 +122,22 @@ export async function POST(request) {
     db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
       .run(chatId, 'user', text, relativePath);
 
+    // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
+    const isSystemEvent = text && text.startsWith('[SYSTEM_EVENT:');
+    if (!isSystemEvent) {
+      try {
+        const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
+        if (ticket) {
+          db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+            VALUES (?, ?, 'customer', ?)
+          `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Foto hochgeladen)');
+        }
+      } catch (e) {
+        console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
+      }
+    }
+
     // 3. Letzten Verlauf laden (inklusive image_url)
     const chatHistory = db.prepare(`
       SELECT sender, text, image_url as imageUrl 
@@ -143,6 +159,19 @@ export async function POST(request) {
     // 6. Botnachricht speichern
     db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, ?, ?)')
       .run(chatId, 'bot', aiResponse);
+
+    // Falls ein Ticket mit dieser chatId verknüpft ist, Botnachricht dort spiegeln
+    try {
+      const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
+      if (ticket) {
+        db.prepare(`
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+          VALUES (?, 'system', 'system', ?)
+        `).run(ticket.id, 'KI-Bot (Chat)', aiResponse);
+      }
+    } catch (e) {
+      console.error('Fehler beim Spiegeln der Botnachricht im Ticket:', e);
+    }
 
     return NextResponse.json({
       text: aiResponse,

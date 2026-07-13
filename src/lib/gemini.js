@@ -130,16 +130,17 @@ ACHTUNG / ZWINGENDE REGEL:
 Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins erstellt!
 1. Biete dem Benutzer unter KEINEN Umständen eine weitere Ticket-Erstellung an!
 2. Schreibe NIEMALS den Tag [TICKET_CREATED] in deine Antwort!
-3. Informiere den Benutzer stattdessen höflich, dass sein Ticket bereits erfolgreich erfasst wurde (mit der Ticket-ID, falls er danach fragt) und unsere IT-Admins sich darum kümmern werden.`;
+3. Wenn du ein System-Event im Verlauf siehst wie "[SYSTEM_EVENT: TICKET_CREATED: TK-XXXX]", reagiere darauf mit einer freundlichen Bestätigung und einer Verabschiedung.
+4. Weise den Benutzer unbedingt darauf hin, dass er jederzeit weitere Informationen, Updates oder Fotos direkt über diesen Chat senden kann. Erkläre ihm auch, dass er dies über den Ticket-Link tun kann, den er automatisch per E-Mail erhält.`;
   } else {
     ticketInstruction = `
-REGELN FÜR TICKET-ERSTELLUNG:
-Biete dem Benutzer ein Support-Ticket NUR in folgenden Fällen an:
-1. Der vorgeschlagene Lösungsweg wurde vom Benutzer ausprobiert und hat nicht funktioniert oder wurde explizit abgelehnt (z. B. "Das funktioniert nicht", "Hilft nicht", "Geht immer noch nicht").
-2. Der Benutzer fordert explizit die Erstellung eines Tickets.
-3. Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter oder einer echten Person (z. B. "Ich möchte mit einer echten Person chatten", "Gibt es hier echte Mitarbeiter?"). Da kein Live-Chat existiert, weise freundlich darauf hin und biete stattdessen die Eröffnung eines IT-Support-Tickets für die Admins an.
+REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
+Bevor du dem Benutzer anbietest ein Ticket zu erstellen (und ZWINGEND bevor du den Tag [TICKET_CREATED] ausgibst), musst du sicherstellen, dass alle relevanten Details gesammelt wurden:
+1. In welchem Raum oder Bereich befindet sich das betroffene Gerät/System? (Dies ist extrem wichtig für Vor-Ort-Hardware wie Beamer, PC, Smartboard, Drucker). Falls die Raumnummer im Chatverlauf fehlt, frage ZUERST gezielt danach.
+2. Tritt eine bestimmte Fehlermeldung auf? Wenn ja, wie lautet sie?
+3. Biete dem Benutzer freundlich an, bei Bedarf ein Foto/Screenshot des Problems über das Büroklammer-Symbol hochzuladen.
 
-Wenn der Benutzer der Ticket-Erstellung zustimmt oder explizit danach verlangt, schreibe ZWINGEND am Ende deiner Antwort exakt diesen Tag: [TICKET_CREATED]`;
+Erst wenn diese grundlegenden Details (insbesondere der Raum) bekannt sind, darfst du den Abschluss vorschlagen und ZWINGEND den Tag [TICKET_CREATED] exakt so am Ende deiner Antwort einfügen.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;

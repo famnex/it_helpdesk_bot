@@ -249,6 +249,31 @@ export default function CustomerChatPage() {
     }
   };
  
+  const sendSystemEventToBot = async (eventText) => {
+    setIsTyping(true);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          chatId, 
+          text: eventText
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(prev => [...prev, { 
+          sender: 'bot', 
+          text: data.text 
+        }]);
+      }
+    } catch (err) {
+      console.error('Fehler bei System-Event an Bot:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   // Ticket direkt erstellen (wenn angemeldet)
   const createTicketDirectly = async (title, email) => {
     try {
@@ -265,6 +290,7 @@ export default function CustomerChatPage() {
           isTicketUI: true,
           ticketId: data.ticketId
         }]);
+        await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
       }
     } catch (err) {
       console.error('Ticket konnte nicht erstellt werden:', err);
@@ -296,6 +322,7 @@ export default function CustomerChatPage() {
           ticketId: data.ticketId
         }]);
         setGuestEmail('');
+        await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
       } else {
         alert(data.error || 'Fehler beim Erstellen.');
       }
@@ -497,6 +524,10 @@ export default function CustomerChatPage() {
               );
             }
  
+            if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
+              return null;
+            }
+
             const isUser = msg.sender === 'user';
             const isSystem = msg.sender === 'system';
             
