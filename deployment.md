@@ -53,12 +53,45 @@ pm2 save
 
 ---
 
-## Schritt 5: Nginx Reverse Proxy konfigurieren
-Öffne die Nginx-Konfigurationsdatei deiner Domain (z. B. `/etc/nginx/sites-available/default`) und füge folgenden Location-Block innerhalb des `server`-Blocks hinzu:
+## Schritt 5: Webserver Reverse Proxy konfigurieren (Nginx oder Apache)
+
+### Option A: Apache (HTTPD)
+Um Apache als Reverse-Proxy zu konfigurieren, müssen die Proxy-Module aktiviert sein.
+
+1. **Proxy-Module in Apache aktivieren:**
+   ```bash
+   sudo a2enmod proxy
+   sudo a2enmod proxy_http
+   sudo systemctl restart apache2
+   ```
+
+2. **VirtualHost konfigurieren:**
+   Öffne die Apache-Konfigurationsdatei deiner Domain (z. B. `/etc/apache2/sites-available/cloud.mso-hef.de.conf` oder `/etc/apache2/sites-available/000-default-le-ssl.conf` bei Let's Encrypt SSL).
+   
+   Füge innerhalb des `<VirtualHost *:443>`-Blocks folgende Zeilen ein:
+   ```apache
+   # Reverse Proxy für den IT-Helpdesk
+   ProxyRequests Off
+   ProxyPreserveHost On
+   
+   <Location /helpdesk>
+       ProxyPass http://localhost:3000/helpdesk
+       ProxyPassReverse http://localhost:3000/helpdesk
+   </Location>
+   ```
+
+3. **Apache neu laden:**
+   ```bash
+   sudo apache2ctl configtest
+   sudo systemctl reload apache2
+   ```
+
+### Option B: Nginx
+Falls du Nginx nutzt, öffne die Nginx-Konfigurationsdatei deiner Domain (z. B. `/etc/nginx/sites-available/default`) und füge folgenden Location-Block innerhalb des `server`-Blocks hinzu:
 
 ```nginx
-location /helpdesk/ {
-    proxy_pass http://localhost:3000/helpdesk/;
+location /helpdesk {
+    proxy_pass http://localhost:3000;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
