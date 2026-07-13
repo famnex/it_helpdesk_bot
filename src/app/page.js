@@ -60,7 +60,7 @@ export default function CustomerChatPage() {
 
         // 2. Token aus der URL prüfen (Auto-Login)
         const params = new URLSearchParams(window.location.search);
-        const urlToken = params.get('token');
+        const urlToken = params.get('sso_token') || params.get('token');
         if (urlToken) {
           window.location.href = `/helpdesk/api/auth/callback?token=${urlToken}`;
           return;
