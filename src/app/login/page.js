@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [user, setUser] = useState(null);
-  const [tokenInput, setTokenInput] = useState('');
-  const [testEmail, setTestEmail] = useState('agent@schule.de');
-  const [testRole, setTestRole] = useState('agent');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -50,36 +47,6 @@ export default function LoginPage() {
       router.push('/agent');
     } else {
       router.push('/tickets');
-    }
-  };
-
-  // JWT Callback manuell triggern (durch Einfügen eines Tokens)
-  const handleTokenLogin = (e) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-    router.push(`/api/auth/callback?token=${tokenInput.trim()}`);
-  };
-
-  // Test-Token generieren und einloggen
-  const handleTestLogin = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/auth/test-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: testRole, email: testEmail })
-      });
-
-      if (!res.ok) {
-        throw new Error('Test-Token konnte nicht erstellt werden.');
-      }
-
-      const data = await res.json();
-      router.push(`/api/auth/callback?token=${data.token}`);
-    } catch (err) {
-      setError(err.message);
-      setIsLoading(false);
     }
   };
 
@@ -137,76 +104,6 @@ export default function LoginPage() {
                   <span>Über Identity Provider anmelden</span>
                 </>
               )}
-            </button>
-          </div>
-
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-slate-700"></div>
-            <span className="flex-shrink mx-4 text-slate-500 text-xs font-medium uppercase">Oder</span>
-            <div className="flex-grow border-t border-slate-700"></div>
-          </div>
-
-          {/* 2. Token Einfügen */}
-          <form onSubmit={handleTokenLogin} className="space-y-3">
-            <div>
-              <h3 className="text-xs font-bold text-slate-400 tracking-wide uppercase mb-2">JWT manuell übergeben</h3>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  placeholder="Signierten JSON Web Token einfügen..."
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
-                />
-                <button 
-                  type="submit"
-                  className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
-                >
-                  Login
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {/* 3. Test Login Generator (Entwicklung) */}
-          <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700/50 space-y-3">
-            <h4 className="text-xs font-bold text-slate-400 tracking-wide uppercase flex items-center gap-2">
-              <i className="fa-solid fa-bug text-violet-500"></i>
-              <span>Lokaler Test-Generator</span>
-            </h4>
-            <p className="text-[10px] text-slate-500 leading-normal">
-              Erstellt einen JWT mit dem aktuell hinterlegten JWT Secret, um den Redirect-Flow lokal zu simulieren.
-            </p>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">E-Mail</label>
-                <input 
-                  type="email" 
-                  value={testEmail}
-                  onChange={(e) => setTestEmail(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-slate-200 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">Rolle</label>
-                <select 
-                  value={testRole}
-                  onChange={(e) => setTestRole(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-slate-200 focus:outline-none"
-                >
-                  <option value="agent">Agent</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-            </div>
-
-            <button 
-              onClick={handleTestLogin}
-              disabled={isLoading}
-              className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-semibold transition-all mt-1"
-            >
-              Als Test-User einloggen
             </button>
           </div>
 
