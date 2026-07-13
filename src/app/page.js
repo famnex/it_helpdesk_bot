@@ -41,11 +41,11 @@ export default function CustomerChatPage() {
   function getGreetingText(currentUser) {
     if (currentUser && currentUser.name) {
       const firstName = currentUser.name.split(' ')[0];
-      return `Hallo ${firstName}! Schön, dass du da bist. Ich bin dein digitaler Campus-Support-Assistent. Beschreibe mir dein Problem. Sollten wir keine Lösung finden, kann ich direkt ein Ticket für die IT-Admins erstellen.`;
+      return `Hallo ${firstName}! Schön, dass du da bist. Ich bin dein digitaler Helfer für Fragen zu Benutzerkonten, Moodle, Schulportal, Webuntis und allen IT-Systemen. Beschreibe mir dein Problem. Falls wir keine Lösung finden, kann ich direkt ein Ticket für dich erstellen.`;
     } else if (currentUser) {
-      return `Hallo! Schön, dass du da bist. Ich bin dein digitaler Campus-Support-Assistent. Beschreibe mir dein Problem. Sollten wir keine Lösung finden, kann ich direkt ein Ticket für die IT-Admins erstellen.`;
+      return `Hallo! Schön, dass du da bist. Ich bin dein digitaler Helfer für Fragen zu Benutzerkonten, Moodle, Schulportal, Webuntis und allen IT-Systemen. Beschreibe mir dein Problem. Falls wir keine Lösung finden, kann ich direkt ein Ticket für dich erstellen.`;
     }
-    return `Hallo! Ich bin dein digitaler Campus-Support-Assistent. Beschreibe mir dein Problem. Sollten wir keine Lösung finden, kann ich direkt ein Ticket für die IT-Admins erstellen. *(Tipp: Wenn du deine Tickets verwalten willst, gib oben deine E-Mail für einen Anmeldelink ein!)*`;
+    return `Hallo! Ich bin dein digitaler Helfer für Fragen zu Benutzerkonten, Moodle, Schulportal, Webuntis und allen IT-Systemen. Beschreibe mir dein Problem. Falls wir keine Lösung finden, kann ich direkt ein Ticket für dich erstellen. *(Tipp: Wenn du deine Tickets verwalten willst, gib oben deine E-Mail für einen Anmeldelink ein!)*`;
   }
  
   useEffect(() => {
@@ -119,9 +119,13 @@ export default function CustomerChatPage() {
             label: chunk.title,
             query: chunk.title
           }));
-          setSuggestions(dynamicSuggestions);
+          setSuggestions([
+            { label: '🎟️ Support-Ticket erstellen', action: 'create_ticket' },
+            ...dynamicSuggestions
+          ]);
         } else {
           setSuggestions([
+            { label: '🎟️ Support-Ticket erstellen', action: 'create_ticket' },
             { label: 'WLAN einrichten', query: 'Wie verbinde ich mich mit dem Schul-WLAN?' },
             { label: 'Drucker installieren', query: 'Wie installiere ich den Drucker im Lehrerzimmer?' },
             { label: 'Smartboard flackert', query: 'Das Smartboard flackert - was kann ich tun?' }
@@ -130,6 +134,7 @@ export default function CustomerChatPage() {
       })
       .catch(() => {
         setSuggestions([
+          { label: '🎟️ Support-Ticket erstellen', action: 'create_ticket' },
           { label: 'WLAN einrichten', query: 'Wie verbinde ich mich mit dem Schul-WLAN?' },
           { label: 'Drucker installieren', query: 'Wie installiere ich den Drucker im Lehrerzimmer?' },
           { label: 'Smartboard flackert', query: 'Das Smartboard flackert - was kann ich tun?' }
@@ -330,6 +335,19 @@ export default function CustomerChatPage() {
       setMagicError('Verbindungsfehler.');
     }
   };
+
+  const handleSuggestionClick = (s) => {
+    if (s.action === 'create_ticket') {
+      setPendingTicketTitle('Neues Support-Ticket');
+      if (user) {
+        setShowConfirmTicket(true);
+      } else {
+        setShowEmailPrompt(true);
+      }
+    } else {
+      handleSend(null, s.query);
+    }
+  };
  
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
@@ -341,7 +359,7 @@ export default function CustomerChatPage() {
             <i className="fa-solid fa-graduation-cap text-2xl"></i>
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white tracking-tight">Smart Campus IT</h1>
+            <h1 className="text-lg font-bold text-white tracking-tight">IT-Helpdesk / Ticketsystem</h1>
             <p className="text-[10px] text-sky-400 font-semibold tracking-wider">KI SUPPORT ASSISTENT</p>
           </div>
         </div>
@@ -366,7 +384,11 @@ export default function CustomerChatPage() {
                 className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-ticket"></i>
-                <span>Portal öffnen</span>
+                <span>
+                  {user.role === 'customer' 
+                    ? `Meine Tickets (${activeTickets.length} offen)` 
+                    : 'Portal öffnen'}
+                </span>
               </Link>
             </div>
           ) : (
@@ -570,7 +592,7 @@ export default function CustomerChatPage() {
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => handleSend(null, s.query)}
+                    onClick={() => handleSuggestionClick(s)}
                     className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/30 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow text-slate-300 hover:text-white cursor-pointer"
                   >
                     {s.label}
