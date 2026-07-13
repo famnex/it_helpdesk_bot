@@ -19,7 +19,7 @@ export default function CustomerTicketDetailPage() {
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
-        if (!data.user || data.user.role !== 'customer') {
+        if (!data.user) {
           router.push('/');
         } else {
           loadTicketDetails();

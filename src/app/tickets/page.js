@@ -17,8 +17,8 @@ export default function CustomerTicketsPage() {
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
-        if (!data.user || data.user.role !== 'customer') {
-          // Falls kein Kunde angemeldet ist, zurück zur Startseite leiten
+        if (!data.user) {
+          // Falls nicht angemeldet, zurück zur Startseite leiten
           router.push('/');
         } else {
           setUser(data.user);
