@@ -13,6 +13,13 @@ export default function CustomerTicketDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [user, setUser] = useState(null);
+
+  // Flagging Message States
+  const [showFlagModal, setShowFlagModal] = useState(false);
+  const [flaggingMessageId, setFlaggingMessageId] = useState(null);
+  const [flaggingMessageIndex, setFlaggingMessageIndex] = useState(null);
+  const [flagReasonText, setFlagReasonText] = useState('');
+
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
@@ -82,22 +89,31 @@ export default function CustomerTicketDetailPage() {
       setIsLoading(false);
     }
   };
-  const handleFlagMessage = async (messageId, msgIndex) => {
+  const handleFlagMessage = (messageId, msgIndex) => {
     if (!messageId) return;
+    setFlaggingMessageId(messageId);
+    setFlaggingMessageIndex(msgIndex);
+    setFlagReasonText('');
+    setShowFlagModal(true);
+  };
+
+  const submitFlagMessage = async () => {
+    if (!flaggingMessageId) return;
     try {
       const res = await fetch('/api/chat/flag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId })
+        body: JSON.stringify({ messageId: flaggingMessageId, reason: flagReasonText })
       });
       if (res.ok) {
         setMessages(prev => {
           const updated = [...prev];
-          if (updated[msgIndex]) {
-            updated[msgIndex] = { ...updated[msgIndex], isFlagged: true };
+          if (updated[flaggingMessageIndex]) {
+            updated[flaggingMessageIndex] = { ...updated[flaggingMessageIndex], isFlagged: true };
           }
           return updated;
         });
+        setShowFlagModal(false);
       }
     } catch (err) {
       console.error('Fehler beim Melden der Nachricht:', err);
@@ -299,6 +315,56 @@ export default function CustomerTicketDetailPage() {
 
         </main>
 
+        {/* Modal zum Melden einer Antwort (global positioniert) */}
+        {showFlagModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-red-500 animate-pulse">
+                  <i className="fa-solid fa-flag text-xl"></i>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Antwort melden</h3>
+                  <p className="text-[10px] text-slate-400">Hilf uns, den IT-Helpdesk-Bot zu verbessern. Was ist an dieser Antwort falsch oder unpassend?</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Problembeschreibung (Optional)</label>
+                  <textarea 
+                    value={flagReasonText}
+                    onChange={(e) => setFlagReasonText(e.target.value)}
+                    placeholder="z.B. Die genannte Tastenkombination ist falsch, die Lösung passt nicht zu meinem Drucker-Problem, etc."
+                    rows="3"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:border-red-500 transition-colors"
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowFlagModal(false);
+                      setFlagReasonText('');
+                    }}
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Abbrechen
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={submitFlagMessage}
+                    className="flex-1 py-2 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                    <span>Meldung absenden</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

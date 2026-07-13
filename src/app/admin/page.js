@@ -1422,6 +1422,16 @@ export default function AdminDashboardPage() {
                       </button>
                     </div>
 
+                    {msg.flaggedReason && (
+                      <div className="mx-5 mt-4 p-3.5 bg-red-950/20 border border-red-500/20 rounded-xl text-xs text-red-200 shadow-inner flex items-start gap-2.5">
+                        <div className="text-red-500 bg-red-500/10 p-1.5 rounded-lg shrink-0 mt-0.5"><i className="fa-solid fa-triangle-exclamation"></i></div>
+                        <div>
+                          <strong className="text-red-400 block mb-0.5">Nutzer-Begründung:</strong>
+                          <span className="leading-relaxed">{msg.flaggedReason}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Chatverlauf Context */}
                     <div className="p-5 space-y-4 bg-slate-900/25">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chat-Kontext (die letzten 5 Nachrichten):</p>

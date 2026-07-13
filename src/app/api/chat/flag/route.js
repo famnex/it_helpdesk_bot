@@ -3,7 +3,7 @@ import db from '@/lib/db';
 
 export async function POST(request) {
   try {
-    const { messageId } = await request.json();
+    const { messageId, reason } = await request.json();
     if (!messageId) {
       return NextResponse.json({ error: 'Nachrichten-ID fehlt.' }, { status: 400 });
     }
@@ -11,9 +11,9 @@ export async function POST(request) {
     // Nachricht aktualisieren
     const result = db.prepare(`
       UPDATE chat_messages 
-      SET is_flagged = 1, flagged_at = CURRENT_TIMESTAMP
+      SET is_flagged = 1, flagged_at = CURRENT_TIMESTAMP, flagged_reason = ?
       WHERE id = ? AND sender = 'bot'
-    `).run(messageId);
+    `).run(reason || null, messageId);
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Nachricht nicht gefunden oder kein Bot-Sender.' }, { status: 404 });

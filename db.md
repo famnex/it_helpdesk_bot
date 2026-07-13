@@ -257,3 +257,10 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ALTER TABLE chats ADD COLUMN is_abusive BOOLEAN DEFAULT 0;
   ALTER TABLE chats ADD COLUMN abusive_flagged_at DATETIME;
   ```
+
+### Update #7 (13.07.2026): Hinzufügen der Spalte `flagged_reason` zu `chat_messages`
+* **Ziel:** Speichern einer Freitext-Begründung des Nutzers, warum er eine Bot-Antwort geflaggt/gemeldet hat.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chat_messages ADD COLUMN flagged_reason TEXT;
+  ```

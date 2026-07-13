@@ -12,7 +12,7 @@ export async function GET() {
     // Holt alle geflaggten Nachrichten, sortiert nach flagged_at absteigend
     const flaggedMessages = db.prepare(`
       SELECT m.id, m.chat_id as chatId, m.text, m.flagged_at as flaggedAt,
-             c.user_email as userEmail
+             m.flagged_reason as flaggedReason, c.user_email as userEmail
       FROM chat_messages m
       JOIN chats c ON m.chat_id = c.id
       WHERE m.is_flagged = 1 AND m.sender = 'bot'
