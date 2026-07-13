@@ -172,7 +172,7 @@ export async function POST(request) {
       if (ticket) {
         db.prepare(`
           INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-          VALUES (?, 'system', 'system', ?)
+          VALUES (?, 'bot', 'bot', ?)
         `).run(ticket.id, 'KI-Bot (Chat)', aiResponse);
       }
     } catch (e) {

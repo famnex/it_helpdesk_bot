@@ -217,7 +217,7 @@ export default function CustomerTicketDetailPage() {
                       )}
                     </div>
                     <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                      {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                      {isBot ? 'IT-Helpdesk-Bot' : isCustomer ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                     </span>
                   </div>
                 </div>

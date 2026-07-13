@@ -364,7 +364,7 @@ export default function AgentTicketDetailPage() {
                         />
                       </div>
                       <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                        {msg.senderRole === 'bot' ? 'KI-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {msg.senderRole === 'bot' ? 'IT-Helpdesk-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                     </div>
                   </div>

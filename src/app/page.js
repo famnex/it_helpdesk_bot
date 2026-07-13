@@ -578,6 +578,9 @@ export default function CustomerChatPage() {
                         />
                       </div>
                     )}
+                    <span className="text-[9px] text-slate-500 mt-1 mx-1">
+                      {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'}
+                    </span>
                   </div>
                 </div>
 
