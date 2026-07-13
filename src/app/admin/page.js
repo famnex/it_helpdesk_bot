@@ -39,7 +39,7 @@ export default function AdminDashboardPage() {
 
   // Settings States
   const [smtpConfig, setSmtpConfig] = useState({ host: '', port: 1025, user: '', pass: '', secure: false, sender: '' });
-  const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '' });
+  const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '', logoutRedirectUrl: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
   const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
   const [settingsSuccess, setSettingsSuccess] = useState(false);
@@ -185,7 +185,18 @@ export default function AdminDashboardPage() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+          return;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
     router.push('/login');
   };
 
@@ -1021,6 +1032,16 @@ export default function AdminDashboardPage() {
                     value={idpConfig.logoutText || ''}
                     onChange={(e) => setIdpConfig({ ...idpConfig, logoutText: e.target.value })}
                     placeholder="z.B. Zurück zur MSO-Cloud"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">IdP Redirect Logout URL (nach Abmeldung)</label>
+                  <input 
+                    type="url" 
+                    value={idpConfig.logoutRedirectUrl || ''}
+                    onChange={(e) => setIdpConfig({ ...idpConfig, logoutRedirectUrl: e.target.value })}
+                    placeholder="z.B. https://idp.schule.de/logout"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
                 </div>

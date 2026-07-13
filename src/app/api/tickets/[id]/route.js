@@ -132,3 +132,26 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE: Ticket dauerhaft löschen (nur für Admins)
+ */
+export async function DELETE(request, { params }) {
+  const { id } = await params;
+  const user = await getSessionUser();
+
+  if (!user || user.role !== 'admin') {
+    return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
+  }
+
+  try {
+    const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
+    if (result.changes === 0) {
+      return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('Fehler beim Löschen des Tickets:', err);
+    return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
+  }
+}

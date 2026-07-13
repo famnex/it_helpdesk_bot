@@ -56,7 +56,18 @@ export default function AgentDashboardPage() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+          return;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
     router.push('/login');
   };
 
@@ -73,6 +84,28 @@ export default function AgentDashboardPage() {
       }
     } catch (err) {
       console.error('Fehler bei Schnellzuweisung:', err);
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId) => {
+    if (!confirm('Möchtest du dieses Ticket wirklich dauerhaft löschen? Alle Nachrichten und Notizen werden ebenfalls gelöscht.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        setTickets(prev => prev.filter(t => t.id !== ticketId));
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Löschen.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
     }
   };
 
@@ -259,12 +292,22 @@ export default function AgentDashboardPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <Link 
-                            href={`/agent/tickets/${tk.id}`}
-                            className="bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all"
-                          >
-                            Bearbeiten
-                          </Link>
+                          <div className="flex justify-end items-center gap-2">
+                            <Link 
+                              href={`/agent/tickets/${tk.id}`}
+                              className="bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all"
+                            >
+                              Bearbeiten
+                            </Link>
+                            {user?.role === 'admin' && (
+                              <button
+                                onClick={() => handleDeleteTicket(tk.id)}
+                                className="bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all cursor-pointer"
+                              >
+                                Löschen
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
