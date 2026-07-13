@@ -275,8 +275,10 @@ export default function AgentTicketDetailPage() {
 
             {messages.map((msg, index) => {
               const isAgent = msg.senderRole === 'agent' || msg.senderRole === 'admin';
+              const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
               const isInternalMessage = msg.isInternal === 1;
+              const isRightAligned = isAgent || isBot;
 
               if (isSystem) {
                 return (
@@ -320,6 +322,16 @@ export default function AgentTicketDetailPage() {
 
               return (
                 <div key={index} className="space-y-4">
+                  {index === 0 && msg.isPreTicket && (
+                    <div className="flex items-center gap-4 py-4 justify-center">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[9px] bg-slate-900 border border-slate-800 text-slate-500 px-3 py-1 rounded-full font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-sm">
+                        <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>
+                        <span>Chatverlauf vor Ticket</span>
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
                   {isFirstTicketMessage && (
                     <div className="flex items-center gap-4 py-4 justify-center">
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -331,10 +343,10 @@ export default function AgentTicketDetailPage() {
                     </div>
                   )}
                   <div 
-                    className={`flex gap-3 max-w-[80%] ${isAgent ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
+                    className={`flex gap-3 max-w-[80%] ${isRightAligned ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                   >
                     {renderAvatar()}
-                    <div className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} max-w-full`}>
+                    <div className={`flex flex-col ${isRightAligned ? 'items-end' : 'items-start'} max-w-full`}>
                       {/* Internal vermerk header */}
                       {isInternalMessage && (
                         <span className="text-[9px] text-violet-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -342,14 +354,8 @@ export default function AgentTicketDetailPage() {
                           <span>Interner Vermerk (nur Mitarbeiter)</span>
                         </span>
                       )}
-                      {msg.isPreTicket && (
-                        <span className="text-[8px] text-slate-500 font-semibold uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <i className="fa-solid fa-clock-rotate-left"></i>
-                          <span>Chatverlauf vor Ticket</span>
-                        </span>
-                      )}
                       <div 
-                        className={`${isAgent ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
+                        className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-800/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
                       >
                         {msg.text}
                       </div>
