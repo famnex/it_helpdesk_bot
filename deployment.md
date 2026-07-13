@@ -75,8 +75,8 @@ Um Apache als Reverse-Proxy zu konfigurieren, müssen die Proxy-Module aktiviert
    ProxyPreserveHost On
    
    <Location /helpdesk>
-       ProxyPass http://localhost:3000/helpdesk
-       ProxyPassReverse http://localhost:3000/helpdesk
+       ProxyPass http://localhost:3005/helpdesk
+       ProxyPassReverse http://localhost:3005/helpdesk
    </Location>
    ```
 
@@ -91,7 +91,7 @@ Falls du Nginx nutzt, öffne die Nginx-Konfigurationsdatei deiner Domain (z. B. 
 
 ```nginx
 location /helpdesk {
-    proxy_pass http://localhost:3000;
+    proxy_pass http://localhost:3005;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
