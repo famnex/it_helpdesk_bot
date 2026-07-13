@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { marked } from 'marked';
 
 export default function AgentTicketDetailPage() {
   const { id } = useParams();
@@ -355,9 +356,12 @@ export default function AgentTicketDetailPage() {
                         </span>
                       )}
                       <div 
-                        className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-800/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
+                        className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                       >
-                        {msg.text}
+                        <div 
+                          className="markdown-content"
+                          dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                        />
                       </div>
                       <span className="text-[9px] text-slate-500 mt-1 mx-1">
                         {msg.senderRole === 'bot' ? 'KI-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr

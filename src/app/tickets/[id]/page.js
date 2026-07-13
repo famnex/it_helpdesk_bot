@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { marked } from 'marked';
 
 export default function CustomerTicketDetailPage() {
   const { id } = useParams();
@@ -201,9 +202,12 @@ export default function CustomerTicketDetailPage() {
                   </div>
                   <div className={`flex flex-col ${isCustomer ? 'items-end' : 'items-start'} max-w-full`}>
                     <div 
-                      className={`${isCustomer ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
+                      className={`${isCustomer ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                     >
-                      {msg.text}
+                      <div 
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                      />
                       {msg.imageUrl && (
                         <img 
                           src={msg.imageUrl.startsWith('/') && !msg.imageUrl.startsWith('/helpdesk') ? `/helpdesk${msg.imageUrl}` : msg.imageUrl}
