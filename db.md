@@ -240,3 +240,11 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ```sql
   ALTER TABLE chats ADD COLUMN ticket_created BOOLEAN DEFAULT 0;
   ```
+
+### Update #5 (13.07.2026): Hinzufügen der Spalten `is_flagged` und `flagged_at` zu `chat_messages`
+* **Ziel:** Ermöglichen, dass Kunden fehlerhafte Bot-Antworten flaggen/melden können, die im Admin-Portal zur Prüfung gesammelt werden.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chat_messages ADD COLUMN is_flagged BOOLEAN DEFAULT 0;
+  ALTER TABLE chat_messages ADD COLUMN flagged_at DATETIME;
+  ```

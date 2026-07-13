@@ -46,6 +46,10 @@ export default function AdminDashboardPage() {
   const [settingsError, setSettingsError] = useState('');
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
 
+  // Flagged Messages States
+  const [flaggedMessages, setFlaggedMessages] = useState([]);
+  const [isFlaggedLoading, setIsFlaggedLoading] = useState(false);
+
   // Update States
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateLogs, setUpdateLogs] = useState(null);
@@ -74,6 +78,8 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (activeTab === 'users') {
       loadUsers();
+    } else if (activeTab === 'flagged') {
+      loadFlaggedMessages();
     }
   }, [activeTab]);
 
@@ -93,6 +99,36 @@ export default function AdminDashboardPage() {
       setUsersError('Verbindungsfehler.');
     } finally {
       setUsersLoading(false);
+    }
+  };
+
+  const loadFlaggedMessages = async () => {
+    setIsFlaggedLoading(true);
+    try {
+      const res = await fetch('/api/admin/flagged');
+      if (res.ok) {
+        const data = await res.json();
+        setFlaggedMessages(data.flaggedMessages || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden geflaggter Nachrichten:', e);
+    } finally {
+      setIsFlaggedLoading(false);
+    }
+  };
+
+  const handleResolveFlagged = async (messageId) => {
+    try {
+      const res = await fetch('/api/admin/flagged', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, action: 'resolve' })
+      });
+      if (res.ok) {
+        setFlaggedMessages(prev => prev.filter(m => m.id !== messageId));
+      }
+    } catch (e) {
+      console.error('Fehler beim Freigeben der Nachricht:', e);
     }
   };
 
@@ -542,6 +578,13 @@ export default function AdminDashboardPage() {
         >
           <i className="fa-solid fa-users"></i>
           <span>Benutzerverwaltung</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('flagged')}
+          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'flagged' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+        >
+          <i className="fa-solid fa-flag"></i>
+          <span>Geflaggte Antworten</span>
         </button>
         <button 
           onClick={() => setActiveTab('update')}
@@ -1260,10 +1303,10 @@ export default function AdminDashboardPage() {
                           <td className="px-6 py-4 text-xs font-mono">{usr.email}</td>
                           <td className="px-6 py-4">
                             <select
-                              value={usr.role}
-                              onChange={(e) => handleUpdateRole(usr.id, e.target.value)}
-                              disabled={usr.id === user.id}
-                              className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-violet-500 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                               value={usr.role}
+                               onChange={(e) => handleUpdateRole(usr.id, e.target.value)}
+                               disabled={usr.id === user.id}
+                               className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-violet-500 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <option value="customer">Kunde (Customer)</option>
                               <option value="agent">Support-Agent (Agent)</option>
@@ -1287,6 +1330,88 @@ export default function AdminDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 6: Geflaggte Antworten */}
+        {activeTab === 'flagged' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
+              <h3 className="text-sm font-bold text-white mb-1">Geflaggte Bot-Antworten</h3>
+              <p className="text-xs text-slate-400">Hier werden fehlerhafte oder verdächtige Bot-Antworten gesammelt, die Kunden im Chat als "komisch" oder "falsch" gemeldet haben.</p>
+            </div>
+
+            {isFlaggedLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : flaggedMessages.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine geflaggten Antworten zur Prüfung vorhanden.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {flaggedMessages.map((msg) => (
+                  <div key={msg.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
+                    {/* Header */}
+                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-wrap justify-between items-center gap-2">
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-mono bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold px-2 py-0.5 rounded">
+                          {msg.chatId}
+                        </span>
+                        <span className="text-slate-400">
+                          Gemeldet: <strong className="text-slate-200">{new Date(msg.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                        </span>
+                        {msg.userEmail && (
+                          <span className="text-slate-400">
+                            Benutzer: <strong className="text-slate-200">{msg.userEmail}</strong>
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleResolveFlagged(msg.id)}
+                        className="bg-violet-950/20 hover:bg-violet-800 text-violet-400 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                      >
+                        <i className="fa-solid fa-circle-check mr-1.5"></i>
+                        Freigeben (Meldung löschen)
+                      </button>
+                    </div>
+
+                    {/* Chatverlauf Context */}
+                    <div className="p-5 space-y-4 bg-slate-900/25">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chat-Kontext (die letzten 5 Nachrichten):</p>
+                      <div className="space-y-3 max-w-3xl border-l-2 border-slate-800 pl-4 py-1">
+                        {msg.context.map((ctxMsg, ctxIdx) => {
+                          const isUser = ctxMsg.sender === 'user';
+                          const isTarget = ctxIdx === msg.context.length - 1; // Die gemeldete Nachricht ist immer die letzte im Kontext
+                          
+                          return (
+                            <div key={ctxIdx} className={`space-y-1 ${isTarget ? 'bg-red-500/5 border border-red-500/25 p-3 rounded-xl' : ''}`}>
+                              <div className="flex items-center gap-2 text-[10px] font-bold">
+                                <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
+                                  {isUser ? 'Benutzer' : 'IT-Helpdesk-Bot'}
+                                </span>
+                                <span className="text-slate-600 font-normal">
+                                  {new Date(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                </span>
+                                {isTarget && (
+                                  <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase scale-90">
+                                    Gemeldete Antwort
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
+                                {ctxMsg.text}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

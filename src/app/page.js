@@ -228,10 +228,10 @@ export default function CustomerChatPage() {
       const data = await res.json();
       
       // Bot-Nachricht hinzufügen
-      setMessages(prev => [...prev, { sender: 'bot', text: data.text }]);
+      setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
       setIsTyping(false);
  
-      // Falls die KI ein Ticket triggert
+      // Falls the KI ein Ticket triggert
       if (data.ticketCreated) {
         setPendingTicketTitle(data.proposedTitle || userText || 'Support-Anfrage über Chat-Assistent');
         if (user) {
@@ -263,14 +263,38 @@ export default function CustomerChatPage() {
       if (res.ok) {
         const data = await res.json();
         setMessages(prev => [...prev, { 
+          id: data.botMessageId,
           sender: 'bot', 
-          text: data.text 
+          text: data.text,
+          isFlagged: false
         }]);
       }
     } catch (err) {
       console.error('Fehler bei System-Event an Bot:', err);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleFlagMessage = async (messageId, msgIndex) => {
+    if (!messageId) return;
+    try {
+      const res = await fetch('/api/chat/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId })
+      });
+      if (res.ok) {
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated[msgIndex]) {
+            updated[msgIndex] = { ...updated[msgIndex], isFlagged: true };
+          }
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Fehler beim Melden der Nachricht:', err);
     }
   };
 
@@ -578,9 +602,23 @@ export default function CustomerChatPage() {
                         />
                       </div>
                     )}
-                    <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                      {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'}
-                    </span>
+                    <div className="flex items-center gap-2 mt-1 mx-1">
+                      <span className="text-[9px] text-slate-500">
+                        {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'}
+                      </span>
+                      {!isUser && msg.id && (
+                        <button
+                          type="button"
+                          onClick={() => handleFlagMessage(msg.id, index)}
+                          disabled={msg.isFlagged}
+                          className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
+                          title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
+                        >
+                          <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
+                          <span>{msg.isFlagged ? 'Gemeldet' : 'Melden'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

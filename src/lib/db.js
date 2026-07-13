@@ -142,6 +142,14 @@ try {
     console.log("Migration: Spalte 'ticket_created' zur Tabelle 'chats' hinzugefügt.");
   }
 
+  const tableInfoChatMessagesFlag = db.prepare("PRAGMA table_info(chat_messages)").all();
+  const hasIsFlagged = tableInfoChatMessagesFlag.some(col => col.name === 'is_flagged');
+  if (!hasIsFlagged) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN is_flagged BOOLEAN DEFAULT 0;");
+    db.exec("ALTER TABLE chat_messages ADD COLUMN flagged_at DATETIME;");
+    console.log("Migration: Spalten 'is_flagged' und 'flagged_at' zur Tabelle 'chat_messages' hinzugefügt.");
+  }
+
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();
   
   const hasDescription = tableInfoKnowledge.some(col => col.name === 'description');

@@ -80,6 +80,27 @@ export default function CustomerTicketDetailPage() {
       setIsLoading(false);
     }
   };
+  const handleFlagMessage = async (messageId, msgIndex) => {
+    if (!messageId) return;
+    try {
+      const res = await fetch('/api/chat/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId })
+      });
+      if (res.ok) {
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated[msgIndex]) {
+            updated[msgIndex] = { ...updated[msgIndex], isFlagged: true };
+          }
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Fehler beim Melden der Nachricht:', err);
+    }
+  };
 
   const handleSendReply = async (e) => {
     e.preventDefault();
@@ -216,9 +237,23 @@ export default function CustomerTicketDetailPage() {
                         />
                       )}
                     </div>
-                    <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                      {isBot ? 'IT-Helpdesk-Bot' : isCustomer ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
-                    </span>
+                    <div className="flex items-center gap-2 mt-1 mx-1">
+                      <span className="text-[9px] text-slate-500">
+                        {isBot ? 'IT-Helpdesk-Bot' : isCustomer ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                      </span>
+                      {isBot && msg.id && (
+                        <button
+                          type="button"
+                          onClick={() => handleFlagMessage(msg.id, index)}
+                          disabled={msg.isFlagged}
+                          className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
+                          title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
+                        >
+                          <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
+                          <span>{msg.isFlagged ? 'Gemeldet' : 'Melden'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
