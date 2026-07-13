@@ -59,7 +59,14 @@ export async function GET(request, { params }) {
       `).all(id);
     }
 
-    return NextResponse.json({ ticket, messages });
+    const messagesWithPrefix = messages.map(m => {
+      if (m.senderAvatarUrl && !m.senderAvatarUrl.startsWith('/helpdesk')) {
+        m.senderAvatarUrl = `/helpdesk${m.senderAvatarUrl}`;
+      }
+      return m;
+    });
+
+    return NextResponse.json({ ticket, messages: messagesWithPrefix });
   } catch (err) {
     console.error('Fehler beim Abrufen des Tickets:', err);
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });

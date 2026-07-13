@@ -18,7 +18,14 @@ export async function GET() {
       ORDER BY role ASC, email ASC
     `).all();
     
-    return NextResponse.json({ users });
+    const usersWithAvatars = users.map(u => {
+      if (u.avatarUrl && !u.avatarUrl.startsWith('/helpdesk')) {
+        u.avatarUrl = `/helpdesk${u.avatarUrl}`;
+      }
+      return u;
+    });
+    
+    return NextResponse.json({ users: usersWithAvatars });
   } catch (err) {
     console.error('Fehler beim Abrufen der Benutzerliste:', err);
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });

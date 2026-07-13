@@ -24,7 +24,14 @@ export async function GET(request) {
         ORDER BY created_at ASC
       `).all(chatId);
       
-      return NextResponse.json({ messages });
+      const messagesWithPrefix = messages.map(m => {
+        if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
+          m.imageUrl = `/helpdesk${m.imageUrl}`;
+        }
+        return m;
+      });
+      
+      return NextResponse.json({ messages: messagesWithPrefix });
     }
 
     if (user && user.email) {

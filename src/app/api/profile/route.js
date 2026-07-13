@@ -13,6 +13,9 @@ export async function GET() {
 
   try {
     const profile = db.prepare('SELECT id, email, role, name, avatar_url as avatarUrl FROM users WHERE id = ?').get(user.id);
+    if (profile && profile.avatarUrl && !profile.avatarUrl.startsWith('/helpdesk')) {
+      profile.avatarUrl = `/helpdesk${profile.avatarUrl}`;
+    }
     if (!profile) {
       return NextResponse.json({ error: 'Profil nicht gefunden.' }, { status: 404 });
     }

@@ -12,6 +12,9 @@ export async function GET() {
 
   try {
     const user = db.prepare('SELECT id, email, role, name, avatar_url as avatarUrl FROM users WHERE id = ?').get(sessionUser.id);
+    if (user && user.avatarUrl && !user.avatarUrl.startsWith('/helpdesk')) {
+      user.avatarUrl = `/helpdesk${user.avatarUrl}`;
+    }
     return NextResponse.json({ user });
   } catch (err) {
     console.error('Fehler bei /api/auth/me:', err);
