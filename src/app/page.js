@@ -35,12 +35,8 @@ export default function CustomerChatPage() {
   
   const messagesEndRef = useRef(null);
 
-  // Frage-Vorschläge
-  const suggestions = [
-    { label: 'WLAN einrichten', query: 'Wie verbinde ich mich mit dem Schul-WLAN?' },
-    { label: 'Drucker installieren', query: 'Wie installiere ich den Drucker im Lehrerzimmer?' },
-    { label: 'Smartboard flackert', query: 'Das Smartboard flackert - was kann ich tun?' }
-  ];
+  // Frage-Vorschläge (dynamisch aus der Datenbank)
+  const [suggestions, setSuggestions] = useState([]);
 
   function getGreetingText(currentUser) {
     if (currentUser && currentUser.name) {
@@ -112,6 +108,32 @@ export default function CustomerChatPage() {
             }
           ]);
         }
+      });
+    // 4. Häufige Fragen (Wissensdatenbank-Artikel) laden
+    fetch('/api/knowledge')
+      .then(res => res.json())
+      .then(data => {
+        if (data.chunks && data.chunks.length > 0) {
+          // Nimm bis zu 3 echte Einträge als Vorschläge
+          const dynamicSuggestions = data.chunks.slice(0, 3).map(chunk => ({
+            label: chunk.title,
+            query: chunk.title
+          }));
+          setSuggestions(dynamicSuggestions);
+        } else {
+          setSuggestions([
+            { label: 'WLAN einrichten', query: 'Wie verbinde ich mich mit dem Schul-WLAN?' },
+            { label: 'Drucker installieren', query: 'Wie installiere ich den Drucker im Lehrerzimmer?' },
+            { label: 'Smartboard flackert', query: 'Das Smartboard flackert - was kann ich tun?' }
+          ]);
+        }
+      })
+      .catch(() => {
+        setSuggestions([
+          { label: 'WLAN einrichten', query: 'Wie verbinde ich mich mit dem Schul-WLAN?' },
+          { label: 'Drucker installieren', query: 'Wie installiere ich den Drucker im Lehrerzimmer?' },
+          { label: 'Smartboard flackert', query: 'Das Smartboard flackert - was kann ich tun?' }
+        ]);
       });
   }, []);
 
