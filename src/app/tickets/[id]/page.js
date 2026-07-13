@@ -44,7 +44,32 @@ export default function CustomerTicketDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setTicket(data.ticket);
-        setMessages(data.messages || []);
+        
+        let ticketMessages = data.messages || [];
+        if (data.ticket.chatId) {
+          try {
+            const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
+            if (chatRes.ok) {
+              const chatData = await chatRes.json();
+              const chatHistory = (chatData.messages || []).map(m => ({
+                ...m,
+                isPreTicket: true,
+                senderRole: m.sender === 'user' ? 'customer' : 'bot',
+                senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
+                text: m.text,
+                createdAt: m.createdAt
+              }));
+              setMessages([...chatHistory, ...ticketMessages]);
+            } else {
+              setMessages(ticketMessages);
+            }
+          } catch (e) {
+            console.error('Fehler beim Laden des Pre-Ticket-Chats:', e);
+            setMessages(ticketMessages);
+          }
+        } else {
+          setMessages(ticketMessages);
+        }
       } else {
         router.push('/tickets');
       }
@@ -145,6 +170,7 @@ export default function CustomerTicketDetailPage() {
 
             {messages.map((msg, index) => {
               const isCustomer = msg.senderRole === 'customer';
+              const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
               
               if (isSystem) {
@@ -157,19 +183,34 @@ export default function CustomerTicketDetailPage() {
                 );
               }
 
+              const avatarBg = isCustomer
+                ? 'bg-slate-700 text-slate-300'
+                : isBot
+                  ? 'bg-violet-650/10 border border-violet-500/20 text-violet-400'
+                  : 'bg-violet-500/10 border border-violet-500/20 text-violet-400';
+
+              const avatarIcon = isCustomer ? 'user' : isBot ? 'robot' : 'user-tie';
+
               return (
                 <div 
                   key={index} 
                   className={`flex gap-3 max-w-[80%] ${isCustomer ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                 >
-                  <div className={`w-8 h-8 rounded-xl ${isCustomer ? 'bg-slate-700 text-slate-300' : 'bg-violet-500/10 border border-violet-500/20 text-violet-400'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
-                    <i className={`fa-solid fa-${isCustomer ? 'user' : 'user-tie'} text-xs`}></i>
+                  <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
+                    <i className={`fa-solid fa-${avatarIcon} text-xs`}></i>
                   </div>
                   <div className={`flex flex-col ${isCustomer ? 'items-end' : 'items-start'} max-w-full`}>
                     <div 
                       className={`${isCustomer ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed`}
                     >
                       {msg.text}
+                      {msg.imageUrl && (
+                        <img 
+                          src={msg.imageUrl.startsWith('/') && !msg.imageUrl.startsWith('/helpdesk') ? `/helpdesk${msg.imageUrl}` : msg.imageUrl}
+                          alt="Foto" 
+                          className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block" 
+                        />
+                      )}
                     </div>
                     <span className="text-[9px] text-slate-500 mt-1 mx-1">
                       {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
