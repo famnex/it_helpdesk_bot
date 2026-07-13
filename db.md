@@ -248,3 +248,12 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ALTER TABLE chat_messages ADD COLUMN is_flagged BOOLEAN DEFAULT 0;
   ALTER TABLE chat_messages ADD COLUMN flagged_at DATETIME;
   ```
+
+### Update #6 (13.07.2026): Hinzufügen der Spalten `user_name`, `is_abusive` und `abusive_flagged_at` zu `chats`
+* **Ziel:** Speichern von Flaggen-Daten bei missbräuchlicher Nutzung des Chats (Beleidigungen/Ärgern) und Hinterlegen von Name und E-Mail des Störers.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chats ADD COLUMN user_name TEXT;
+  ALTER TABLE chats ADD COLUMN is_abusive BOOLEAN DEFAULT 0;
+  ALTER TABLE chats ADD COLUMN abusive_flagged_at DATETIME;
+  ```

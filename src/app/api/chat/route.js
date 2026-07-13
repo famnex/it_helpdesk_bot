@@ -18,7 +18,7 @@ export async function GET(request) {
     if (chatId) {
       // Verlauf eines bestimmten Chats laden
       const messages = db.prepare(`
-        SELECT sender, text, image_url as imageUrl, created_at as createdAt 
+        SELECT id, sender, text, image_url as imageUrl, is_flagged as isFlagged, created_at as createdAt 
         FROM chat_messages 
         WHERE chat_id = ? 
         ORDER BY created_at ASC
@@ -109,13 +109,14 @@ export async function POST(request) {
     const email = user ? user.email : null;
 
     // 1. Sicherstellen, dass der Chat existiert
-    let chat = db.prepare('SELECT id, ticket_created as ticketCreated FROM chats WHERE id = ?').get(chatId);
+    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName FROM chats WHERE id = ?').get(chatId);
     if (!chat) {
-      db.prepare('INSERT INTO chats (id, user_email) VALUES (?, ?)').run(chatId, email);
+      db.prepare('INSERT INTO chats (id, user_email, user_name) VALUES (?, ?, ?)').run(chatId, email, user ? user.name : null);
       chat = { id: chatId, ticketCreated: 0 };
-    } else if (email) {
-      // Falls der Chat existierte, aber noch keine E-Mail hatte (z.B. nach Login)
-      db.prepare('UPDATE chats SET user_email = ? WHERE id = ? AND user_email IS NULL').run(email, chatId);
+    } else {
+      // Immer versuchen, E-Mail und Name des angemeldeten Benutzers zu aktualisieren/ergänzen
+      db.prepare('UPDATE chats SET user_email = ?, user_name = ? WHERE id = ?')
+        .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, chatId);
     }
 
     // 2. Benutzernachricht speichern (mit eventuellem Foto)
@@ -162,9 +163,27 @@ export async function POST(request) {
       }
     }
 
+    // Auf Missbrauch (Beleidigung) prüfen
+    let isAbusive = false;
+    if (aiResponse.includes('[CHAT_ABUSE_DETECTED]')) {
+      isAbusive = true;
+      aiResponse = aiResponse.replace('[CHAT_ABUSE_DETECTED]', '').trim();
+      try {
+        db.prepare(`
+          UPDATE chats 
+          SET is_abusive = 1, abusive_flagged_at = CURRENT_TIMESTAMP 
+          WHERE id = ?
+        `).run(chatId);
+        console.log(`Chat ${chatId} wurde als missbräuchlich markiert.`);
+      } catch (err) {
+        console.error('Fehler beim Markieren von Missbrauch:', err);
+      }
+    }
+
     // 6. Botnachricht speichern
-    db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, ?, ?)')
+    const insertResult = db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, ?, ?)')
       .run(chatId, 'bot', aiResponse);
+    const botMessageId = insertResult.lastInsertRowid;
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Botnachricht dort spiegeln
     try {
@@ -182,7 +201,9 @@ export async function POST(request) {
     return NextResponse.json({
       text: aiResponse,
       ticketCreated,
-      proposedTitle
+      proposedTitle,
+      botMessageId,
+      isAbusive
     });
 
   } catch (err) {

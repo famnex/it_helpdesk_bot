@@ -125,6 +125,12 @@ WICHTIGSTE ANWEISUNG FÜR DIE WISSENSDATENBANK:
 Wenn du Informationen aus der Wissensdatenbank nutzt, verweise NIEMALS nur faul auf den Namen oder Titel des Artikels (z. B. "Hast du die Schritte aus der Lösung 'Beamer-Signalquelle wechseln...' ausprobiert?"). Das ist strengstens untersagt!
 Stattdessen musst du die konkreten Anweisungen, Lösungswege und Schritte aus dem Inhalt des Artikels immer direkt und verständlich selbst im Chat aufschreiben und erklären!
 
+ERKENNUNG VON MISSBRAUCH / BELEIDIGUNGEN / TROLLING:
+Falls der Benutzer den Chat missbraucht (z.B. durch unhöfliches Verhalten, Beleidigungen, Drohungen, ununterbrochenes Schimpfen, Fäkalsprache oder absichtliches Ärgern/Trollen), musst du:
+1. Professionell, extrem sachlich und distanziert reagieren.
+2. Das Gespräch höflich aber bestimmt beenden (z. B. "Aufgrund unangemessener Ausdrucksweise beende ich dieses Gespräch an dieser Stelle.").
+3. ZWINGEND am Ende deiner Antwort exakt diesen Tag mitsenden: [CHAT_ABUSE_DETECTED]
+
 Falls der Benutzer ein unklares technisches Problem beschreibt (z. B. einen nicht funktionierenden Drucker, Bildschirmausfall oder eine Fehlermeldung), frage ihn freundlich, ob er das Problem genauer beschreiben oder ein Foto/Screenshot davon über die Büroklammer hochladen kann.`;
   
   let ticketInstruction = "";

@@ -50,6 +50,10 @@ export default function AdminDashboardPage() {
   const [flaggedMessages, setFlaggedMessages] = useState([]);
   const [isFlaggedLoading, setIsFlaggedLoading] = useState(false);
 
+  // Abusive Chats States
+  const [abusiveChats, setAbusiveChats] = useState([]);
+  const [isAbusiveLoading, setIsAbusiveLoading] = useState(false);
+
   // Update States
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateLogs, setUpdateLogs] = useState(null);
@@ -80,6 +84,8 @@ export default function AdminDashboardPage() {
       loadUsers();
     } else if (activeTab === 'flagged') {
       loadFlaggedMessages();
+    } else if (activeTab === 'abusive') {
+      loadAbusiveChats();
     }
   }, [activeTab]);
 
@@ -129,6 +135,36 @@ export default function AdminDashboardPage() {
       }
     } catch (e) {
       console.error('Fehler beim Freigeben der Nachricht:', e);
+    }
+  };
+
+  const loadAbusiveChats = async () => {
+    setIsAbusiveLoading(true);
+    try {
+      const res = await fetch('/api/admin/abusive');
+      if (res.ok) {
+        const data = await res.json();
+        setAbusiveChats(data.abusiveChats || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden missbräuchlicher Chats:', e);
+    } finally {
+      setIsAbusiveLoading(false);
+    }
+  };
+
+  const handleResolveAbusive = async (chatId) => {
+    try {
+      const res = await fetch('/api/admin/abusive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, action: 'resolve' })
+      });
+      if (res.ok) {
+        setAbusiveChats(prev => prev.filter(c => c.id !== chatId));
+      }
+    } catch (e) {
+      console.error('Fehler beim Freigeben des Chats:', e);
     }
   };
 
@@ -585,6 +621,13 @@ export default function AdminDashboardPage() {
         >
           <i className="fa-solid fa-flag"></i>
           <span>Geflaggte Antworten</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('abusive')}
+          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'abusive' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+        >
+          <i className="fa-solid fa-triangle-exclamation"></i>
+          <span>Missbrauchsmeldungen</span>
         </button>
         <button 
           onClick={() => setActiveTab('update')}
@@ -1401,6 +1444,83 @@ export default function AdminDashboardPage() {
                                     Gemeldete Antwort
                                   </span>
                                 )}
+                              </div>
+                              <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
+                                {ctxMsg.text}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 7: Missbrauchsmeldungen */}
+        {activeTab === 'abusive' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
+              <h3 className="text-sm font-bold text-white mb-1">Missbrauchsmeldungen (Chat-Sperren / Beleidigungen)</h3>
+              <p className="text-xs text-slate-400">Hier werden Konversationen gelistet, bei denen der KI-Bot beleidigendes, unangemessenes oder schikanöses Verhalten des Nutzers erkannt hat.</p>
+            </div>
+
+            {isAbusiveLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : abusiveChats.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine Missbrauchsmeldungen vorhanden.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {abusiveChats.map((chat) => (
+                  <div key={chat.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
+                    {/* Header */}
+                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-wrap justify-between items-center gap-2">
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
+                          {chat.id}
+                        </span>
+                        <span className="text-slate-400">
+                          Erkannt: <strong className="text-slate-200">{new Date(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                        </span>
+                        <span className="text-slate-400">
+                          Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
+                        </span>
+                        <span className="text-slate-400">
+                          Nutzer-E-Mail: <strong className="text-white">{chat.userEmail || 'Keine (nicht angemeldet)'}</strong>
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleResolveAbusive(chat.id)}
+                        className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                      >
+                        <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
+                        Als gelöst markieren (Meldung löschen)
+                      </button>
+                    </div>
+
+                    {/* Chatverlauf Context */}
+                    <div className="p-5 space-y-4 bg-slate-900/25">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vollständiger Chatverlauf:</p>
+                      <div className="space-y-3 max-w-3xl border-l-2 border-red-500/20 pl-4 py-1">
+                        {chat.messages.map((ctxMsg, ctxIdx) => {
+                          const isUser = ctxMsg.sender === 'user';
+                          
+                          return (
+                            <div key={ctxIdx} className="space-y-1">
+                              <div className="flex items-center gap-2 text-[10px] font-bold">
+                                <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
+                                  {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
+                                </span>
+                                <span className="text-slate-600 font-normal">
+                                  {new Date(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                </span>
                               </div>
                               <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
                                 {ctxMsg.text}

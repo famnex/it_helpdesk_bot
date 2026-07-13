@@ -150,6 +150,15 @@ try {
     console.log("Migration: Spalten 'is_flagged' und 'flagged_at' zur Tabelle 'chat_messages' hinzugefügt.");
   }
 
+  const tableInfoChatsAbuse = db.prepare("PRAGMA table_info(chats)").all();
+  const hasIsAbusive = tableInfoChatsAbuse.some(col => col.name === 'is_abusive');
+  if (!hasIsAbusive) {
+    db.exec("ALTER TABLE chats ADD COLUMN user_name TEXT;");
+    db.exec("ALTER TABLE chats ADD COLUMN is_abusive BOOLEAN DEFAULT 0;");
+    db.exec("ALTER TABLE chats ADD COLUMN abusive_flagged_at DATETIME;");
+    console.log("Migration: Spalten für Missbrauchs-Erkennung zur Tabelle 'chats' hinzugefügt.");
+  }
+
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();
   
   const hasDescription = tableInfoKnowledge.some(col => col.name === 'description');
