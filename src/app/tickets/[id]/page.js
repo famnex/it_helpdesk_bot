@@ -12,6 +12,7 @@ export default function CustomerTicketDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [user, setUser] = useState(null);
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
@@ -23,6 +24,7 @@ export default function CustomerTicketDetailPage() {
         if (!data.user) {
           router.push('/');
         } else {
+          setUser(data.user);
           loadTicketDetails();
         }
       })
