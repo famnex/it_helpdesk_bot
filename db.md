@@ -90,12 +90,14 @@ Speichert private Chats von Kunden mit dem Bot.
   CREATE TABLE chats (
       id TEXT PRIMARY KEY,
       user_email TEXT,
+      ticket_created BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   ```
 * **Feldbeschreibungen:**
   * `id`: Eindeutige ID des Chat-Verlaufs.
   * `user_email`: Die E-Mail-Adresse des Benutzers, falls dieser angemeldet ist (ermöglicht das Laden alter Chats).
+  * `ticket_created`: Flag (`0` oder `1`), das angibt, ob für diesen Chatverlauf bereits ein Ticket erstellt wurde, um doppelte Ticket-Erstellungen zu verhindern.
 
 ---
 
@@ -230,4 +232,11 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
       file_size INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+  ```
+
+### Update #4 (13.07.2026): Hinzufügen der Spalte `ticket_created` zu `chats`
+* **Ziel:** Verhindern von doppelten Ticket-Erstellungen innerhalb desselben Chatverlaufs.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chats ADD COLUMN ticket_created BOOLEAN DEFAULT 0;
   ```

@@ -44,6 +44,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS chats (
       id TEXT PRIMARY KEY,
       user_email TEXT,
+      ticket_created BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -133,6 +134,12 @@ try {
     // Foreign Keys wieder aktivieren
     db.pragma('foreign_keys = ON');
     console.log("Migration: ticket_messages Tabelle erfolgreich aktualisiert.");
+  }
+  const tableInfoChats = db.prepare("PRAGMA table_info(chats)").all();
+  const hasTicketCreated = tableInfoChats.some(col => col.name === 'ticket_created');
+  if (!hasTicketCreated) {
+    db.exec("ALTER TABLE chats ADD COLUMN ticket_created BOOLEAN DEFAULT 0;");
+    console.log("Migration: Spalte 'ticket_created' zur Tabelle 'chats' hinzugefügt.");
   }
 
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();

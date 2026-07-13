@@ -83,7 +83,7 @@ async function callGemini(modelName, payload) {
  * Generiert eine Antwort im Bot-Chat basierend auf dem aktuellen Chatverlauf
  * und den passenden Wissenseinträgen aus der Datenbank.
  */
-export async function generateChatResponse(chatMessagesState) {
+export async function generateChatResponse(chatMessagesState, ticketAlreadyCreated = false) {
   const { chatModel } = getModelNames();
   
   // 1. Wissensdatenbank auslesen
@@ -122,7 +122,17 @@ export async function generateChatResponse(chatMessagesState) {
   const basePrompt = `Du bist ein freundlicher IT-Support-Chatbot für eine Schule. Du sprichst den Benutzer ausschließlich per Du ("du", "dir", "dein") an. Halte deine Antworten kurz, übersichtlich und präzise.
 Verwende Markdown für Listen, Hervorhebungen und Links.
 Falls der Benutzer ein unklares technisches Problem beschreibt (z.B. einen nicht funktionierenden Drucker, Bildschirmausfall oder eine Fehlermeldung), frage ihn freundlich, ob er das Problem genauer beschreiben oder ein Foto/Screenshot davon über die Büroklammer hochladen kann.`;
-  const ticketInstruction = `
+  
+  let ticketInstruction = "";
+  if (ticketAlreadyCreated) {
+    ticketInstruction = `
+ACHTUNG / ZWINGENDE REGEL:
+Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins erstellt!
+1. Biete dem Benutzer unter KEINEN Umständen eine weitere Ticket-Erstellung an!
+2. Schreibe NIEMALS den Tag [TICKET_CREATED] in deine Antwort!
+3. Informiere den Benutzer stattdessen höflich, dass sein Ticket bereits erfolgreich erfasst wurde (mit der Ticket-ID, falls er danach fragt) und unsere IT-Admins sich darum kümmern werden.`;
+  } else {
+    ticketInstruction = `
 REGELN FÜR TICKET-ERSTELLUNG:
 Biete dem Benutzer ein Support-Ticket NUR in folgenden Fällen an:
 1. Der vorgeschlagene Lösungsweg wurde vom Benutzer ausprobiert und hat nicht funktioniert oder wurde explizit abgelehnt (z. B. "Das funktioniert nicht", "Hilft nicht", "Geht immer noch nicht").
@@ -130,6 +140,7 @@ Biete dem Benutzer ein Support-Ticket NUR in folgenden Fällen an:
 3. Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter oder einer echten Person (z. B. "Ich möchte mit einer echten Person chatten", "Gibt es hier echte Mitarbeiter?"). Da kein Live-Chat existiert, weise freundlich darauf hin und biete stattdessen die Eröffnung eines IT-Support-Tickets für die Admins an.
 
 Wenn der Benutzer der Ticket-Erstellung zustimmt oder explizit danach verlangt, schreibe ZWINGEND am Ende deiner Antwort exakt diesen Tag: [TICKET_CREATED]`;
+  }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
 
@@ -238,6 +249,41 @@ Antworte ausschließlich mit dem generierten Markdown-Text. Schreibe keine Begr�
   };
 
   return callGemini(extractionModel, payload);
+}
+
+/**
+ * Generiert einen kurzen, prägnanten Ticket-Titel aus dem Chatverlauf.
+ */
+export async function generateTicketTitle(chatMessages) {
+  const { extractionModel } = getModelNames();
+  
+  let chatText = "";
+  chatMessages.slice(-10).forEach(m => {
+    chatText += `${m.sender === 'user' ? 'Benutzer' : 'Support-Assistent'}: ${m.text}\n`;
+  });
+
+  const prompt = `Erstelle einen kurzen, prägnanten Ticket-Titel (in deutscher Sprache, maximal 6 Wörter), der das IT-Problem des Benutzers aus dem folgenden Chatverlauf zusammenfasst.
+Antworte ausschließlich mit dem Titeltext selbst, ohne Anführungszeichen oder Einleitung.
+
+Beispiele:
+- "Moodle Passwort zurücksetzen"
+- "WLAN-Verbindung schlägt fehl (Android)"
+- "Smartboard flackert in Raum 204"
+
+Chatverlauf:
+${chatText}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+
+  try {
+    const title = await callGemini(extractionModel, payload);
+    return title.trim().replace(/^["']|["']$/g, '');
+  } catch (err) {
+    console.error('Fehler bei generateTicketTitle:', err);
+    return 'Support-Anfrage über Chat-Assistent';
+  }
 }
 
 /**

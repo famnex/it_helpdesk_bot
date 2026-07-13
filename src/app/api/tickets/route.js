@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { generateTicketTitle } from '@/lib/gemini';
 
 /**
  * GET: Gibt die Tickets aus.
@@ -65,7 +66,28 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    const title = data.title || 'Support-Anfrage über Chat-Assistent';
+    let title = data.title || 'Support-Anfrage über Chat-Assistent';
+    const chatId = data.chat_id || null;
+
+    // Wenn ein Chat verknüpft ist, generiere den Titel per KI
+    if (chatId) {
+      try {
+        const chatMessages = db.prepare(`
+          SELECT sender, text FROM chat_messages 
+          WHERE chat_id = ? 
+          ORDER BY created_at ASC
+        `).all(chatId);
+        
+        if (chatMessages.length > 0) {
+          const aiTitle = await generateTicketTitle(chatMessages);
+          if (aiTitle) {
+            title = aiTitle;
+          }
+        }
+      } catch (e) {
+        console.error('Fehler bei KI-Titelgenerierung:', e);
+      }
+    }
 
     // Eindeutige Ticket-ID generieren (TK-XXXX)
     let ticketId;
@@ -80,13 +102,16 @@ export async function POST(request) {
       }
     }
 
-    const chatId = data.chat_id || null;
-
     // Ticket anlegen
     db.prepare(`
       INSERT INTO tickets (id, title, status, creator_email, chat_id) 
       VALUES (?, ?, 'open', ?, ?)
     `).run(ticketId, title, email, chatId);
+
+    // Chat als ticket_created markieren
+    if (chatId) {
+      db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
+    }
 
     // Initiale System-Nachricht einfügen
     db.prepare(`

@@ -109,9 +109,10 @@ export async function POST(request) {
     const email = user ? user.email : null;
 
     // 1. Sicherstellen, dass der Chat existiert
-    let chat = db.prepare('SELECT id FROM chats WHERE id = ?').get(chatId);
+    let chat = db.prepare('SELECT id, ticket_created as ticketCreated FROM chats WHERE id = ?').get(chatId);
     if (!chat) {
       db.prepare('INSERT INTO chats (id, user_email) VALUES (?, ?)').run(chatId, email);
+      chat = { id: chatId, ticketCreated: 0 };
     } else if (email) {
       // Falls der Chat existierte, aber noch keine E-Mail hatte (z.B. nach Login)
       db.prepare('UPDATE chats SET user_email = ? WHERE id = ? AND user_email IS NULL').run(email, chatId);
@@ -130,7 +131,7 @@ export async function POST(request) {
     `).all(chatId);
 
     // 4. Gemini aufrufen
-    let aiResponse = await generateChatResponse(chatHistory);
+    let aiResponse = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0);
 
     // 5. Auf Ticket-Erstellung prüfen
     let ticketCreated = false;
