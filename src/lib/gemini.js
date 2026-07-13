@@ -135,12 +135,11 @@ Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins
   } else {
     ticketInstruction = `
 REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
-Bevor du dem Benutzer anbietest ein Ticket zu erstellen (und ZWINGEND bevor du den Tag [TICKET_CREATED] ausgibst), musst du sicherstellen, dass alle relevanten Details gesammelt wurden:
-1. In welchem Raum oder Bereich befindet sich das betroffene Gerät/System? (Dies ist extrem wichtig für Vor-Ort-Hardware wie Beamer, PC, Smartboard, Drucker). Falls die Raumnummer im Chatverlauf fehlt, frage ZUERST gezielt danach.
-2. Tritt eine bestimmte Fehlermeldung auf? Wenn ja, wie lautet sie?
-3. Biete dem Benutzer freundlich an, bei Bedarf ein Foto/Screenshot des Problems über das Büroklammer-Symbol hochzuladen.
-
-Erst wenn diese grundlegenden Details (insbesondere der Raum) bekannt sind, darfst du den Abschluss vorschlagen und ZWINGEND den Tag [TICKET_CREATED] exakt so am Ende deiner Antwort einfügen.`;
+1. Du darfst dem Benutzer die Erstellung eines IT-Support-Tickets NUR DANN anbieten und den Tag [TICKET_CREATED] NUR DANN am Ende deiner Antwort mitsenden, wenn du ALLE notwendigen Informationen vollständig gesammelt hast.
+2. Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer (Raum) eine ZWINGENDE Pflichtangabe!
+3. Falls die Raumnummer noch nicht im bisherigen Chatverlauf genannt wurde, frage ZUERST gezielt danach (z. B. "In welchem Raum befindest du dich?").
+4. WARNUNG: Wenn du noch auf die Antwort des Benutzers bezüglich des Raums oder der Fehlerdetails wartest (d.h. wenn du eine Frage an ihn stellst), darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
+5. Der Tag [TICKET_CREATED] darf ausschließlich und ZWINGEND nur dann gesendet werden, wenn die Raumnummer und alle Details geklärt sind und du bereit bist, das Ticket JETZT FINAL zu erstellen.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
@@ -263,11 +262,12 @@ export async function generateTicketTitle(chatMessages) {
     chatText += `${m.sender === 'user' ? 'Benutzer' : 'Support-Assistent'}: ${m.text}\n`;
   });
 
-  const prompt = `Erstelle einen kurzen, prägnanten Ticket-Titel (in deutscher Sprache, maximal 6 Wörter), der das IT-Problem des Benutzers aus dem folgenden Chatverlauf zusammenfasst.
-Antworte ausschließlich mit dem Titeltext selbst, ohne Anführungszeichen oder Einleitung.
+  const prompt = `Erstelle eine präzise, kurze Betreffzeile (in deutscher Sprache, maximal 5 Wörter) für ein IT-Support-Ticket, die das konkrete Problem des Benutzers aus dem folgenden Chatverlauf zusammenfasst.
+Verwende eine sachliche Formulierung (eine Nominalphrase / Substantivgruppe, z. B. "Defektes Gerät", "Verbindungsproblem", etc.) und wiederhole NIEMALS wörtlich ganze Sätze des Benutzers oder Umgangssprache.
 
 Beispiele:
-- "Moodle Passwort zurücksetzen"
+- "Beamer defekt (blinkt rot)"
+- "Moodle-Passwort zurücksetzen"
 - "WLAN-Verbindung schlägt fehl (Android)"
 - "Smartboard flackert in Raum 204"
 
