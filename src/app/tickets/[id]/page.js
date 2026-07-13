@@ -191,7 +191,7 @@ export default function CustomerTicketDetailPage() {
             )}
 
             {messages.map((msg, index) => {
-              const isCustomer = msg.senderRole === 'customer';
+              const isMyMessage = user ? msg.senderEmail === user.email : msg.senderRole === 'customer';
               const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
               
@@ -205,25 +205,25 @@ export default function CustomerTicketDetailPage() {
                 );
               }
 
-              const avatarBg = isCustomer
+              const avatarBg = isMyMessage
                 ? 'bg-slate-700 text-slate-300'
                 : isBot
                   ? 'bg-violet-650/10 border border-violet-500/20 text-violet-400'
                   : 'bg-violet-500/10 border border-violet-500/20 text-violet-400';
 
-              const avatarIcon = isCustomer ? 'user' : isBot ? 'robot' : 'user-tie';
+              const avatarIcon = isMyMessage ? 'user' : isBot ? 'robot' : 'user-tie';
 
               return (
                 <div 
                   key={index} 
-                  className={`flex gap-3 max-w-[80%] ${isCustomer ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
+                  className={`flex gap-3 max-w-[80%] ${isMyMessage ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                 >
                   <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
                     <i className={`fa-solid fa-${avatarIcon} text-xs`}></i>
                   </div>
-                  <div className={`flex flex-col ${isCustomer ? 'items-end' : 'items-start'} max-w-full`}>
+                  <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-full`}>
                     <div 
-                      className={`${isCustomer ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                      className={`${isMyMessage ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                     >
                       <div 
                         className="markdown-content"
@@ -239,7 +239,7 @@ export default function CustomerTicketDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-1 mx-1">
                       <span className="text-[9px] text-slate-500">
-                        {isBot ? 'IT-Helpdesk-Bot' : isCustomer ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                       {isBot && msg.id && (
                         <button
