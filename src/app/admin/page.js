@@ -1086,6 +1086,15 @@ export default function AdminDashboardPage() {
                 <i className="fa-solid fa-envelope text-violet-500"></i>
                 <span>E-Mail-Server (SMTP) Konfiguration</span>
               </h3>
+
+              <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-3.5 space-y-2 text-xs text-sky-200">
+                <p className="font-bold flex items-center gap-1.5"><i className="fa-solid fa-circle-info text-sky-400"></i> Wichtige Hinweise für Microsoft 365, Outlook.com & Gmail:</p>
+                <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px] leading-relaxed">
+                  <li><strong>Port & Verbindung:</strong> Verwende in der Regel Port <strong className="text-white">587</strong> und lasse die Option <em>"Sichere Verbindung (SSL/TLS) nutzen"</em> <strong>deaktiviert</strong>. Die Mail-Bibliothek schützt die Verbindung stattdessen automatisch per <strong className="text-white">STARTTLS</strong>.</li>
+                  <li><strong>Zwei-Faktor-Authentifizierung (2FA):</strong> Wenn für dein E-Mail-Konto 2FA aktiv ist, musst du zwingend ein eigenes <strong>App-Passwort</strong> in den Sicherheitseinstellungen deines Microsoft- oder Google-Kontos erstellen und dieses hier eintragen. Das normale Anmelde-Passwort wird vom Mailserver abgelehnt.</li>
+                  <li><strong>SMTP-Auth aktivieren:</strong> Stelle bei Microsoft 365 sicher, dass die <em>"SMTP-Authentifizierung"</em> (SMTP AUTH) für das betreffende Postfach im Microsoft 365 Admin Center unter <em>Aktive Benutzer → [Dein Postfach] → E-Mail → E-Mail-Apps verwalten</em> explizit aktiviert ist.</li>
+                </ul>
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">

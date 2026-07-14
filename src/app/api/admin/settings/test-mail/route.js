@@ -23,6 +23,9 @@ export async function POST(request) {
         user: smtpConfig.user,
         pass: smtpConfig.pass
       } : undefined,
+      tls: {
+        rejectUnauthorized: false
+      },
       connectionTimeout: 8000,
       greetingTimeout: 8000,
       socketTimeout: 8000

@@ -37,7 +37,10 @@ export async function sendMail({ to, subject, html, text }) {
     auth: config.user ? {
       user: config.user,
       pass: config.pass
-    } : undefined
+    } : undefined,
+    tls: {
+      rejectUnauthorized: false
+    }
   });
 
   const mailOptions = {
