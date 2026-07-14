@@ -104,6 +104,14 @@ export async function POST(request) {
         isUnique = true;
       }
     }
+    // Sicherstellen, dass der Chat in der Datenbank existiert, falls übergeben (Fremdschlüssel-Sicherheit)
+    if (chatId) {
+      const chatExists = db.prepare('SELECT id FROM chats WHERE id = ?').get(chatId);
+      if (!chatExists) {
+        db.prepare('INSERT INTO chats (id, user_email, user_name) VALUES (?, ?, ?)')
+          .run(chatId, email, user ? user.name : null);
+      }
+    }
 
     // 1. Alle Agenten/Admins mit hinterlegten Zuständigkeiten holen
     const potentialAgents = db.prepare(`
