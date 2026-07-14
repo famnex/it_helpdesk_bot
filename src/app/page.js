@@ -424,7 +424,7 @@ export default function CustomerChatPage() {
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 z-20 sticky top-0 shadow-lg">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 z-20 fixed top-0 left-0 right-0 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
             <i className="fa-solid fa-graduation-cap text-2xl"></i>
@@ -508,11 +508,11 @@ export default function CustomerChatPage() {
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative">
+      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[140px] md:pt-[76px] pb-[104px] md:pb-[92px]">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-md w-full px-4 animate-fade-in">
+          <div className="fixed top-36 md:top-20 left-1/2 -translate-x-1/2 z-40 max-w-md w-full px-4 animate-fade-in">
             {magicSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex justify-between items-center shadow-lg">
                 <span className="flex items-center gap-2">
@@ -746,7 +746,7 @@ export default function CustomerChatPage() {
         </div>
  
         {/* Input Area */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 relative shrink-0 sticky bottom-0 z-10">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg">
           
           <form onSubmit={handleSend} className="max-w-4xl mx-auto flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
             

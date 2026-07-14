@@ -172,7 +172,7 @@ export default function CustomerTicketDetailPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans h-screen overflow-hidden">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 relative">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 fixed top-0 left-0 right-0">
         <div className="flex items-center gap-3">
           <Link href="/tickets" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-700 transition-colors flex items-center justify-center">
             <i className="fa-solid fa-arrow-left"></i>
@@ -188,7 +188,7 @@ export default function CustomerTicketDetailPage() {
       </header>
 
       {/* Ticket Body & Messages Area */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <div className={`flex-1 flex flex-col md:flex-row overflow-hidden relative pt-[73px] ${ticket.status !== 'closed' ? 'pb-[92px]' : ''}`}>
         
         {/* Chat Verlauf */}
         <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20">
@@ -281,7 +281,7 @@ export default function CustomerTicketDetailPage() {
 
           {/* Antworten Form */}
           {ticket.status !== 'closed' ? (
-            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
+            <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg">
               <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex items-end gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
                 <textarea 
                   value={replyText}
