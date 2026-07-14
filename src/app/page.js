@@ -424,7 +424,7 @@ export default function CustomerChatPage() {
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 z-20 relative shadow-lg">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 z-20 sticky top-0 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
             <i className="fa-solid fa-graduation-cap text-2xl"></i>
@@ -563,6 +563,40 @@ export default function CustomerChatPage() {
               );
             }
  
+            if (msg.text && msg.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:')) {
+              const ticketId = msg.text.replace('[SYSTEM_EVENT: TICKET_CREATED:', '').replace(']', '').trim();
+              return (
+                <div key={index} className="flex justify-center w-full animate-fade-in my-4">
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl max-w-md w-full shadow-lg relative overflow-hidden flex items-start gap-4">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
+                    <div className="text-amber-500 bg-amber-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-ticket-simple text-xl"></i></div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-sm font-bold text-amber-200">Support-Ticket erstellt</h4>
+                        <a 
+                          href={`/helpdesk/tickets/${ticketId}`}
+                          className="text-xs font-mono font-bold text-amber-400 hover:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded transition-colors"
+                        >
+                          {ticketId}
+                        </a>
+                      </div>
+                      <p className="text-xs text-slate-350 mt-2">
+                        Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
+                        <br />
+                        <a 
+                          href={`/helpdesk/tickets/${ticketId}`} 
+                          className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold mt-2 transition-colors"
+                        >
+                          <span>Ticket anzeigen</span>
+                          <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
               return null;
             }
@@ -712,7 +746,7 @@ export default function CustomerChatPage() {
         </div>
  
         {/* Input Area */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 relative shrink-0">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 relative shrink-0 sticky bottom-0 z-10">
           
           <form onSubmit={handleSend} className="max-w-4xl mx-auto flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
             

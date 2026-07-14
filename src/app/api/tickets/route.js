@@ -150,9 +150,16 @@ export async function POST(request) {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(ticketId, title, status, email, assignedAgentId, chatId);
 
-    // Chat als ticket_created markieren
+    // Chat als ticket_created markieren und System-Event im Chatverlauf speichern, falls nicht bereits vorhanden
     if (chatId) {
       db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
+      
+      const eventText = `[SYSTEM_EVENT: TICKET_CREATED: ${ticketId}]`;
+      const exists = db.prepare('SELECT id FROM chat_messages WHERE chat_id = ? AND text = ?').get(chatId, eventText);
+      if (!exists) {
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)')
+          .run(chatId, eventText);
+      }
     }
 
     // Initiale System-Nachricht einfügen
