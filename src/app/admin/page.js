@@ -46,6 +46,11 @@ export default function AdminDashboardPage() {
   const [settingsError, setSettingsError] = useState('');
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
 
+  // SMTP Test States
+  const [testRecipient, setTestRecipient] = useState('');
+  const [testSmtpLoading, setTestSmtpLoading] = useState(false);
+  const [testSmtpResult, setTestSmtpResult] = useState(null);
+
   // Flagged Messages States
   const [flaggedMessages, setFlaggedMessages] = useState([]);
   const [isFlaggedLoading, setIsFlaggedLoading] = useState(false);
@@ -68,6 +73,7 @@ export default function AdminDashboardPage() {
           router.push('/login');
         } else {
           setUser(data.user);
+          setTestRecipient(data.user.email || '');
           if (data.logoutText) {
             setLogoutLabel(data.logoutText);
           }
@@ -461,6 +467,40 @@ export default function AdminDashboardPage() {
   };
 
   // --- Settings ---
+  const handleTestSmtp = async (e) => {
+    e.preventDefault();
+    if (!testRecipient) {
+      alert('Bitte geben Sie eine Empfänger-E-Mail-Adresse ein.');
+      return;
+    }
+
+    setTestSmtpLoading(true);
+    setTestSmtpResult(null);
+
+    try {
+      const res = await fetch('/api/admin/settings/test-mail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smtpConfig: smtpConfig,
+          recipientEmail: testRecipient
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTestSmtpResult(data);
+      } else {
+        const data = await res.json();
+        setTestSmtpResult({ success: false, error: data.error || 'Fehler beim Senden der Testmail.' });
+      }
+    } catch (err) {
+      setTestSmtpResult({ success: false, error: 'Verbindungsfehler beim API-Aufruf.' });
+    } finally {
+      setTestSmtpLoading(false);
+    }
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setSettingsSuccess(false);
@@ -1104,6 +1144,68 @@ export default function AdminDashboardPage() {
                 />
                 <span>Sichere Verbindung (SSL/TLS) nutzen</span>
               </label>
+
+              <div className="border-t border-slate-800/80 pt-4 mt-4 space-y-4">
+                <h4 className="text-xs font-bold text-slate-350 flex items-center gap-2">
+                  <i className="fa-solid fa-paper-plane text-violet-500"></i>
+                  <span>Verbindung & E-Mail-Versand testen</span>
+                </h4>
+                
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Empfänger-E-Mail für Testnachricht</label>
+                    <input 
+                      type="email" 
+                      value={testRecipient}
+                      onChange={(e) => setTestRecipient(e.target.value)}
+                      placeholder="z.B. admin@schule.de"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestSmtp}
+                    disabled={testSmtpLoading}
+                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-750 text-slate-250 border border-slate-700/80 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                  >
+                    {testSmtpLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Testen...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-vial"></i>
+                        <span>Verbindung testen</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {testSmtpResult && (
+                  <div className="animate-fade-in">
+                    {testSmtpResult.success ? (
+                      <div className="bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+                        <div className="text-emerald-400 bg-emerald-500/10 p-1.5 rounded-lg shrink-0 mt-0.5"><i className="fa-solid fa-circle-check"></i></div>
+                        <div>
+                          <strong className="text-emerald-400 block mb-0.5">Erfolg!</strong>
+                          <span>Die Verbindung zum SMTP-Server wurde erfolgreich hergestellt und die Test-E-Mail gesendet.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-red-950/40 border border-red-500/30 text-red-200 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+                        <div className="text-red-400 bg-red-500/10 p-1.5 rounded-lg shrink-0 mt-0.5"><i className="fa-solid fa-triangle-exclamation"></i></div>
+                        <div className="w-full overflow-hidden">
+                          <strong className="text-red-400 block mb-0.5">Fehler beim Verbindungstest:</strong>
+                          <pre className="mt-1 text-[10px] font-mono leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 overflow-x-auto whitespace-pre-wrap max-h-48">
+                            {testSmtpResult.error}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Identity Provider Config */}
