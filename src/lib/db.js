@@ -192,6 +192,12 @@ try {
     console.log("Migration: Spalte 'avatar_url' zur Tabelle 'users' hinzugefügt.");
   }
 
+  const hasResponsibilities = tableInfoUsers.some(col => col.name === 'responsibilities');
+  if (!hasResponsibilities) {
+    db.exec("ALTER TABLE users ADD COLUMN responsibilities TEXT");
+    console.log("Migration: Spalte 'responsibilities' zur Tabelle 'users' hinzugefügt.");
+  }
+
   const tableInfoTickets = db.prepare("PRAGMA table_info(tickets)").all();
   const hasChatId = tableInfoTickets.some(col => col.name === 'chat_id');
   if (!hasChatId) {

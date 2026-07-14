@@ -152,3 +152,30 @@ export async function sendAssignmentNotification(agentEmail, ticketId, ticketTit
 
   return sendMail({ to: agentEmail, subject, html, text });
 }
+
+/**
+ * Informiert alle Agenten/Admins über ein neues, unzugewiesenes Ticket.
+ */
+export async function sendUnassignedTicketNotification(agentEmails, ticketId, ticketTitle) {
+  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const link = `${host}/agent/tickets/${ticketId}`;
+  
+  const subject = `Neues unzugewiesenes Ticket: ${ticketId}`;
+  const text = `Hallo,\n\nes wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:\n\n"${ticketTitle}" (${ticketId})\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen und zu übernehmen:\n\n${link}`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #333;">
+      <h2>Neues unzugewiesenes Ticket ${ticketId}</h2>
+      <p>Hallo,</p>
+      <p>es wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:</p>
+      <p style="margin: 10px 0; font-style: italic; color: #555;">
+        "${ticketTitle}"
+      </p>
+      <p style="margin: 30px 0;">
+        <a href="${link}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket ansehen & übernehmen</a>
+      </p>
+    </div>
+  `;
+
+  // Alle Agenten informieren (parallel)
+  await Promise.all((agentEmails || []).map(email => sendMail({ to: email, subject, html, text })));
+}

@@ -306,6 +306,53 @@ ${chatText}`;
 }
 
 /**
+ * Ermittelt den am besten passenden Agenten für ein Ticket basierend auf seinen Zuständigkeiten.
+ * Gibt die Agenten-ID oder null zurück (wenn keine oder mehrere passen).
+ */
+export async function determineAgentAssignment(ticketTitle, chatMessages, agents) {
+  if (!agents || agents.length === 0) return null;
+  const { extractionModel } = getModelNames();
+  
+  let chatText = "";
+  if (chatMessages && chatMessages.length > 0) {
+    chatMessages.slice(-10).forEach(m => {
+      chatText += `${m.sender === 'user' ? 'Benutzer' : 'Support-Assistent'}: ${m.text}\n`;
+    });
+  }
+
+  const prompt = `Du bist ein automatischer IT-Support-Ticket-Dispatcher.
+Hier ist ein neu erstelltes Support-Ticket:
+Titel: ${ticketTitle}
+${chatText ? `Chat-Verlauf:\n${chatText}` : ''}
+
+Hier ist eine Liste von verfügbaren Support-Mitarbeitern und deren Zuständigkeiten in Prosa:
+${agents.map(ag => `- ID: "${ag.id}", Name: "${ag.name || ''}", E-Mail: "${ag.email}", Zuständigkeiten: "${ag.responsibilities}"`).join('\n')}
+
+Deine Aufgabe ist es, das Ticket anhand des Titels und Gesprächsverlaufs genau einem Mitarbeiter zuzuordnen, dessen Zuständigkeiten am besten passen.
+Regeln:
+1. Antworte AUSSCHLIESSLICH mit der ID des passenden Mitarbeiters (z. B. "admin-123456").
+2. Falls kein Mitarbeiter zu den Zuständigkeiten passt ODER falls es mehrere passende Mitarbeiter gibt (Mehrdeutigkeit/Konflikt), antworte mit exakt dem Wort: "NONE".
+3. Gib keinerlei Erklärungen, Begründungen, Leerzeichen oder sonstige Zeichen aus. Nur die ID oder "NONE".`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1 }
+  };
+
+  try {
+    const aiResponse = await callGemini(extractionModel, payload);
+    const assignedId = aiResponse.trim();
+    if (assignedId && assignedId !== 'NONE' && agents.some(ag => ag.id === assignedId)) {
+      return assignedId;
+    }
+  } catch (err) {
+    console.error('Fehler bei der automatischen Ticket-Zuweisung via Gemini:', err);
+  }
+  return null;
+}
+
+
+/**
  * Prüft, ob ein neuer Chunk bereits in der Datenbank existiert (Deduplizierung).
  * Gibt die ID des Duplikats zurück oder 'NEIN', falls es sich um neues Wissen handelt.
  */

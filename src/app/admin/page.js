@@ -186,6 +186,27 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleUpdateResponsibilitiesState = (userId, value) => {
+    setUsersList(prev => prev.map(u => u.id === userId ? { ...u, responsibilities: value } : u));
+  };
+
+  const handleSaveResponsibilities = async (userId, value) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, responsibilities: value })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Speichern der Zuständigkeiten.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler beim Speichern der Zuständigkeiten.');
+    }
+  };
+
   const handleDeleteUser = async (userId) => {
     if (!confirm('Diesen Benutzer wirklich löschen?')) return;
     try {
@@ -1324,6 +1345,7 @@ export default function AdminDashboardPage() {
                         <th className="px-6 py-4">Name</th>
                         <th className="px-6 py-4">E-Mail</th>
                         <th className="px-6 py-4">Rolle</th>
+                        <th className="px-6 py-4">Zuständigkeiten (Prosa)</th>
                         <th className="px-6 py-4">Registriert</th>
                         <th className="px-6 py-4 text-right">Aktionen</th>
                       </tr>
@@ -1355,6 +1377,20 @@ export default function AdminDashboardPage() {
                               <option value="agent">Support-Agent (Agent)</option>
                               <option value="admin">System-Administrator (Admin)</option>
                             </select>
+                          </td>
+                          <td className="px-6 py-4 min-w-[220px]">
+                            {usr.role !== 'customer' ? (
+                              <textarea
+                                value={usr.responsibilities || ''}
+                                onChange={(e) => handleUpdateResponsibilitiesState(usr.id, e.target.value)}
+                                onBlur={() => handleSaveResponsibilities(usr.id, usr.responsibilities)}
+                                placeholder="z. B. Beamer, Netzwerk, Moodle..."
+                                rows="2"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500 placeholder-slate-650 resize-y"
+                              />
+                            ) : (
+                              <span className="text-slate-600 text-xs">-</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-xs text-slate-500">
                             {new Date(usr.createdAt).toLocaleDateString('de-DE')}

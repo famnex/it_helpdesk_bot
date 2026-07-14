@@ -13,7 +13,7 @@ export async function GET() {
 
   try {
     const users = db.prepare(`
-      SELECT id, email, role, name, avatar_url as avatarUrl, created_at as createdAt 
+      SELECT id, email, role, name, responsibilities, avatar_url as avatarUrl, created_at as createdAt 
       FROM users 
       ORDER BY role ASC, email ASC
     `).all();
@@ -42,23 +42,29 @@ export async function PUT(request) {
   }
 
   try {
-    const { userId, role } = await request.json();
-    if (!userId || !role) {
-      return NextResponse.json({ error: 'Benutzer-ID und Rolle sind erforderlich.' }, { status: 400 });
+    const { userId, role, responsibilities } = await request.json();
+    if (!userId) {
+      return NextResponse.json({ error: 'Benutzer-ID ist erforderlich.' }, { status: 400 });
     }
 
-    if (!['customer', 'agent', 'admin'].includes(role)) {
-      return NextResponse.json({ error: 'Ungültige Rolle.' }, { status: 400 });
+    if (role) {
+      if (!['customer', 'agent', 'admin'].includes(role)) {
+        return NextResponse.json({ error: 'Ungültige Rolle.' }, { status: 400 });
+      }
+
+      // Selbst-Herabstufung verhindern
+      if (user.id === userId) {
+        return NextResponse.json({ error: 'Sie können Ihre eigene Rolle nicht ändern.' }, { status: 400 });
+      }
+
+      const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+      if (result.changes === 0) {
+        return NextResponse.json({ error: 'Benutzer nicht gefunden.' }, { status: 404 });
+      }
     }
 
-    // Selbst-Herabstufung verhindern
-    if (user.id === userId) {
-      return NextResponse.json({ error: 'Sie können Ihre eigene Rolle nicht ändern.' }, { status: 400 });
-    }
-
-    const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Benutzer nicht gefunden.' }, { status: 404 });
+    if (responsibilities !== undefined) {
+      db.prepare('UPDATE users SET responsibilities = ? WHERE id = ?').run(responsibilities || null, userId);
     }
 
     return NextResponse.json({ success: true });

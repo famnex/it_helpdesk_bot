@@ -264,3 +264,10 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ```sql
   ALTER TABLE chat_messages ADD COLUMN flagged_reason TEXT;
   ```
+
+### Update #8 (14.07.2026): Hinzufügen der Spalte `responsibilities` zu `users`
+* **Ziel:** Speichern der Zuständigkeiten (in Prosa) von Administratoren und Support-Agenten zur automatischen Zuweisung neuer Tickets.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE users ADD COLUMN responsibilities TEXT;
+  ```
