@@ -27,8 +27,8 @@ function getSmtpConfig() {
 /**
  * Sendet eine E-Mail unter Verwendung der in der DB konfigurierten SMTP-Einstellungen.
  */
-export async function sendMail({ to, subject, html, text }) {
-  const config = getSmtpConfig();
+export async function sendMail({ to, subject, html, text }, overrideConfig = null, errorOut = null) {
+  const config = overrideConfig || getSmtpConfig();
   
   const transporter = nodemailer.createTransport({
     host: config.host || 'localhost',
@@ -40,7 +40,10 @@ export async function sendMail({ to, subject, html, text }) {
     } : undefined,
     tls: {
       rejectUnauthorized: false
-    }
+    },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000
   });
 
   const mailOptions = {
@@ -57,6 +60,9 @@ export async function sendMail({ to, subject, html, text }) {
     return true;
   } catch (error) {
     console.error(`Fehler beim E-Mail-Versand an ${to}:`, error);
+    if (errorOut) {
+      errorOut.error = error;
+    }
     return false;
   }
 }
