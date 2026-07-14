@@ -16,6 +16,25 @@ export default function CustomerChatPage() {
   const [magicSuccess, setMagicSuccess] = useState('');
   const [magicError, setMagicError] = useState('');
   const [magicLoading, setMagicLoading] = useState(false);
+
+  // Mobile Menu & Logout States
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+          return;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    window.location.reload();
+  };
  
   // Ticket Creation States
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
@@ -424,24 +443,33 @@ export default function CustomerChatPage() {
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 z-20 fixed top-0 left-0 right-0 shadow-lg">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 z-30 fixed top-0 left-0 right-0 shadow-lg h-[72px]">
         <div className="flex items-center gap-3">
-          <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
-            <i className="fa-solid fa-graduation-cap text-2xl"></i>
+          <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
+            <i className="fa-solid fa-graduation-cap text-xl md:text-2xl"></i>
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white tracking-tight">IT-Helpdesk / Ticketsystem</h1>
-            <p className="text-[10px] text-sky-400 font-semibold tracking-wider">KI SUPPORT ASSISTENT</p>
+            <h1 className="text-sm md:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
+            <p className="text-[9px] md:text-[10px] text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
           </div>
         </div>
+
+        {/* Hamburger-Button für kleine Bildschirme */}
+        <button 
+          type="button" 
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
+        >
+          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
+        </button>
  
-        {/* Auth / Magic Link Bereich */}
-        <div className="flex flex-wrap items-center gap-4 text-sm">
+        {/* Desktop Menu - nur auf md: und größer */}
+        <div className="hidden md:flex items-center gap-4 text-sm">
           {user ? (
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-300">
                 <i className="fa-solid fa-user text-slate-400 mr-1.5"></i>
-                {user.email} ({user.role === 'customer' ? 'Kunde' : user.role})
+                {user.email}
               </span>
               <Link 
                 href="/knowledge"
@@ -461,9 +489,17 @@ export default function CustomerChatPage() {
                     : 'Portal öffnen'}
                 </span>
               </Link>
+              <button 
+                type="button"
+                onClick={handleLogout}
+                className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <i className="fa-solid fa-right-from-bracket"></i>
+                <span>Abmelden</span>
+              </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
               {/* Magic Link Form */}
               <form onSubmit={handleMagicLink} className="flex gap-2 items-center bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                 <input 
@@ -483,7 +519,7 @@ export default function CustomerChatPage() {
                 </button>
               </form>
               
-              <div className="w-px h-6 bg-slate-800 hidden md:block"></div>
+              <div className="w-px h-6 bg-slate-800"></div>
               
               <Link 
                 href="/knowledge"
@@ -493,7 +529,7 @@ export default function CustomerChatPage() {
                 <span>Wissensdatenbank</span>
               </Link>
  
-              <div className="w-px h-6 bg-slate-800 hidden md:block"></div>
+              <div className="w-px h-6 bg-slate-800"></div>
               
               <Link 
                 href="/login"
@@ -505,14 +541,103 @@ export default function CustomerChatPage() {
             </div>
           )}
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden absolute top-[72px] left-0 right-0 bg-slate-900 border-b border-slate-800 p-5 shadow-2xl flex flex-col gap-4 animate-fade-in z-35">
+            {user ? (
+              <div className="flex flex-col gap-3">
+                <div className="text-xs text-slate-400 font-medium px-2 py-1 flex items-center gap-2 bg-slate-950/50 rounded-lg">
+                  <i className="fa-solid fa-user text-slate-500"></i>
+                  <span className="truncate">{user.email}</span>
+                </div>
+                
+                <Link 
+                  href="/knowledge"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-book-open text-sky-400"></i>
+                  <span>Wissensdatenbank</span>
+                </Link>
+
+                <Link 
+                  href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-ticket"></i>
+                  <span>
+                    {user.role === 'customer' 
+                      ? `Meine Tickets (${activeTickets.length} offen)` 
+                      : 'Portal öffnen'}
+                  </span>
+                </Link>
+
+                <button 
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+                  className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-right-from-bracket"></i>
+                  <span>Abmelden</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {/* Magic Link Form */}
+                <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                  <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="email" 
+                      value={magicEmail}
+                      onChange={(e) => setMagicEmail(e.target.value)}
+                      placeholder="Deine E-Mail..."
+                      className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-600 px-2 py-1.5 focus:outline-none focus:ring-0 flex-1 min-w-0"
+                      required
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={magicLoading}
+                      className="bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      {magicLoading ? '...' : 'Anfordern'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="flex gap-2">
+                  <Link 
+                    href="/knowledge"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-book-open text-sky-400"></i>
+                    <span>Wissen</span>
+                  </Link>
+
+                  <Link 
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <i className="fa-solid fa-user-shield text-violet-400"></i>
+                    <span>Mitarbeiter</span>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[140px] md:pt-[76px] pb-[104px] md:pb-[92px]">
+      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[72px] pb-[104px] md:pb-[92px]">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
-          <div className="fixed top-36 md:top-20 left-1/2 -translate-x-1/2 z-40 max-w-md w-full px-4 animate-fade-in">
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-45 max-w-md w-full px-4 animate-fade-in">
             {magicSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex justify-between items-center shadow-lg">
                 <span className="flex items-center gap-2">
@@ -673,24 +798,24 @@ export default function CustomerChatPage() {
 
                 {/* Ticket Prompt Box direkt unter der ersten Bot-Nachricht */}
                 {index === 0 && showTicketPrompt && activeTickets.length > 0 && (
-                  <div className="flex gap-3 max-w-[85%] animate-fade-in mt-3">
+                  <div className="flex gap-3 w-full max-w-[85%] sm:max-w-md animate-fade-in mt-3 overflow-hidden">
                     <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center shrink-0 mt-1 shadow-md">
                       <i className="fa-solid fa-robot text-sm"></i>
                     </div>
-                    <div className="flex flex-col items-start max-w-full">
-                      <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed">
-                        <p className="font-bold mb-2">Ich sehe, du hast bereits offene Anfragen. Geht es darum oder möchtest du etwas Neues fragen?</p>
-                        <div className="space-y-2 mt-3">
+                    <div className="flex flex-col items-start max-w-full min-w-0 w-full">
+                      <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed w-full overflow-hidden">
+                        <p className="font-bold mb-2 text-xs md:text-sm">Ich sehe, du hast bereits offene Anfragen. Geht es darum oder möchtest du etwas Neues fragen?</p>
+                        <div className="space-y-2 mt-3 w-full">
                           {activeTickets.map(tk => (
                             <Link 
                               key={tk.id} 
                               href={`/tickets/${tk.id}`}
-                              className="flex items-center justify-between gap-3 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/50 p-3 rounded-xl transition-all w-full text-left"
+                              className="flex items-center justify-between gap-2 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/50 p-2.5 rounded-xl transition-all w-full text-left min-w-0 overflow-hidden"
                             >
-                              <span className="truncate pr-4 text-xs font-semibold text-slate-300">
+                              <span className="truncate text-[11px] md:text-xs font-semibold text-slate-300 min-w-0 flex-1 block">
                                 <span className="text-sky-400 font-mono font-bold">{tk.id}</span>: {tk.title}
                               </span>
-                              <i className="fa-solid fa-arrow-right text-sky-500 text-xs shrink-0"></i>
+                              <i className="fa-solid fa-arrow-right text-sky-500 text-[10px] shrink-0"></i>
                             </Link>
                           ))}
                           <button 
