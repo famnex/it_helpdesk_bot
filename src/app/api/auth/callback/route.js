@@ -26,8 +26,8 @@ export async function GET(request) {
       // Wenn der Benutzer noch nicht existiert, legen wir ihn an.
       // Rolle aus dem Token bestimmen (falls angegeben), andernfalls standardmäßig 'agent'
       let role = decoded.role;
-      if (!role || !['agent', 'admin'].includes(role)) {
-        role = 'agent';
+      if (!role || !['customer', 'agent', 'admin'].includes(role)) {
+        role = 'customer';
       }
       
       const userId = decoded.id || `usr-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -42,8 +42,10 @@ export async function GET(request) {
     const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (user.role === 'admin') {
       return NextResponse.redirect(`${host}/admin`);
-    } else {
+    } else if (user.role === 'agent') {
       return NextResponse.redirect(`${host}/agent`);
+    } else {
+      return NextResponse.redirect(`${host}/tickets`);
     }
   } catch (err) {
     console.error('Fehler beim IdP-Callback:', err);
