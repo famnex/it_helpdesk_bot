@@ -174,14 +174,14 @@ export async function POST(request) {
     db.prepare(`
       INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) 
       VALUES (?, 'system', 'system', ?)
-    `).run(ticketId, 'System', `Ticket ${ticketId} wurde erstellt.`);
+    `).run(ticketId, `Ticket ${ticketId} wurde erstellt.`);
 
     // Zuweisungsnachricht und E-Mail-Benachrichtigungen
     if (matchedAgent) {
       db.prepare(`
         INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) 
         VALUES (?, 'system', 'system', ?)
-      `).run(ticketId, 'System', `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
+      `).run(ticketId, `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
       
       // Benachrichtige den zugewiesenen Agenten
       try {
