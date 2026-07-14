@@ -109,10 +109,9 @@ export async function destroySession() {
 /**
  * Generiert einen Magic-Link-Token für einen Kunden
  */
-export function generateMagicLinkToken(email) {
+export function generateMagicLinkToken(email, expiresIn = '15m') {
   const secret = getJwtSecret();
-  // Magic Link läuft nach 15 Minuten ab
-  return jwt.sign({ email, type: 'magic_link' }, secret, { expiresIn: '15m' });
+  return jwt.sign({ email, type: 'magic_link' }, secret, { expiresIn });
 }
 
 /**

@@ -31,9 +31,12 @@ export async function GET(request) {
     // Session erstellen
     await createSession(user);
 
-    // Weiterleiten zur Ticket-Ansicht
+    // Weiterleiten zur gewünschten Seite (z.B. Ticket-Details) oder Standard-Portalseite
+    const redirectPath = searchParams.get('redirect') || '/tickets';
+    const safeRedirect = redirectPath.startsWith('/') ? redirectPath : '/tickets';
+
     const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    return NextResponse.redirect(`${host}/tickets`);
+    return NextResponse.redirect(`${host}${safeRedirect}`);
   } catch (err) {
     console.error('Fehler bei der Magic-Link Anmeldung:', err);
     return new NextResponse('Interner Fehler bei der Anmeldung.', { status: 500 });

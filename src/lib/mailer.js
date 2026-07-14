@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import db from './db';
+import { generateMagicLinkToken } from './auth';
 
 /**
  * Holt die aktuelle SMTP-Konfiguration aus der Datenbank.
@@ -97,19 +98,23 @@ export async function sendMagicLinkEmail(email, token) {
  */
 export async function sendAgentReplyNotification(customerEmail, ticketId, ticketTitle) {
   const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const link = `${host}/tickets/${ticketId}`;
+  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
+  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
   const subject = `Neue Antwort zu Ihrem Ticket ${ticketId}`;
-  const text = `Hallo,\n\nein IT-Support-Agent hat auf Ihr Ticket "${ticketTitle}" (${ticketId}) geantwortet.\n\nKlicken Sie auf den folgenden Link, um die Antwort zu lesen:\n\n${link}`;
+  const text = `Hallo,\n\nein IT-Support-Agent hat auf Ihr Ticket "${ticketTitle}" (${ticketId}) geantwortet.\n\nKlicken Sie auf den folgenden Link, um sich automatisch anzumelden und die Antwort zu lesen:\n\n${link}`;
   const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333;">
-      <h2>Neue Antwort zum Ticket ${ticketId}</h2>
+    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+      <h2 style="color: #0ea5e9; margin-top: 0;">Neue Antwort zum Ticket ${ticketId}</h2>
       <p>Hallo,</p>
       <p>ein IT-Support-Agent hat auf Ihr Ticket <strong>"${ticketTitle}"</strong> geantwortet.</p>
       <p style="margin: 30px 0;">
-        <a href="${link}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Antwort lesen</a>
+        <a href="${link}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; shadow: 0 4px 6px rgba(14, 165, 233, 0.15);">Antwort lesen</a>
       </p>
-      <p style="color: #666; font-size: 12px;">Falls Sie nicht angemeldet sind, fordern Sie einfach auf der Seite einen neuen Anmeldelink an.</p>
+      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
+        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
+      </p>
     </div>
   `;
 
