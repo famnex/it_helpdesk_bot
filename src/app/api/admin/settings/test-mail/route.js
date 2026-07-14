@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { getSessionUser } from '@/lib/auth';
+import db from '@/lib/db';
 
 export async function POST(request) {
   const user = await getSessionUser();
@@ -12,6 +13,15 @@ export async function POST(request) {
     const { smtpConfig, recipientEmail } = await request.json();
     if (!smtpConfig || !recipientEmail) {
       return NextResponse.json({ error: 'SMTP-Konfiguration und Empfänger-E-Mail sind erforderlich.' }, { status: 400 });
+    }
+
+    // Wenn das Passwort maskiert ist, das echte aus der DB laden
+    if (smtpConfig.pass === '********') {
+      const existingRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('smtp_config');
+      if (existingRow) {
+        const existing = JSON.parse(existingRow.value);
+        smtpConfig.pass = existing.pass;
+      }
     }
 
     // Nodemailer Transporter konfigurieren
