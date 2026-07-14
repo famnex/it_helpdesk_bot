@@ -13,6 +13,9 @@ export default function AgentDashboardPage() {
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
   const router = useRouter();
 
+  // Mobile Menu State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   useEffect(() => {
     // Session prüfen
     fetch('/api/auth/me')
@@ -130,21 +133,31 @@ export default function AgentDashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 relative">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 shadow-lg z-30 relative h-[72px]">
         <div className="flex items-center gap-3">
-          <div className="bg-violet-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
-            <i className="fa-solid fa-user-shield text-xl"></i>
+          <div className="bg-violet-600 text-white p-2 rounded-xl shadow-md flex items-center justify-center shrink-0">
+            <i className="fa-solid fa-user-shield text-lg md:text-xl"></i>
           </div>
           <div>
-            <h1 className="text-base font-bold text-white">IT-Helpdesk Agenten-Portal</h1>
-            <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
+            <h1 className="text-sm md:text-base font-bold text-white leading-tight">IT-Helpdesk Agenten-Portal</h1>
+            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Hamburger-Button für mobile Navigation */}
+        <button 
+          type="button" 
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
+        >
+          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
+        </button>
+
+        {/* Desktop-Menu */}
+        <div className="hidden md:flex items-center gap-4 text-sm">
           <Link 
             href="/profile"
-            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-xs text-slate-300 hover:border-violet-500/50"
+            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-xs text-slate-350 hover:border-violet-500/50"
             title="Profil bearbeiten"
           >
             {user?.avatarUrl ? (
@@ -166,21 +179,68 @@ export default function AgentDashboardPage() {
           {user?.role === 'admin' && (
             <Link 
               href="/admin"
-              className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all"
+              className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1"
             >
-              <i className="fa-solid fa-gears mr-1"></i>
-              Admin-Bereich
+              <i className="fa-solid fa-gears text-violet-400"></i>
+              <span>Admin-Bereich</span>
             </Link>
           )}
 
           <button 
             onClick={handleLogout}
-            className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
+            className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold"
           >
             <i className="fa-solid fa-right-from-bracket"></i>
             <span>{logoutLabel}</span>
           </button>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden absolute top-[72px] left-0 right-0 bg-slate-900 border-b border-slate-800 p-5 shadow-2xl flex flex-col gap-3 animate-fade-in z-30">
+            <Link 
+              href="/profile"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl transition-all text-xs text-slate-300 font-semibold"
+            >
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-violet-500/30" />
+              ) : (
+                <i className="fa-solid fa-user-tie text-violet-400"></i>
+              )}
+              <span>Profil: {user?.name || user?.email}</span>
+            </Link>
+
+            <Link
+              href="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-comments text-sky-400"></i>
+              <span>Zum Chat-Frontend</span>
+            </Link>
+
+            {user?.role === 'admin' && (
+              <Link 
+                href="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-gears text-violet-400"></i>
+                <span>Admin-Bereich</span>
+              </Link>
+            )}
+
+            <button 
+              type="button"
+              onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+              className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-right-from-bracket"></i>
+              <span>{logoutLabel}</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Dashboard */}
@@ -194,30 +254,33 @@ export default function AgentDashboardPage() {
           </div>
           
           {/* Filters */}
-          <div className="flex bg-slate-950 p-1.5 border border-slate-800 rounded-xl text-xs font-semibold">
+          <div className="flex flex-wrap bg-slate-950 p-1 border border-slate-800 rounded-xl text-xs font-semibold w-full sm:w-auto justify-center gap-1 sm:gap-0">
             <button 
               onClick={() => setFilter('active')}
-              className={`px-4 py-2 rounded-lg transition-all ${filter === 'active' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'active' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               Aktiv ({tickets.filter(t => t.status !== 'closed').length})
             </button>
             <button 
               onClick={() => setFilter('mine')}
-              className={`px-4 py-2 rounded-lg transition-all ${filter === 'mine' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'mine' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Mir zugewiesen ({tickets.filter(t => t.assignedAgentId === user?.id && t.status !== 'closed').length})
+              <span className="hidden sm:inline">Mir zugewiesen</span>
+              <span className="sm:hidden">Meine</span> ({tickets.filter(t => t.assignedAgentId === user?.id && t.status !== 'closed').length})
             </button>
             <button 
               onClick={() => setFilter('unassigned')}
-              className={`px-4 py-2 rounded-lg transition-all ${filter === 'unassigned' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'unassigned' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Unzugewiesen ({tickets.filter(t => !t.assignedAgentId && t.status !== 'closed').length})
+              <span className="hidden sm:inline">Unzugewiesen</span>
+              <span className="sm:hidden">Offen</span> ({tickets.filter(t => !t.assignedAgentId && t.status !== 'closed').length})
             </button>
             <button 
               onClick={() => setFilter('closed')}
-              className={`px-4 py-2 rounded-lg transition-all ${filter === 'closed' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'closed' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Geschlossen ({tickets.filter(t => t.status === 'closed').length})
+              <span className="hidden sm:inline">Geschlossen</span>
+              <span className="sm:hidden">Gelöst</span> ({tickets.filter(t => t.status === 'closed').length})
             </button>
           </div>
         </div>
