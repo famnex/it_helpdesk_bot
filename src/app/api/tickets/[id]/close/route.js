@@ -33,8 +33,11 @@ export async function POST(request, { params }) {
       .run(solution, id);
 
     // Systemkommentar einfügen
+    const systemText = ticket.creatorEmail 
+      ? `Ticket wurde geschlossen mit Lösung: ${solution} (Kunde per E-Mail benachrichtigt.)` 
+      : `Ticket wurde geschlossen mit Lösung: ${solution}`;
     db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-      .run(id, `Ticket wurde geschlossen mit Lösung: ${solution}`);
+      .run(id, systemText);
 
     // Benachrichtige den Kunden über die Lösung per E-Mail
     if (ticket.creatorEmail) {
