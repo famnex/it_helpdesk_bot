@@ -157,7 +157,12 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
    - Wenn deine aktuelle Nachricht eine Frage an den Benutzer enthält (z. B. "Welche Fehlermeldung siehst du?", "Welcher Raum?", "Funktioniert es jetzt?") oder ein Fragezeichen (?) enthält, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
    - Wenn du den Tag [TICKET_CREATED] mitsendest, während du gleichzeitig noch eine Frage stellst, ist das ein schwerer Systemfehler, da der Benutzer deine Frage nicht mehr beantworten kann!
    - Sende den Tag [TICKET_CREATED] erst dann, wenn der Benutzer alle Fragen beantwortet hat und du eine reine Bestätigung ohne weitere Fragen ausgibst.
-   - Stelle keine unnötigen oder redundanten Fragen (z. B. nach dem Standort bei Login-Problemen). Halte den Dialog so kurz wie möglich.`;
+   - Stelle keine unnötigen oder redundanten Fragen (z. B. nach dem Standort bei Login-Problemen). Halte den Dialog so kurz wie möglich.
+4. SOFORTIGE ERSTELLUNG BEI EXPLIZITER ANFRAGE:
+   - Wenn der Benutzer explizit "Support-Ticket erstellen" wünscht (z. B. durch den Satz "Ich möchte ein Support-Ticket erstellen" oder eine ähnliche explizite Aufforderung):
+     1. Schlage KEINE Lösungen aus der Wissensdatenbank vor und biete KEINE Ratschläge oder Fehlerdiagnosen an!
+     2. Halte dich extrem kurz und frage sofort nach den noch fehlenden Pflichtangaben (Fehlermeldung, ggf. Raumnummer falls physisches Gerät).
+     3. Sobald der Benutzer auf diese Fragen antwortet (oder angibt, keine Details zu wissen/keine Fehlermeldung zu haben), erstelle das Ticket unverzüglich durch Ausgabe des Tags [TICKET_CREATED]! Verliere dich nicht in weiteren Beratungsrunden.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
