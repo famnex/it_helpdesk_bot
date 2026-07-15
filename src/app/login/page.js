@@ -54,11 +54,13 @@ export default function LoginPage() {
   const handleIdpLogin = () => {
     // Holt die konfigurierte IdP URL und leitet dorthin weiter
     setIsLoading(true);
-    fetch('/api/admin/settings')
+    fetch('/api/setup')
       .then(res => res.json())
       .then(data => {
         const idpUrl = data.config?.idp_config?.redirectUrl || 'https://idp.schule.de/auth';
-        window.location.href = `${idpUrl}?redirect_uri=${window.location.origin}/helpdesk/api/auth/callback`;
+        const callbackPath = window.location.pathname.replace(/\/login$/, '/api/auth/callback');
+        const callbackUrl = `${window.location.origin}${callbackPath}`;
+        window.location.href = `${idpUrl}?redirect_uri=${encodeURIComponent(callbackUrl)}`;
       })
       .catch(() => {
         setError('IdP-Einstellungen konnten nicht geladen werden.');
