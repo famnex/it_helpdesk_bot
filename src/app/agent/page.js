@@ -502,7 +502,7 @@ export default function AgentDashboardPage() {
                               <option value="">-- Nicht zugewiesen --</option>
                               {agents.map(ag => (
                                 <option key={ag.id} value={ag.id}>
-                                  {ag.email.split('@')[0]} ({ag.role})
+                                  {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]} ({ag.role === 'admin' ? 'Admin' : 'Agent'})
                                 </option>
                               ))}
                             </select>

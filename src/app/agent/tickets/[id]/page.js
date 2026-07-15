@@ -84,6 +84,7 @@ export default function AgentTicketDetailPage() {
                 isPreTicket: true,
                 senderRole: m.sender === 'user' ? 'customer' : 'bot',
                 senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
+                senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
                 text: m.text,
                 createdAt: m.createdAt
               }));
@@ -94,6 +95,7 @@ export default function AgentTicketDetailPage() {
                   isPreTicket: false,
                   senderRole: m.sender === 'user' ? 'customer' : 'bot',
                   senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
+                  senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
                   text: m.text,
                   createdAt: m.createdAt
                 }))
