@@ -64,10 +64,15 @@ export default function CustomerTicketDetailPage() {
               const chatMessages = chatData.messages || [];
               const ticketCreatedEventIndex = chatMessages.findIndex(m => m.text && m.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:'));
               
-              // Nur Nachrichten vor dem Erstellungs-Event behalten, um Duplikate zu vermeiden
-              const preTicketMessages = ticketCreatedEventIndex !== -1 
-                ? chatMessages.slice(0, ticketCreatedEventIndex) 
-                : chatMessages;
+              let preTicketMessages = [];
+              let postTicketMessages = [];
+              
+              if (ticketCreatedEventIndex !== -1) {
+                preTicketMessages = chatMessages.slice(0, ticketCreatedEventIndex);
+                postTicketMessages = chatMessages.slice(ticketCreatedEventIndex + 1);
+              } else {
+                preTicketMessages = chatMessages;
+              }
 
               const chatHistory = preTicketMessages.map(m => ({
                 ...m,
@@ -78,7 +83,24 @@ export default function CustomerTicketDetailPage() {
                 createdAt: m.createdAt
               }));
 
-              const combined = [...chatHistory, ...ticketMessages];
+              const missingPostMessages = postTicketMessages
+                .map(m => ({
+                  ...m,
+                  isPreTicket: false,
+                  senderRole: m.sender === 'user' ? 'customer' : 'bot',
+                  senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
+                  text: m.text,
+                  createdAt: m.createdAt
+                }))
+                .filter(pm => {
+                  const existsInTicket = ticketMessages.some(tm => 
+                    tm.senderRole === pm.senderRole && 
+                    tm.text === pm.text
+                  );
+                  return !existsInTicket;
+                });
+
+              const combined = [...chatHistory, ...missingPostMessages, ...ticketMessages];
               combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
               setMessages(combined);
             } else {
