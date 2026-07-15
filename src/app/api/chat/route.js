@@ -120,11 +120,22 @@ export async function POST(request) {
     }
 
     // 2. Benutzernachricht speichern (mit eventuellem Foto)
-    db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
-      .run(chatId, 'user', text, relativePath);
+    const isSystemEvent = text && text.startsWith('[SYSTEM_EVENT:');
+    let shouldInsert = true;
+    if (isSystemEvent) {
+      // Wenn das System-Event bereits existiert, nicht doppelt speichern
+      const exists = db.prepare('SELECT id FROM chat_messages WHERE chat_id = ? AND text = ?').get(chatId, text);
+      if (exists) {
+        shouldInsert = false;
+      }
+    }
+
+    if (shouldInsert) {
+      db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
+        .run(chatId, 'user', text, relativePath);
+    }
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
-    const isSystemEvent = text && text.startsWith('[SYSTEM_EVENT:');
     if (!isSystemEvent) {
       try {
         const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);

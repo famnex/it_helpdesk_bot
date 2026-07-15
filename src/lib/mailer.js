@@ -193,3 +193,37 @@ export async function sendUnassignedTicketNotification(agentEmails, ticketId, ti
   // Alle Agenten informieren (parallel)
   await Promise.all((agentEmails || []).map(email => sendMail({ to: email, subject, html, text })));
 }
+
+/**
+ * Informiert den Kunden, dass sein Ticket gelöst wurde, und teilt ihm die Lösung mit.
+ */
+export async function sendTicketResolvedNotification(customerEmail, ticketId, ticketTitle, solution) {
+  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
+  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
+  
+  const subject = `Ihr Ticket ${ticketId} wurde gelöst!`;
+  const text = `Hallo,\n\nihr Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich gelöst.\n\nEingetragene Lösung:\n${solution}\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen:\n\n${link}`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+      <h2 style="color: #10b981; margin-top: 0;">Ticket gelöst!</h2>
+      <p>Hallo,</p>
+      <p>Ihr Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold;">${ticketId}</span>) wurde erfolgreich gelöst.</p>
+      
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <strong style="color: #15803d; font-size: 13px; display: block; margin-bottom: 5px;">Bestätigte Lösung:</strong>
+        <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.5; white-space: pre-wrap;">${solution}</p>
+      </div>
+
+      <p style="margin: 30px 0;">
+        <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; shadow: 0 4px 6px rgba(16, 185, 129, 0.15);">Ticket im Portal ansehen</a>
+      </p>
+      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
+        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
+      </p>
+    </div>
+  `;
+
+  return sendMail({ to: customerEmail, subject, html, text });
+}

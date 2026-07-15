@@ -150,14 +150,14 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
    - Der Benutzer fordert explizit die Erstellung eines Tickets.
    - Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter.
 2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
-   - Bevor du den Tag [TICKET_CREATED] am Ende deiner Antwort ausgibst, musst du alle notwendigen Informationen vollständig gesammelt haben.
-   - Raumnummer (Raum): Bei allen physischen Geräten und Problemen vor Ort (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) ist die Raumnummer eine ZWINGENDE Pflichtangabe! Frage ZUERST gezielt danach, falls sie fehlt.
+   - Raumnummer (Raum): Frage NUR DANN gezielt nach der Raumnummer, wenn es sich um ein physisches Gerät (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) oder ein lokales Netzwerkproblem vor Ort in der Schule handelt. Frage NIEMALS nach einer Raumnummer oder dem Aufenthaltsort (z.B. ob der Fehler von zu Hause oder in der Schule auftritt), wenn es sich um rein softwarebasierte Probleme, Account-Fragen, Passwörter, Logins (z. B. Moodle, Schulportal, Outlook, Authenticator) oder allgemeine softwareseitige Zugriffe handelt.
    - Fehlermeldung: Frage den Benutzer ZWINGEND, ob eine Fehlermeldung auf dem Bildschirm angezeigt wird und wie diese lautet. Der Benutzer muss entweder die genaue Fehlermeldung nennen oder explizit bestätigen, dass es keine Fehlermeldung gibt (z. B. "Nein, keine Fehlermeldung, das Bild bleibt einfach schwarz"). Erst wenn diese Angabe (Fehlermeldung oder Bestätigung, dass keine existiert) vorliegt, sind die Voraussetzungen erfüllt.
 3. ABSOLUTES VERBOT (SEHR WICHTIG):
    - Der Tag [TICKET_CREATED] ist der technische Auslöser, der das Ticket-Formular SOFORT auf dem Bildschirm des Benutzers öffnet.
    - Wenn deine aktuelle Nachricht eine Frage an den Benutzer enthält (z. B. "Welche Fehlermeldung siehst du?", "Welcher Raum?", "Funktioniert es jetzt?") oder ein Fragezeichen (?) enthält, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
    - Wenn du den Tag [TICKET_CREATED] mitsendest, während du gleichzeitig noch eine Frage stellst, ist das ein schwerer Systemfehler, da der Benutzer deine Frage nicht mehr beantworten kann!
-   - Sende den Tag [TICKET_CREATED] erst dann, wenn der Benutzer alle Fragen beantwortet hat und du eine reine Bestätigung ohne weitere Fragen ausgibst.`;
+   - Sende den Tag [TICKET_CREATED] erst dann, wenn der Benutzer alle Fragen beantwortet hat und du eine reine Bestätigung ohne weitere Fragen ausgibst.
+   - Stelle keine unnötigen oder redundanten Fragen (z. B. nach dem Standort bei Login-Problemen). Halte den Dialog so kurz wie möglich.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;

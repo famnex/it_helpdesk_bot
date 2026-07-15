@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { extractKnowledgeChunks, processAndSaveChunks } from '@/lib/gemini';
+import { sendTicketResolvedNotification } from '@/lib/mailer';
 
 export async function POST(request, { params }) {
   const { id } = await params;
@@ -18,7 +19,7 @@ export async function POST(request, { params }) {
     }
 
     // Ticket laden
-    const ticket = db.prepare('SELECT title, status FROM tickets WHERE id = ?').get(id);
+    const ticket = db.prepare('SELECT title, status, creator_email as creatorEmail FROM tickets WHERE id = ?').get(id);
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
     }
@@ -34,6 +35,15 @@ export async function POST(request, { params }) {
     // Systemkommentar einfügen
     db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
       .run(id, `Ticket wurde geschlossen mit Lösung: ${solution}`);
+
+    // Benachrichtige den Kunden über die Lösung per E-Mail
+    if (ticket.creatorEmail) {
+      try {
+        await sendTicketResolvedNotification(ticket.creatorEmail, id, ticket.title, solution);
+      } catch (mailErr) {
+        console.error('Fehler beim Senden der Lösungs-Benachrichtigung per E-Mail:', mailErr);
+      }
+    }
 
     // --- KI Wissens-Extraktion & Deduplizierung im Hintergrund (bzw. asynchron) ---
     // Wir holen alle öffentlichen Nachrichten des Tickets
