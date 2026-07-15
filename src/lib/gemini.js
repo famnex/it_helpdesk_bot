@@ -83,8 +83,36 @@ async function callGemini(modelName, payload) {
  * Generiert eine Antwort im Bot-Chat basierend auf dem aktuellen Chatverlauf
  * und den passenden Wissenseinträgen aus der Datenbank.
  */
-export async function generateChatResponse(chatMessagesState, ticketAlreadyCreated = false) {
+export async function generateChatResponse(chatMessagesState, ticketAlreadyCreated = false, isAgentOnBehalf = false) {
   const { chatModel } = getModelNames();
+
+  if (isAgentOnBehalf) {
+    const systemInstruction = `Du bist ein hilfreicher IT-Assistent für Schul-Admins und Support-Agenten. Deine Aufgabe ist es, dem Agenten dabei zu helfen, ein Support-Ticket für einen anderen Benutzer (z. B. Lehrer oder Schüler) zu erstellen.
+Deine Antworten müssen sehr kurz, sachlich und präzise sein. Du sprichst den Agenten per Du an.
+Du musst strukturiert folgende Informationen abfragen und sammeln:
+1. Für wen ist das Ticket? Name, E-Mail-Adresse und (falls bekannt) Telefonnummer des betroffenen Benutzers.
+2. Problembeschreibung: Worum geht es konkret?
+3. Bisherige Lösungsversuche: Was wurde bereits versucht?
+
+Regeln für die Abfrage:
+- Frage diese Punkte nacheinander kurz und präzise ab. Sende nie alle Fragen auf einmal!
+- Biete KEINE Ratschläge, Diagnosen oder Fehlerbehebungen an, da der Agent selbst IT-Support leistet. Konzentriere dich rein auf das Sammeln der Informationen!
+- Wenn der Agent dir eine Liste von Antworten oder alle Infos direkt gibt, akzeptiere das sofort.
+- Sobald du alle 3 Punkte (Betroffener Benutzer mit Name/Mail, Problembeschreibung, bisherige Versuche) erfasst hast, gib ZWINGEND am Ende deiner Antwort exakt diesen Tag aus: [TICKET_CREATED]
+- Stelle in der Nachricht mit [TICKET_CREATED] keine weiteren Fragen mehr.`;
+
+    const payload = {
+      contents: chatMessagesState.slice(-10).map(msg => {
+        return {
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text || "" }]
+        };
+      }),
+      systemInstruction: { parts: [{ text: systemInstruction }] }
+    };
+
+    return callGemini(chatModel, payload);
+  }
   
   // 1. Wissensdatenbank auslesen
   let knowledgeString = "";
@@ -428,4 +456,52 @@ export async function processAndSaveChunks(chunks, source) {
     console.error('Fehler bei der Chunks-Verarbeitung:', err);
   }
   return savedChunks;
+}
+
+/**
+ * Extrahiert Ticket-Details aus einem Chat-Verlauf auf behalf eines Agenten.
+ */
+export async function extractAgentBehalfDetails(chatMessages) {
+  const { extractionModel } = getModelNames();
+  
+  let chatText = "";
+  chatMessages.forEach(m => {
+    chatText += `${m.sender === 'user' ? 'Agent' : 'IT-Assistent'}: ${m.text}\n`;
+  });
+
+  const prompt = `Analysiere den folgenden Chatverlauf zwischen einem IT-Support-Agenten und einem IT-Assistenten. 
+Der Agent erstellt ein Ticket im Namen eines anderen betroffenen Benutzers.
+Extrahiere folgende Informationen:
+1. "name": Der Name des betroffenen Benutzers (nicht des Agenten!). Falls nicht genannt, null.
+2. "email": Die E-Mail-Adresse des betroffenen Benutzers. Falls nicht genannt, null.
+3. "phone": Die Telefonnummer des betroffenen Benutzers (falls genannt). Falls nicht genannt, null.
+4. "title": Ein kurzer, prägnanter Betreff/Titel für das Ticket (maximal 5 Wörter, z. B. "Outlook Login-Fehler").
+5. "description": Eine Beschreibung des IT-Problems des Benutzers.
+6. "attempts": Bisherige Lösungsversuche, die unternommen wurden (falls genannt). Falls nicht genannt, null.
+
+Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, das diese sechs Schlüssel enthält. Verwende keine Markdown-Formatierung um das JSON (kein \`\`\`json).
+
+Chatverlauf:
+${chatText}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json" }
+  };
+
+  try {
+    const responseText = await callGemini(extractionModel, payload);
+    const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanedText);
+  } catch (err) {
+    console.error('Fehler bei extractAgentBehalfDetails:', err);
+    return {
+      name: null,
+      email: null,
+      phone: null,
+      title: 'Support-Anfrage im Namen eines Benutzers',
+      description: '',
+      attempts: null
+    };
+  }
 }

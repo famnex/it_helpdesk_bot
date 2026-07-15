@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { generateChatResponse, generateTicketTitle } from '@/lib/gemini';
+import { generateChatResponse, generateTicketTitle, extractAgentBehalfDetails } from '@/lib/gemini';
 import fs from 'fs';
 import path from 'path';
 
@@ -63,10 +63,13 @@ export async function POST(request) {
     let text = '';
     let relativePath = null;
 
+    let isAgentOnBehalf = false;
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       chatId = formData.get('chatId');
       text = formData.get('text') || '';
+      isAgentOnBehalf = formData.get('isAgentOnBehalf') === 'true';
       
       const photoFile = formData.get('photo'); // File-Objekt
       
@@ -99,6 +102,7 @@ export async function POST(request) {
       const body = await request.json();
       chatId = body.chatId;
       text = body.text;
+      isAgentOnBehalf = !!body.isAgentOnBehalf;
     }
 
     if (!text && !relativePath) {
@@ -109,14 +113,16 @@ export async function POST(request) {
     const email = user ? user.email : null;
 
     // 1. Sicherstellen, dass der Chat existiert
-    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName FROM chats WHERE id = ?').get(chatId);
+    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(chatId);
     if (!chat) {
-      db.prepare('INSERT INTO chats (id, user_email, user_name) VALUES (?, ?, ?)').run(chatId, email, user ? user.name : null);
-      chat = { id: chatId, ticketCreated: 0 };
+      db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf) VALUES (?, ?, ?, ?)').run(chatId, email, user ? user.name : null, isAgentOnBehalf ? 1 : 0);
+      chat = { id: chatId, ticketCreated: 0, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0 };
     } else {
-      // Immer versuchen, E-Mail und Name des angemeldeten Benutzers zu aktualisieren/ergänzen
-      db.prepare('UPDATE chats SET user_email = ?, user_name = ? WHERE id = ?')
-        .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, chatId);
+      // Immer versuchen, E-Mail und Name des angemeldeten Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
+      if (chat.isAgentOnBehalf !== 1) {
+        db.prepare('UPDATE chats SET user_email = ?, user_name = ? WHERE id = ?')
+          .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, chatId);
+      }
     }
 
     // 2. Benutzernachricht speichern (mit eventuellem Foto)
@@ -159,18 +165,29 @@ export async function POST(request) {
     `).all(chatId);
 
     // 4. Gemini aufrufen
-    let aiResponse = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0);
-
+    const isAgentOnBehalfMode = chat ? chat.isAgentOnBehalf === 1 : false;
+    let aiResponse = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0, isAgentOnBehalfMode);
+ 
     // 5. Auf Ticket-Erstellung prüfen
     let ticketCreated = false;
     let proposedTitle = null;
+    let extractedData = null;
     if (aiResponse.includes('[TICKET_CREATED]')) {
       ticketCreated = true;
       aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
-      try {
-        proposedTitle = await generateTicketTitle(chatHistory);
-      } catch (err) {
-        console.error('Fehler bei der proposedTitle-Generierung:', err);
+      
+      if (isAgentOnBehalfMode) {
+        try {
+          extractedData = await extractAgentBehalfDetails(chatHistory);
+        } catch (err) {
+          console.error('Fehler bei extractAgentBehalfDetails:', err);
+        }
+      } else {
+        try {
+          proposedTitle = await generateTicketTitle(chatHistory);
+        } catch (err) {
+          console.error('Fehler bei der proposedTitle-Generierung:', err);
+        }
       }
     }
 
@@ -213,6 +230,8 @@ export async function POST(request) {
       text: aiResponse,
       ticketCreated,
       proposedTitle,
+      extractedData,
+      isAgentOnBehalf: isAgentOnBehalfMode,
       botMessageId,
       isAbusive
     });

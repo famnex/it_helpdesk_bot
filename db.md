@@ -85,12 +85,15 @@ Speichert den Chatverlauf und interne Notizen innerhalb eines Support-Tickets.
 ### 4. Tabelle: `chats`
 Speichert private Chats von Kunden mit dem Bot.
 
-* **Schema:**
   ```sql
   CREATE TABLE chats (
       id TEXT PRIMARY KEY,
       user_email TEXT,
       ticket_created BOOLEAN DEFAULT 0,
+      is_agent_on_behalf BOOLEAN DEFAULT 0,
+      user_name TEXT,
+      is_abusive BOOLEAN DEFAULT 0,
+      abusive_flagged_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   ```
@@ -98,6 +101,11 @@ Speichert private Chats von Kunden mit dem Bot.
   * `id`: Eindeutige ID des Chat-Verlaufs.
   * `user_email`: Die E-Mail-Adresse des Benutzers, falls dieser angemeldet ist (ermöglicht das Laden alter Chats).
   * `ticket_created`: Flag (`0` oder `1`), das angibt, ob für diesen Chatverlauf bereits ein Ticket erstellt wurde, um doppelte Ticket-Erstellungen zu verhindern.
+  * `is_agent_on_behalf`: Flag (`0` oder `1`), das angibt, ob das Ticket im Namen eines Benutzers durch einen Agenten im Backend erfasst wird.
+  * `user_name`: Name des Benutzers (für unregistrierte Benutzer oder Behalf-Tickets).
+  * `is_abusive`: Missbrauch-Erkennungs-Flag.
+  * `abusive_flagged_at`: Zeitstempel der Missbrauch-Erkennung.
+  * `created_at`: Erstelldatum des Chats.
 
 ---
 

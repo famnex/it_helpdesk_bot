@@ -9,7 +9,7 @@ export async function GET() {
   }
 
   try {
-    const agents = db.prepare('SELECT id, email, role FROM users WHERE role IN (\'agent\', \'admin\') ORDER BY email ASC').all();
+    const agents = db.prepare("SELECT id, email, name, role FROM users WHERE role IN ('agent', 'admin') ORDER BY name ASC, email ASC").all();
     return NextResponse.json({ agents });
   } catch (err) {
     console.error('Fehler beim Abrufen der Agenten:', err);

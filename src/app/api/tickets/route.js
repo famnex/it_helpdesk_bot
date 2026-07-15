@@ -60,13 +60,25 @@ export async function POST(request) {
     const user = await getSessionUser();
     const data = await request.json();
     
-    let email = user ? user.email : data.creator_email;
+    const isAgent = user && (user.role === 'agent' || user.role === 'admin');
+    let email = (isAgent && data.creator_email) ? data.creator_email : (user ? user.email : data.creator_email);
     
     if (!email) {
       return NextResponse.json({ 
         error: 'E-Mail-Adresse ist erforderlich.', 
         emailRequired: true 
       }, { status: 400 });
+    }
+
+    // Falls der Kunde noch nicht in der Tabelle 'users' existiert, direkt anlegen
+    if (email) {
+      const userExists = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      if (!userExists) {
+        const customerId = `user-${Math.floor(100000 + Math.random() * 900000)}`;
+        const customerName = data.creator_name || email.split('@')[0];
+        db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, \'customer\', ?)')
+          .run(customerId, email, customerName);
+      }
     }
 
     let title = data.title || 'Support-Anfrage über Chat-Assistent';
@@ -108,8 +120,11 @@ export async function POST(request) {
     if (chatId) {
       const chatExists = db.prepare('SELECT id FROM chats WHERE id = ?').get(chatId);
       if (!chatExists) {
+        const chatUserName = (data.creator_email && data.creator_name) 
+          ? data.creator_name 
+          : (user && user.email === email ? user.name : null);
         db.prepare('INSERT INTO chats (id, user_email, user_name) VALUES (?, ?, ?)')
-          .run(chatId, email, user ? user.name : null);
+          .run(chatId, email, chatUserName);
       }
     }
 
@@ -144,11 +159,22 @@ export async function POST(request) {
     let assignedAgentId = null;
     let matchedAgent = null;
 
-    if (matchedAgentId) {
-      matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
-      if (matchedAgent) {
+    const requestedAssignee = data.assignedAgentId;
+
+    if (requestedAssignee && requestedAssignee !== 'auto' && requestedAssignee !== 'unassigned') {
+      const explicitAgent = db.prepare("SELECT id, email, name FROM users WHERE id = ? AND (role = 'agent' OR role = 'admin')").get(requestedAssignee);
+      if (explicitAgent) {
         status = 'assigned';
-        assignedAgentId = matchedAgentId;
+        assignedAgentId = explicitAgent.id;
+        matchedAgent = explicitAgent;
+      }
+    } else if (!requestedAssignee || requestedAssignee === 'auto') {
+      if (matchedAgentId) {
+        matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
+        if (matchedAgent) {
+          status = 'assigned';
+          assignedAgentId = matchedAgentId;
+        }
       }
     }
 

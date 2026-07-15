@@ -45,6 +45,10 @@ db.exec(`
       id TEXT PRIMARY KEY,
       user_email TEXT,
       ticket_created BOOLEAN DEFAULT 0,
+      is_agent_on_behalf BOOLEAN DEFAULT 0,
+      user_name TEXT,
+      is_abusive BOOLEAN DEFAULT 0,
+      abusive_flagged_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -163,6 +167,12 @@ try {
     db.exec("ALTER TABLE chats ADD COLUMN is_abusive BOOLEAN DEFAULT 0;");
     db.exec("ALTER TABLE chats ADD COLUMN abusive_flagged_at DATETIME;");
     console.log("Migration: Spalten für Missbrauchs-Erkennung zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const hasIsAgentOnBehalf = tableInfoChatsAbuse.some(col => col.name === 'is_agent_on_behalf');
+  if (!hasIsAgentOnBehalf) {
+    db.exec("ALTER TABLE chats ADD COLUMN is_agent_on_behalf BOOLEAN DEFAULT 0;");
+    console.log("Migration: Spalte 'is_agent_on_behalf' zur Tabelle 'chats' hinzugefügt.");
   }
 
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();

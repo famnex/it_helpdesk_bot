@@ -16,6 +16,145 @@ export default function AgentDashboardPage() {
   // Mobile Menu State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // On Behalf Ticket Creation Modal State
+  const [showBehalfModal, setShowBehalfModal] = useState(false);
+  const [behalfChatId, setBehalfChatId] = useState('');
+  const [behalfMessages, setBehalfMessages] = useState([]);
+  const [behalfInput, setBehalfInput] = useState('');
+  const [isBehalfTyping, setIsBehalfTyping] = useState(false);
+
+  // Extraction & Form Review State
+  const [showBehalfForm, setShowBehalfForm] = useState(false);
+  const [behalfFormName, setBehalfFormName] = useState('');
+  const [behalfFormEmail, setBehalfFormEmail] = useState('');
+  const [behalfFormPhone, setBehalfFormPhone] = useState('');
+  const [behalfFormTitle, setBehalfFormTitle] = useState('');
+  const [behalfFormDescription, setBehalfFormDescription] = useState('');
+  const [behalfFormAttempts, setBehalfFormAttempts] = useState('');
+  const [behalfFormAssignee, setBehalfFormAssignee] = useState('auto'); // 'auto', 'unassigned', or agent ID
+  const [isSubmittingBehalfTicket, setIsSubmittingBehalfTicket] = useState(false);
+
+  const handleOpenBehalfModal = () => {
+    const newChatId = `behalf-${Date.now()}`;
+    setBehalfChatId(newChatId);
+    setBehalfMessages([
+      {
+        sender: 'bot',
+        text: 'Hallo! Ich helfe dir dabei, ein Support-Ticket im Namen eines Benutzers (z. B. Lehrer oder Schüler) anzulegen.\n\nBitte nenne mir zuerst **Name und E-Mail-Adresse** (und optional die Telefonnummer) des betroffenen Benutzers.'
+      }
+    ]);
+    setBehalfInput('');
+    setIsBehalfTyping(false);
+    setShowBehalfForm(false);
+    setBehalfFormName('');
+    setBehalfFormEmail('');
+    setBehalfFormPhone('');
+    setBehalfFormTitle('');
+    setBehalfFormDescription('');
+    setBehalfFormAttempts('');
+    setBehalfFormAssignee('auto');
+    setShowBehalfModal(true);
+  };
+
+  const handleSendBehalfMessage = async (e) => {
+    e.preventDefault();
+    if (!behalfInput.trim() || isBehalfTyping) return;
+
+    const userText = behalfInput.trim();
+    setBehalfInput('');
+
+    // Append user message
+    setBehalfMessages(prev => [...prev, { sender: 'user', text: userText }]);
+    setIsBehalfTyping(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: behalfChatId,
+          text: userText,
+          isAgentOnBehalf: true
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Append bot message
+        setBehalfMessages(prev => [...prev, { sender: 'bot', text: data.text }]);
+        
+        // If ticket extraction is triggered
+        if (data.ticketCreated && data.extractedData) {
+          const ext = data.extractedData;
+          setBehalfFormName(ext.name || '');
+          setBehalfFormEmail(ext.email || '');
+          setBehalfFormPhone(ext.phone || '');
+          setBehalfFormTitle(ext.title || '');
+          setBehalfFormDescription(ext.description || '');
+          setBehalfFormAttempts(ext.attempts || '');
+          setShowBehalfForm(true); // Switch to review form view
+        }
+      }
+    } catch (err) {
+      console.error('Fehler bei On-Behalf Chat:', err);
+    } finally {
+      setIsBehalfTyping(false);
+    }
+  };
+
+  const handleSubmitBehalfForm = async (e) => {
+    e.preventDefault();
+    if (!behalfFormEmail.trim() || !behalfFormTitle.trim() || isSubmittingBehalfTicket) return;
+
+    setIsSubmittingBehalfTicket(true);
+
+    try {
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creator_email: behalfFormEmail.trim(),
+          creator_name: behalfFormName.trim(),
+          title: behalfFormTitle.trim(),
+          assignedAgentId: behalfFormAssignee,
+          chat_id: behalfChatId
+        })
+      });
+
+      if (res.ok) {
+        const ticketData = await res.json();
+        
+        // Also save description and attempts as messages in ticket_messages
+        let detailsText = `**Problembeschreibung:**\n${behalfFormDescription}`;
+        if (behalfFormPhone) {
+          detailsText += `\n\n**Telefonnummer:** ${behalfFormPhone}`;
+        }
+        if (behalfFormAttempts) {
+          detailsText += `\n\n**Bisherige Lösungsversuche:**\n${behalfFormAttempts}`;
+        }
+
+        await fetch(`/api/tickets/${ticketData.ticketId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: detailsText })
+        });
+
+        // Close modal and reload dashboard data
+        setShowBehalfModal(false);
+        loadData();
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || 'Fehler beim Erstellen des Tickets.');
+      }
+    } catch (err) {
+      console.error('Fehler beim Erstellen des Tickets:', err);
+      alert('Verbindungsfehler.');
+    } finally {
+      setIsSubmittingBehalfTicket(false);
+    }
+  };
+
   useEffect(() => {
     // Session prüfen
     fetch('/api/auth/me')
@@ -248,9 +387,18 @@ export default function AgentDashboardPage() {
         
         {/* Title and Filter Panel */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
-          <div>
-            <h2 className="text-lg font-bold text-white">Support-Ticket-Übersicht</h2>
-            <p className="text-xs text-slate-400">Verwalte, weise zu und beantworte Tickets von Kunden</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between w-full md:w-auto flex-grow">
+            <div>
+              <h2 className="text-lg font-bold text-white">Support-Ticket-Übersicht</h2>
+              <p className="text-xs text-slate-400">Verwalte, weise zu und beantworte Tickets von Kunden</p>
+            </div>
+            <button
+              onClick={handleOpenBehalfModal}
+              className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 self-start shadow-md hover:shadow-violet-550/20 cursor-pointer shrink-0"
+            >
+              <i className="fa-solid fa-plus-circle text-sm"></i>
+              <span>Neues Ticket (im Namen von...)</span>
+            </button>
           </div>
           
           {/* Filters */}
@@ -389,6 +537,209 @@ export default function AgentDashboardPage() {
         )}
 
       </main>
+
+      {/* On-Behalf Ticket Creation Modal */}
+      {showBehalfModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40 shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-white">Ticket im Namen eines Benutzers erstellen</h3>
+                <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider mt-0.5">Assistenten-Modus</p>
+              </div>
+              <button 
+                onClick={() => setShowBehalfModal(false)}
+                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-850"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            {!showBehalfForm ? (
+              /* Chat Mode */
+              <>
+                <div className="p-6 flex-grow overflow-y-auto space-y-4 min-h-[300px]">
+                  {behalfMessages.map((msg, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`flex gap-3 max-w-[85%] ${msg.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl ${msg.sender === 'user' ? 'bg-slate-700 text-slate-350' : 'bg-violet-600/10 text-violet-400 border border-violet-500/25'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
+                        <i className={`fa-solid fa-${msg.sender === 'user' ? 'user-tie' : 'robot'} text-xs`}></i>
+                      </div>
+                      <div className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} max-w-full`}>
+                        <div className={`${msg.sender === 'user' ? 'bg-violet-600 text-white rounded-tr-none' : 'bg-slate-950 border border-slate-850 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-sm text-sm whitespace-pre-wrap leading-relaxed`}>
+                          {msg.text}
+                        </div>
+                        <span className="text-[9px] text-slate-500 mt-1 mx-1">
+                          {msg.sender === 'user' ? 'Du (Agent)' : 'IT-Assistent'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isBehalfTyping && (
+                    <div className="flex gap-3 max-w-[85%]">
+                      <div className="w-8 h-8 rounded-xl bg-violet-600/10 text-violet-400 border border-violet-500/25 flex items-center justify-center shrink-0 mt-1 shadow-md">
+                        <i className="fa-solid fa-robot text-xs"></i>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-850 p-4 rounded-2xl rounded-tl-none">
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <form onSubmit={handleSendBehalfMessage} className="p-4 border-t border-slate-800 bg-slate-950/20 shrink-0 flex gap-3">
+                  <input
+                    type="text"
+                    value={behalfInput}
+                    onChange={(e) => setBehalfInput(e.target.value)}
+                    placeholder="Problem oder Benutzerdaten beschreiben..."
+                    className="flex-grow bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!behalfInput.trim() || isBehalfTyping}
+                    className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white font-bold px-5 rounded-xl transition-all flex items-center justify-center cursor-pointer shadow-md"
+                  >
+                    <i className="fa-solid fa-paper-plane"></i>
+                  </button>
+                </form>
+              </>
+            ) : (
+              /* Review Form Mode */
+              <form onSubmit={handleSubmitBehalfForm} className="flex flex-col flex-grow overflow-hidden">
+                <div className="p-6 overflow-y-auto space-y-4 flex-grow">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex gap-3 items-start mb-2">
+                    <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400"><i className="fa-solid fa-circle-check text-base"></i></div>
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-300">Daten erfolgreich erfasst!</h4>
+                      <p className="text-[11px] text-slate-400 mt-1">Die KI hat die Ticket-Details extrahiert. Bitte überprüfe die Angaben unten und passe sie ggf. an.</p>
+                    </div>
+                  </div>
+
+                  {/* Betroffener User */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Name des Benutzers</label>
+                      <input
+                        type="text"
+                        value={behalfFormName}
+                        onChange={(e) => setBehalfFormName(e.target.value)}
+                        placeholder="z. B. Julian Jost"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">E-Mail-Adresse *</label>
+                      <input
+                        type="email"
+                        required
+                        value={behalfFormEmail}
+                        onChange={(e) => setBehalfFormEmail(e.target.value)}
+                        placeholder="z. B. julian@schule.de"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Telefonnummer & Zuweisung */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Telefonnummer (optional)</label>
+                      <input
+                        type="text"
+                        value={behalfFormPhone}
+                        onChange={(e) => setBehalfFormPhone(e.target.value)}
+                        placeholder="z. B. 0123-456789"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Zuweisen an *</label>
+                      <select
+                        value={behalfFormAssignee}
+                        onChange={(e) => setBehalfFormAssignee(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                      >
+                        <option value="auto">Automatische Zuweisung (KI)</option>
+                        <option value="unassigned">Keine Zuweisung (Offen)</option>
+                        {agents.map((ag) => (
+                          <option key={ag.id} value={ag.id}>
+                            {ag.name ? `${ag.name} (${ag.email})` : ag.email}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Ticket-Betreff / Titel *</label>
+                    <input
+                      type="text"
+                      required
+                      value={behalfFormTitle}
+                      onChange={(e) => setBehalfFormTitle(e.target.value)}
+                      placeholder="z. B. Outlook Anmeldeproblem"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+                    />
+                  </div>
+
+                  {/* Problembeschreibung */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Problembeschreibung</label>
+                    <textarea
+                      value={behalfFormDescription}
+                      onChange={(e) => setBehalfFormDescription(e.target.value)}
+                      rows={3}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                    />
+                  </div>
+
+                  {/* Bisherige Lösungsversuche */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Bisherige Lösungsversuche</label>
+                    <textarea
+                      value={behalfFormAttempts}
+                      onChange={(e) => setBehalfFormAttempts(e.target.value)}
+                      rows={2}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="p-4 border-t border-slate-800 bg-slate-950/40 shrink-0 flex justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowBehalfForm(false)}
+                    className="border border-slate-800 hover:bg-slate-800 text-slate-350 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+                  >
+                    Zurück zum Chat
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingBehalfTicket}
+                    className="bg-emerald-650 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md"
+                  >
+                    {isSubmittingBehalfTicket && (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    )}
+                    <span>Ticket final erstellen</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
