@@ -17,22 +17,29 @@ export async function GET(request) {
   }
 
   const email = decoded.email;
+  const displayName = decoded.display_name || decoded.username || null;
   
   try {
     // Benutzer in der Datenbank suchen
-    let user = db.prepare('SELECT id, email, role FROM users WHERE email = ?').get(email);
+    let user = db.prepare('SELECT id, email, role, name FROM users WHERE email = ?').get(email);
     
     if (!user) {
       // Wenn der Benutzer noch nicht existiert, legen wir ihn an.
-      // Rolle aus dem Token bestimmen (falls angegeben), andernfalls standardmäßig 'agent'
+      // Rolle aus dem Token bestimmen (falls angegeben), andernfalls standardmäßig 'customer'
       let role = decoded.role;
       if (!role || !['customer', 'agent', 'admin'].includes(role)) {
         role = 'customer';
       }
       
       const userId = decoded.id || `usr-${Math.floor(100000 + Math.random() * 900000)}`;
-      db.prepare('INSERT INTO users (id, email, role) VALUES (?, ?, ?)').run(userId, email, role);
-      user = { id: userId, email, role };
+      db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, ?, ?)').run(userId, email, role, displayName);
+      user = { id: userId, email, role, name: displayName };
+    } else {
+      // Falls der Benutzer existiert, aber noch keinen Namen hat (oder der Name abweicht)
+      if (displayName && user.name !== displayName) {
+        db.prepare('UPDATE users SET name = ? WHERE id = ?').run(displayName, user.id);
+        user.name = displayName;
+      }
     }
 
     // Interne Session erstellen
