@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { marked } from 'marked';
 
 export default function AgentDashboardPage() {
   const [tickets, setTickets] = useState([]);
@@ -570,9 +571,18 @@ export default function AgentDashboardPage() {
                         <i className={`fa-solid fa-${msg.sender === 'user' ? 'user-tie' : 'robot'} text-xs`}></i>
                       </div>
                       <div className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} max-w-full`}>
-                        <div className={`${msg.sender === 'user' ? 'bg-violet-600 text-white rounded-tr-none' : 'bg-slate-950 border border-slate-850 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-sm text-sm whitespace-pre-wrap leading-relaxed`}>
-                          {msg.text}
-                        </div>
+                        {msg.sender === 'user' ? (
+                          <div className="bg-violet-650 text-white rounded-tr-none p-3.5 rounded-2xl shadow-sm text-sm whitespace-pre-wrap leading-relaxed">
+                            {msg.text}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-950 border border-slate-850 text-slate-200 rounded-tl-none p-3.5 rounded-2xl shadow-sm text-sm leading-relaxed">
+                            <div 
+                              className="markdown-content"
+                              dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                            />
+                          </div>
+                        )}
                         <span className="text-[9px] text-slate-500 mt-1 mx-1">
                           {msg.sender === 'user' ? 'Du (Agent)' : 'IT-Assistent'}
                         </span>
