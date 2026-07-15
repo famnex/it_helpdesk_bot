@@ -144,22 +144,24 @@ export async function sendCustomerReplyNotification(agentEmail, ticketId, ticket
   return sendMail({ to: agentEmail, subject, html, text });
 }
 
-/**
- * Informiert einen Agenten über eine Ticket-Zuweisung.
- */
 export async function sendAssignmentNotification(agentEmail, ticketId, ticketTitle) {
   const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const link = `${host}/agent/tickets/${ticketId}`;
+  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
+  const loginToken = generateMagicLinkToken(agentEmail, '30d');
+  const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/agent/tickets/${ticketId}`;
   
   const subject = `Ihnen wurde das Ticket ${ticketId} zugewiesen`;
   const text = `Hallo,\n\nIhnen wurde das Ticket "${ticketTitle}" (${ticketId}) zur Bearbeitung zugewiesen.\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen:\n\n${link}`;
   const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333;">
-      <h2>Zuweisung des Tickets ${ticketId}</h2>
+    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+      <h2 style="color: #8b5cf6; margin-top: 0;">Ticket zugewiesen</h2>
       <p>Hallo,</p>
-      <p>Ihnen wurde das Ticket <strong>"${ticketTitle}"</strong> zur Bearbeitung zugewiesen.</p>
+      <p>Ihnen wurde das Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold;">${ticketId}</span>) zur Bearbeitung zugewiesen.</p>
       <p style="margin: 30px 0;">
-        <a href="${link}" style="background-color: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket ansehen</a>
+        <a href="${link}" style="background-color: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket im Portal ansehen</a>
+      </p>
+      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
+        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
       </p>
     </div>
   `;
