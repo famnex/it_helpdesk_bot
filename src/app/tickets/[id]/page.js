@@ -61,7 +61,15 @@ export default function CustomerTicketDetailPage() {
             const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
             if (chatRes.ok) {
               const chatData = await chatRes.json();
-              const chatHistory = (chatData.messages || []).map(m => ({
+              const chatMessages = chatData.messages || [];
+              const ticketCreatedEventIndex = chatMessages.findIndex(m => m.text && m.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:'));
+              
+              // Nur Nachrichten vor dem Erstellungs-Event behalten, um Duplikate zu vermeiden
+              const preTicketMessages = ticketCreatedEventIndex !== -1 
+                ? chatMessages.slice(0, ticketCreatedEventIndex) 
+                : chatMessages;
+
+              const chatHistory = preTicketMessages.map(m => ({
                 ...m,
                 isPreTicket: true,
                 senderRole: m.sender === 'user' ? 'customer' : 'bot',
@@ -69,7 +77,10 @@ export default function CustomerTicketDetailPage() {
                 text: m.text,
                 createdAt: m.createdAt
               }));
-              setMessages([...chatHistory, ...ticketMessages]);
+
+              const combined = [...chatHistory, ...ticketMessages];
+              combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              setMessages(combined);
             } else {
               setMessages(ticketMessages);
             }
@@ -213,6 +224,10 @@ export default function CustomerTicketDetailPage() {
               const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
               
+              if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
+                return null;
+              }
+
               if (isSystem) {
                 return (
                   <div key={index} className="flex justify-center">
