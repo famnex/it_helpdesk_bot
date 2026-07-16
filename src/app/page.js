@@ -101,7 +101,7 @@ export default function CustomerChatPage() {
               fetch('/api/tickets')
                 .then(res => res.json())
                 .then(ticketData => {
-                  const openTickets = (ticketData.tickets || []).filter(t => t.status !== 'closed');
+                  const openTickets = (ticketData.tickets || []).filter(t => t.status !== 'closed' && t.creatorEmail === data.user.email);
                   if (openTickets.length > 0) {
                     setActiveTickets(openTickets);
                     setShowTicketPrompt(true);

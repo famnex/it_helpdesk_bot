@@ -25,7 +25,7 @@ export default function CustomerTicketsPage() {
           if (data.logoutText) {
             setLogoutLabel(data.logoutText);
           }
-          loadTickets();
+          loadTickets(data.user);
         }
       })
       .catch(() => {
@@ -33,12 +33,14 @@ export default function CustomerTicketsPage() {
       });
   }, []);
 
-  const loadTickets = async () => {
+  const loadTickets = async (currentUser) => {
     try {
       const res = await fetch('/api/tickets');
       if (res.ok) {
         const data = await res.json();
-        setTickets(data.tickets || []);
+        // Nur Tickets anzeigen, bei denen der eingeloggte Benutzer der Ersteller ist
+        const myTickets = (data.tickets || []).filter(t => t.creatorEmail === currentUser?.email);
+        setTickets(myTickets);
       }
     } catch (err) {
       console.error('Fehler beim Laden der Tickets:', err);
