@@ -137,8 +137,10 @@ export default function CustomerChatPage() {
         fetch('/api/auth/me')
           .then(res => res.json())
           .then(data => {
+            let currentUser = null;
             if (data.user) {
               setUser(data.user);
+              currentUser = data.user;
               // Laden der offenen Tickets des Benutzers
               fetch('/api/tickets')
                 .then(res => res.json())
@@ -150,6 +152,18 @@ export default function CustomerChatPage() {
                   }
                 })
                 .catch(err => console.error('Fehler beim Laden der Tickets:', err));
+            }
+
+            // Action check
+            const action = params.get('action');
+            if (action === 'create_ticket') {
+              setPendingTicketTitle('Support-Anfrage über Chat-Assistent');
+              if (!currentUser) {
+                setShowEmailPrompt(true);
+              } else {
+                setShowConfirmTicket(true);
+              }
+              window.history.replaceState({}, document.title, window.location.pathname);
             }
           });
       })
@@ -507,6 +521,15 @@ export default function CustomerChatPage() {
  
         {/* Desktop Menu - nur auf md: und größer */}
         <div className="hidden md:flex items-center gap-4 text-sm">
+          <button 
+            type="button"
+            onClick={() => triggerTicketCreation('')}
+            className="bg-sky-600 hover:bg-sky-750 text-white border border-sky-650 font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow cursor-pointer shrink-0"
+          >
+            <i className="fa-solid fa-plus-circle"></i>
+            <span>Ticket erstellen</span>
+          </button>
+
           {user ? (
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-300">
@@ -515,14 +538,14 @@ export default function CustomerChatPage() {
               </span>
               <Link 
                 href="/knowledge"
-                className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-750 font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-book-open text-sky-400"></i>
                 <span>Wissensdatenbank</span>
               </Link>
               <Link 
                 href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
-                className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-ticket"></i>
                 <span>
@@ -594,6 +617,15 @@ export default function CustomerChatPage() {
                   <span className="truncate">{user.email}</span>
                 </div>
                 
+                <button 
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); triggerTicketCreation(''); }}
+                  className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
+                >
+                  <i className="fa-solid fa-plus-circle"></i>
+                  <span>Ticket erstellen</span>
+                </button>
+
                 <Link 
                   href="/knowledge"
                   onClick={() => setMobileMenuOpen(false)}
@@ -606,7 +638,7 @@ export default function CustomerChatPage() {
                 <Link 
                   href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   <i className="fa-solid fa-ticket"></i>
                   <span>
@@ -627,6 +659,15 @@ export default function CustomerChatPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                <button 
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); triggerTicketCreation(''); }}
+                  className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
+                >
+                  <i className="fa-solid fa-plus-circle"></i>
+                  <span>Ticket erstellen</span>
+                </button>
+
                 {/* Magic Link Form */}
                 <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
@@ -636,7 +677,7 @@ export default function CustomerChatPage() {
                       value={magicEmail}
                       onChange={(e) => setMagicEmail(e.target.value)}
                       placeholder="Deine E-Mail..."
-                      className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-600 px-2 py-1.5 focus:outline-none focus:ring-0 flex-1 min-w-0"
+                      className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-655 px-2 py-1.5 focus:outline-none focus:ring-0 flex-1 min-w-0"
                       required
                     />
                     <button 
