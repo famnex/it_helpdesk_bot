@@ -52,6 +52,15 @@ export default function CustomerChatPage() {
   const [guestEmail, setGuestEmail] = useState('');
   const [ticketCreationLoading, setTicketCreationLoading] = useState(false);
 
+  const triggerTicketCreation = (title = '') => {
+    setPendingTicketTitle(title || 'Support-Anfrage über Chat-Assistent');
+    if (user) {
+      setShowConfirmTicket(true);
+    } else {
+      setShowEmailPrompt(true);
+    }
+  };
+
   // Active Tickets States
   const [activeTickets, setActiveTickets] = useState([]);
   const [showTicketPrompt, setShowTicketPrompt] = useState(false);
