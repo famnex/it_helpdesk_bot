@@ -530,15 +530,6 @@ export default function CustomerChatPage() {
  
         {/* Desktop Menu - nur auf md: und größer */}
         <div className="hidden md:flex items-center gap-4 text-sm">
-          <button 
-            type="button"
-            onClick={() => triggerTicketCreation('')}
-            className="bg-sky-600 hover:bg-sky-750 text-white border border-sky-650 font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow cursor-pointer shrink-0"
-          >
-            <i className="fa-solid fa-plus-circle"></i>
-            <span>Ticket erstellen</span>
-          </button>
-
           {user ? (
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-300">
@@ -626,15 +617,6 @@ export default function CustomerChatPage() {
                   <span className="truncate">{user.email}</span>
                 </div>
                 
-                <button 
-                  type="button"
-                  onClick={() => { setMobileMenuOpen(false); triggerTicketCreation(''); }}
-                  className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
-                >
-                  <i className="fa-solid fa-plus-circle"></i>
-                  <span>Ticket erstellen</span>
-                </button>
-
                 <Link 
                   href="/knowledge"
                   onClick={() => setMobileMenuOpen(false)}
@@ -668,15 +650,6 @@ export default function CustomerChatPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                <button 
-                  type="button"
-                  onClick={() => { setMobileMenuOpen(false); triggerTicketCreation(''); }}
-                  className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
-                >
-                  <i className="fa-solid fa-plus-circle"></i>
-                  <span>Ticket erstellen</span>
-                </button>
-
                 {/* Magic Link Form */}
                 <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>

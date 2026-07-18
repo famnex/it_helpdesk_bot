@@ -96,13 +96,6 @@ export default function CustomerTicketsPage() {
         </div>
         
         <div className="flex items-center gap-4">
-          <Link
-            href="/?action=create_ticket"
-            className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow cursor-pointer shrink-0"
-          >
-            <i className="fa-solid fa-plus-circle"></i>
-            <span>Ticket erstellen</span>
-          </Link>
           <span className="text-xs text-slate-400 hidden sm:inline">
             <i className="fa-regular fa-envelope mr-1.5 text-slate-500"></i>
             {user?.email}
