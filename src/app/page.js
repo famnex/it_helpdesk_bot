@@ -20,6 +20,15 @@ export default function CustomerChatPage() {
   // Mobile Menu & Logout States
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // DSGVO Consent States
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentCheckbox, setConsentCheckbox] = useState(false);
+
+  const handleAcceptConsent = () => {
+    localStorage.setItem('it_helpdesk_bot_consent', 'true');
+    setShowConsentModal(false);
+  };
+
   const handleLogout = async () => {
     try {
       const res = await fetch('/api/auth/logout', { method: 'POST' });
@@ -63,9 +72,36 @@ export default function CustomerChatPage() {
   // Frage-Vorschläge (dynamisch aus der Datenbank)
   const [suggestions, setSuggestions] = useState([]);
 
+  function getFirstName(fullName) {
+    if (!fullName) return '';
+    
+    // 1. Falls ein Komma enthalten ist (z.B. "Fleischer, Stefan" oder "Fleischer, Stefan Dr.")
+    if (fullName.includes(',')) {
+      const parts = fullName.split(',');
+      if (parts.length > 1) {
+        const afterComma = parts[1].trim();
+        return afterComma.split(' ')[0];
+      }
+    }
+    
+    // 2. Normaler Name mit Leerzeichen (z.B. "Stefan Fleischer" oder "OStD Karsten Backhaus")
+    const words = fullName.trim().split(/\s+/);
+    
+    // Finde das erste Wort, das kein generischer Titel ist
+    const lowercaseTitles = ['ostd', 'std', 'str', 'dr.', 'dr', 'prof.', 'prof', 'hr.', 'fr.'];
+    for (const word of words) {
+      const cleanWord = word.toLowerCase().replace(/[^a-zäöüß.]/g, '');
+      if (!lowercaseTitles.includes(cleanWord)) {
+        return word;
+      }
+    }
+    
+    return words[0] || '';
+  }
+
   function getGreetingText(currentUser) {
     if (currentUser && currentUser.name) {
-      const firstName = currentUser.name.split(' ')[0];
+      const firstName = getFirstName(currentUser.name);
       return `Hallo ${firstName}! Schön, dass du da bist. Ich bin dein digitaler Helfer für Fragen zu Benutzerkonten, Moodle, Schulportal, Webuntis und allen IT-Systemen. Beschreibe mir dein Problem. Falls wir keine Lösung finden, kann ich direkt ein Ticket für dich erstellen.`;
     } else if (currentUser) {
       return `Hallo! Schön, dass du da bist. Ich bin dein digitaler Helfer für Fragen zu Benutzerkonten, Moodle, Schulportal, Webuntis und allen IT-Systemen. Beschreibe mir dein Problem. Falls wir keine Lösung finden, kann ich direkt ein Ticket für dich erstellen.`;
@@ -74,6 +110,12 @@ export default function CustomerChatPage() {
   }
  
   useEffect(() => {
+    // DSGVO-Einwilligung prüfen
+    const consent = localStorage.getItem('it_helpdesk_bot_consent');
+    if (consent !== 'true') {
+      setShowConsentModal(true);
+    }
+
     // 1. Erst-Einrichtung (Setup) prüfen
     fetch('/api/setup')
       .then(res => res.json())
@@ -1071,6 +1113,60 @@ export default function CustomerChatPage() {
                   <span>Meldung absenden</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DSGVO Consent Modal */}
+      {showConsentModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
+            <div className="flex items-center gap-3 text-sky-400">
+              <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
+                <i className="fa-solid fa-shield-halved text-xl"></i>
+              </div>
+              <h3 className="text-base font-bold text-white">Nutzungshinweis & Datenschutz (DSGVO)</h3>
+            </div>
+            
+            <div className="text-slate-300 text-xs space-y-3 leading-relaxed">
+              <p>
+                Dieser Support-Assistent nutzt ein <strong>künstliches Intelligenzsystem (LLM)</strong>, um dir automatisiert bei IT-Problemen zu helfen.
+              </p>
+              <p className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-slate-400">
+                <strong className="text-slate-350 block mb-1">⚠️ Wichtiger Hinweis zur Datenverarbeitung:</strong>
+                Die von dir eingegebenen Anfragen werden zur Beantwortung an KI-Modelle übertragen. Dabei können Daten an Server <strong>außerhalb der Europäischen Union (EU)</strong> gesendet werden. Die dortige Verarbeitung ist nicht durch europäische Stellen kontrollierbar.
+              </p>
+              <p className="text-red-400 font-bold bg-red-950/20 border border-red-500/20 p-2.5 rounded-xl">
+                ⚠️ Bitte trage niemals Passwörter, Geburtsdaten oder andere sensible persönliche Daten in das Chatfenster ein!
+              </p>
+              <p>
+                Die Nutzung des Chat-Assistenten ist freiwillig. Du kannst alternativ jederzeit über die Schaltfläche oben direkt ein Ticket im Service-Desk anlegen.
+              </p>
+            </div>
+            
+            <div className="pt-2 border-t border-slate-800 space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={consentCheckbox}
+                  onChange={(e) => setConsentCheckbox(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-900 mt-0.5"
+                />
+                <span className="text-xs font-semibold text-slate-300">
+                  Ja, ich stimme zu.
+                </span>
+              </label>
+              
+              <button
+                type="button"
+                disabled={!consentCheckbox}
+                onClick={handleAcceptConsent}
+                className="w-full bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:hover:bg-sky-600 text-white font-bold text-xs py-3 rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              >
+                <i className="fa-solid fa-circle-check"></i>
+                <span>Zustimmen und Fortfahren</span>
+              </button>
             </div>
           </div>
         </div>
