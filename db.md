@@ -138,6 +138,7 @@ Speichert die Wissensdatenbank (Chunks), welche von Admins verwaltet und von der
       description TEXT,
       category TEXT DEFAULT 'Sonstiges',
       source TEXT NOT NULL CHECK(source IN ('manual', 'ticket', 'file', 'url')),
+      is_private BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   ```
@@ -148,6 +149,9 @@ Speichert die Wissensdatenbank (Chunks), welche von Admins verwaltet und von der
   * `description`: Umfassende, detaillierte Beschreibung oder Anleitung (wird dem Benutzer im öffentlichen Hilfeportal im Markdown-Format angezeigt).
   * `category`: Kategorie des Artikels zur Gruppierung (z.B. WLAN, Hardware, Drucker, Software).
   * `source`: Woher das Wissen stammt (`manual` = Manuell angelegt, `ticket` = Aus gelöstem Ticket extrahiert, `file` = Aus Datei importiert, `url` = Aus Webseite extrahiert).
+  * `is_private`: Flag (`0` oder `1`), das angibt, ob dieser Chunk nur für die KI und Agenten intern bestimmt ist und NICHT in der öffentlichen Wissensdatenbank aufgeführt werden soll.
+
+---
 
 ### 7. Tabelle: `knowledge_attachments`
 Speichert Anhänge (Dateien), die von Administratoren an Einträge der Wissensdatenbank angehängt wurden.
@@ -278,4 +282,11 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
 * **Migration (ausgeführt in `src/lib/db.js`):**
   ```sql
   ALTER TABLE users ADD COLUMN responsibilities TEXT;
+  ```
+
+### Update #9 (23.07.2026): Hinzufügen der Spalte `is_private` zu `knowledge`
+* **Ziel:** Speichern eines Flags, um Wissenschunks als intern/privat zu kennzeichnen (nicht sichtbar in der öffentlichen Wissensdatenbank).
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE knowledge ADD COLUMN is_private BOOLEAN DEFAULT 0;
   ```

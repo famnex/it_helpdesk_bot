@@ -16,11 +16,12 @@ export async function GET(request) {
       chunks = db.prepare(`
         SELECT id, title, fact, description, category 
         FROM knowledge 
-        WHERE title LIKE ? OR fact LIKE ? OR description LIKE ? OR category LIKE ?
+        WHERE (is_private IS NULL OR is_private = 0) 
+          AND (title LIKE ? OR fact LIKE ? OR description LIKE ? OR category LIKE ?)
         ORDER BY title ASC
       `).all(sqlPattern, sqlPattern, sqlPattern, sqlPattern);
     } else {
-      chunks = db.prepare('SELECT id, title, fact, description, category FROM knowledge ORDER BY title ASC').all();
+      chunks = db.prepare('SELECT id, title, fact, description, category FROM knowledge WHERE is_private IS NULL OR is_private = 0 ORDER BY title ASC').all();
     }
 
     // Für jeden Wissenschunk die verknüpften Anhänge laden

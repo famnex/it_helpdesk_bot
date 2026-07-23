@@ -13,15 +13,16 @@ export async function PUT(request, { params }) {
   }
 
   try {
-    const { title, fact, description, category } = await request.json();
+    const { title, fact, description, category, isPrivate } = await request.json();
     if (!title || !fact) {
       return NextResponse.json({ error: 'Titel und Fakt sind erforderlich.' }, { status: 400 });
     }
 
     const desc = description || fact;
     const cat = category || 'Sonstiges';
+    const priv = isPrivate ? 1 : 0;
 
-    const result = db.prepare('UPDATE knowledge SET title = ?, fact = ?, description = ?, category = ? WHERE id = ?').run(title, fact, desc, cat, id);
+    const result = db.prepare('UPDATE knowledge SET title = ?, fact = ?, description = ?, category = ?, is_private = ? WHERE id = ?').run(title, fact, desc, cat, priv, id);
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Eintrag nicht gefunden.' }, { status: 404 });
     }

@@ -19,9 +19,11 @@ export default function AdminDashboardPage() {
   const [chunkFact, setChunkFact] = useState('');
   const [chunkDescription, setChunkDescription] = useState('');
   const [chunkCategory, setChunkCategory] = useState('');
+  const [chunkIsPrivate, setChunkIsPrivate] = useState(false);
   const [chunkError, setChunkError] = useState('');
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [adminSelectedCategory, setAdminSelectedCategory] = useState('Alle');
+  const [adminSelectedPrivateCategory, setAdminSelectedPrivateCategory] = useState('Alle');
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
 
@@ -313,7 +315,7 @@ export default function AdminDashboardPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: chunkTitle, fact: chunkFact, description: chunkDescription, category: chunkCategory })
+        body: JSON.stringify({ title: chunkTitle, fact: chunkFact, description: chunkDescription, category: chunkCategory, isPrivate: chunkIsPrivate })
       });
 
       const data = await res.json();
@@ -323,6 +325,7 @@ export default function AdminDashboardPage() {
         setChunkFact('');
         setChunkDescription('');
         setChunkCategory('');
+        setChunkIsPrivate(false);
         setEditingChunk(null);
         setIsCreatingChunk(false);
         loadAllData();
@@ -566,11 +569,21 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Filtered knowledge chunks
-  const filteredKnowledge = knowledge.filter(k => {
+  // Filtered knowledge chunks (public vs private)
+  const publicKnowledge = knowledge.filter(k => !k.isPrivate);
+  const privateKnowledge = knowledge.filter(k => !!k.isPrivate);
+
+  const filteredKnowledge = publicKnowledge.filter(k => {
     const matchesSearch = k.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
       k.fact.toLowerCase().includes(knowledgeSearch.toLowerCase());
     const matchesCategory = adminSelectedCategory === 'Alle' || (k.category || 'Sonstiges') === adminSelectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const filteredPrivateKnowledge = privateKnowledge.filter(k => {
+    const matchesSearch = k.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
+      k.fact.toLowerCase().includes(knowledgeSearch.toLowerCase());
+    const matchesCategory = adminSelectedPrivateCategory === 'Alle' || (k.category || 'Sonstiges') === adminSelectedPrivateCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -711,7 +724,14 @@ export default function AdminDashboardPage() {
           className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'knowledge' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
         >
           <i className="fa-solid fa-brain"></i>
-          <span>Wissensdatenbank</span>
+          <span>Öffentliches Wissen</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('private_knowledge')}
+          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'private_knowledge' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+        >
+          <i className="fa-solid fa-user-lock"></i>
+          <span>Internes Wissen (KI)</span>
         </button>
         <button 
           onClick={() => setActiveTab('import')}
@@ -763,7 +783,6 @@ export default function AdminDashboardPage() {
         {/* Tab 1: Wissensdatenbank */}
         {activeTab === 'knowledge' && (
           <div className="space-y-6">
-            
             {/* Search and Add panel */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
               <div className="flex-1 w-full sm:max-w-md relative">
@@ -772,7 +791,7 @@ export default function AdminDashboardPage() {
                   type="text" 
                   value={knowledgeSearch}
                   onChange={(e) => setKnowledgeSearch(e.target.value)}
-                  placeholder="Wissen durchsuchen..."
+                  placeholder="Öffentliches Wissen durchsuchen..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
                 />
               </div>
@@ -783,6 +802,7 @@ export default function AdminDashboardPage() {
                   setChunkFact('');
                   setChunkDescription('');
                   setChunkCategory('');
+                  setChunkIsPrivate(false);
                   setIsCreatingChunk(true);
                 }}
                 className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
@@ -793,9 +813,9 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Category Tabs */}
-            {knowledge.length > 0 && (
+            {publicKnowledge.length > 0 && (
               <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-[10px] font-bold scrollbar-none">
-                {['Alle', ...new Set(knowledge.map(k => k.category || 'Sonstiges'))].map(cat => (
+                {['Alle', ...new Set(publicKnowledge.map(k => k.category || 'Sonstiges'))].map(cat => (
                   <button
                     key={cat}
                     type="button"
@@ -856,6 +876,20 @@ export default function AdminDashboardPage() {
                         placeholder="z.B. WLAN (Standard: Sonstiges)"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                       />
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2.5 cursor-pointer py-1 select-none">
+                        <input
+                          type="checkbox"
+                          checked={chunkIsPrivate}
+                          onChange={(e) => setChunkIsPrivate(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-850 bg-slate-950 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
+                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung.</span>
+                        </div>
+                      </label>
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
@@ -944,6 +978,7 @@ export default function AdminDashboardPage() {
                         setChunkFact('');
                         setChunkDescription('');
                         setChunkCategory('');
+                        setChunkIsPrivate(false);
                         setChunkError('');
                       }}
                       className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-xl transition-all"
@@ -972,6 +1007,7 @@ export default function AdminDashboardPage() {
                     setChunkFact(k.fact);
                     setChunkDescription(k.description || '');
                     setChunkCategory(k.category || '');
+                    setChunkIsPrivate(!!k.isPrivate);
                     setIsCreatingChunk(false);
                   }}
                   className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-850/30 transition-all cursor-pointer select-none animate-fade-in"
@@ -1010,6 +1046,287 @@ export default function AdminDashboardPage() {
                 </div>
               ))}
             </div>
+
+          </div>
+        )}
+
+        {/* Tab 1b: Internes Wissen (Privat) */}
+        {activeTab === 'private_knowledge' && (
+          <div className="space-y-6">
+            
+            {/* Search and Add panel */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+              <div className="flex-1 w-full sm:max-w-md relative">
+                <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+                <input 
+                  type="text" 
+                  value={knowledgeSearch}
+                  onChange={(e) => setKnowledgeSearch(e.target.value)}
+                  placeholder="Internes Wissen durchsuchen..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  setEditingChunk(null);
+                  setChunkTitle('');
+                  setChunkFact('');
+                  setChunkDescription('');
+                  setChunkCategory('');
+                  setChunkIsPrivate(true);
+                  setIsCreatingChunk(true);
+                }}
+                className="bg-violet-600 hover:bg-violet-750 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+              >
+                <i className="fa-solid fa-plus"></i>
+                <span>Internes Wissen anlegen</span>
+              </button>
+            </div>
+
+            {/* Category Tabs */}
+            {privateKnowledge.length > 0 && (
+              <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-[10px] font-bold scrollbar-none">
+                {['Alle', ...new Set(privateKnowledge.map(k => k.category || 'Sonstiges'))].map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setAdminSelectedPrivateCategory(cat)}
+                    className={`px-4 py-2 rounded-lg transition-all shrink-0 uppercase tracking-wider ${adminSelectedPrivateCategory === cat ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Modal/Form zum Anlegen/Editieren */}
+            {(isCreatingChunk || editingChunk) && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 animate-fade-in space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-brain text-violet-500"></i>
+                  <span>{editingChunk ? 'Internen Wissenschunk bearbeiten' : 'Neuen internen Wissenschunk anlegen'}</span>
+                </h3>
+                
+                {chunkError && (
+                  <div className="bg-red-950/50 border border-red-500/50 text-red-200 text-xs p-3 rounded-lg flex items-center gap-2">
+                    <i className="fa-solid fa-triangle-exclamation"></i>
+                    <span>{chunkError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveChunk} className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung</label>
+                      <input 
+                        type="text" 
+                        value={chunkTitle}
+                        onChange={(e) => setChunkTitle(e.target.value)}
+                        placeholder="z.B. Interner Beamer IP-Konflikt"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Fakt / Konkrete Lösung (Kurz-Info für Bot-Chat)</label>
+                      <textarea 
+                        value={chunkFact}
+                        onChange={(e) => setChunkFact(e.target.value)}
+                        placeholder="z.B. IP-Adresse muss manuell auf 10.0.0.15 geändert werden."
+                        rows="2"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
+                      <input 
+                        type="text" 
+                        value={chunkCategory}
+                        onChange={(e) => setChunkCategory(e.target.value)}
+                        placeholder="z.B. Hardware (Standard: Sonstiges)"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2.5 cursor-pointer py-1 select-none">
+                        <input
+                          type="checkbox"
+                          checked={chunkIsPrivate}
+                          onChange={(e) => setChunkIsPrivate(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-855 bg-slate-955 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
+                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung.</span>
+                        </div>
+                      </label>
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] text-slate-400 font-bold block">Umfassende Beschreibung / Anleitung (Markdown möglich)</label>
+                        <button
+                          type="button"
+                          onClick={handleGenerateDescription}
+                          disabled={isGeneratingDesc || !chunkTitle.trim() || !chunkFact.trim()}
+                          className="bg-sky-650/20 hover:bg-sky-600 hover:text-white text-sky-400 text-[9px] font-bold px-2 py-0.5 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingDesc ? 'Generiere...' : 'KI-Beschreibung generieren'}
+                        </button>
+                      </div>
+                      <textarea 
+                        value={chunkDescription}
+                        onChange={(e) => setChunkDescription(e.target.value)}
+                        placeholder="Ausführliche interne Schritt-für-Schritt-Anleitung..."
+                        rows="5"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+
+                    {/* Dateianhänge-Verwaltung */}
+                    <div className="border-t border-slate-850 pt-4 mt-2 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] text-violet-400 font-bold uppercase tracking-wider block">Dateianhänge (PDF, DOCX, ZIP, Bilder - max. 5 MB)</label>
+                        {editingChunk && (
+                          <label className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 text-[10px] font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center gap-1">
+                            <i className="fa-solid fa-paperclip text-violet-400"></i>
+                            <span>{uploadingAttachment ? 'Lade hoch...' : 'Datei anhängen'}</span>
+                            <input 
+                              type="file" 
+                              onChange={handleUploadAttachment} 
+                              disabled={uploadingAttachment} 
+                              className="hidden" 
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {attachmentError && (
+                        <p className="text-[10px] text-red-400 font-semibold">{attachmentError}</p>
+                      )}
+
+                      {editingChunk ? (
+                        editingChunk.attachments && editingChunk.attachments.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {editingChunk.attachments.map(att => (
+                              <div key={att.id} className="flex justify-between items-center bg-slate-950/70 border border-slate-850 p-2.5 rounded-xl text-xs" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <i className="fa-solid fa-file text-slate-500 shrink-0"></i>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="truncate max-w-[150px] text-slate-250 font-medium">{att.filename}</span>
+                                    <span className="text-[9px] text-slate-500">({(att.fileSize / 1024).toFixed(1)} KB)</span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAttachment(att.id)}
+                                  className="text-slate-500 hover:text-red-400 p-1.5 transition-colors"
+                                  title="Anhang löschen"
+                                >
+                                  <i className="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-500 italic">Noch keine Dateianhänge hochgeladen.</p>
+                        )
+                      ) : (
+                        <p className="text-[10px] text-slate-500 bg-slate-950/30 p-2 rounded-lg border border-dashed border-slate-850">
+                          Dateianhänge können hochgeladen werden, sobald der Wissenschunk das erste Mal gespeichert wurde.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsCreatingChunk(false);
+                        setEditingChunk(null);
+                        setChunkTitle('');
+                        setChunkFact('');
+                        setChunkDescription('');
+                        setChunkCategory('');
+                        setChunkIsPrivate(false);
+                        setChunkError('');
+                      }}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-xl transition-all"
+                    >
+                      Abbrechen
+                    </button>
+                    <button 
+                      type="submit"
+                      className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all"
+                    >
+                      Speichern
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* List */}
+            {filteredPrivateKnowledge.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine internen Wissenschunks gefunden.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {filteredPrivateKnowledge.map((k) => (
+                  <div 
+                    key={k.id} 
+                    onClick={() => {
+                      setEditingChunk(k);
+                      setChunkTitle(k.title);
+                      setChunkFact(k.fact);
+                      setChunkDescription(k.description || '');
+                      setChunkCategory(k.category || '');
+                      setChunkIsPrivate(true);
+                      setIsCreatingChunk(false);
+                    }}
+                    className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-850/30 transition-all cursor-pointer select-none animate-fade-in"
+                  >
+                    {/* Actions */}
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteChunk(k.id);
+                        }}
+                        className="text-slate-400 hover:text-red-500 transition-colors text-xs p-1"
+                        title="Löschen"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase">
+                          {k.source === 'ticket' ? 'Aus Ticket' : k.source === 'url' ? 'Webseite' : k.source === 'file' ? 'Datei' : 'Manuell'}
+                        </span>
+                        <span className="text-[10px] font-bold text-sky-400 bg-sky-600/10 px-2 py-0.5 rounded-full uppercase">
+                          {k.category || 'Sonstiges'}
+                        </span>
+                        <span className="text-[10px] font-bold text-red-400 bg-red-650/15 border border-red-500/20 px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                          <i className="fa-solid fa-user-lock text-[9px]"></i>
+                          <span>Intern</span>
+                        </span>
+                      </div>
+                      
+                      <h4 className="text-sm font-bold text-white">{k.title}</h4>
+                      
+                      <div className="space-y-1">
+                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Kurz-Info (Bot):</div>
+                        <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{k.fact}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
           </div>
         )}

@@ -13,7 +13,7 @@ export async function GET() {
   }
 
   try {
-    const knowledge = db.prepare('SELECT id, title, fact, description, category, source, created_at as createdAt FROM knowledge ORDER BY title ASC').all();
+    const knowledge = db.prepare('SELECT id, title, fact, description, category, source, is_private as isPrivate, created_at as createdAt FROM knowledge ORDER BY title ASC').all();
     
     // Für jeden Wissenschunk die verknüpften Anhänge laden
     const knowledgeWithAttachments = knowledge.map(k => {
@@ -43,13 +43,14 @@ export async function POST(request) {
   }
 
   try {
-    const { title, fact, description, category } = await request.json();
+    const { title, fact, description, category, isPrivate } = await request.json();
     if (!title || !fact) {
       return NextResponse.json({ error: 'Titel und Fakt sind erforderlich.' }, { status: 400 });
     }
 
     const desc = description || fact;
     const cat = category || 'Sonstiges';
+    const priv = isPrivate ? 1 : 0;
 
     const existingChunks = db.prepare('SELECT id, title, fact FROM knowledge').all();
     
@@ -66,12 +67,12 @@ export async function POST(request) {
     }
 
     const chunkId = `chunk-${Math.floor(100000 + Math.random() * 900000)}`;
-    db.prepare('INSERT INTO knowledge (id, title, fact, description, category, source) VALUES (?, ?, ?, ?, ?, \'manual\')')
-      .run(chunkId, title, fact, desc, cat);
+    db.prepare('INSERT INTO knowledge (id, title, fact, description, category, source, is_private) VALUES (?, ?, ?, ?, ?, \'manual\', ?)')
+      .run(chunkId, title, fact, desc, cat, priv);
 
     return NextResponse.json({ 
       success: true, 
-      chunk: { id: chunkId, title, fact, description: desc, category: cat, source: 'manual' } 
+      chunk: { id: chunkId, title, fact, description: desc, category: cat, source: 'manual', isPrivate: priv === 1 } 
     });
 
   } catch (err) {

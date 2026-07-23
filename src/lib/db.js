@@ -68,6 +68,7 @@ db.exec(`
       description TEXT,
       category TEXT DEFAULT 'Sonstiges',
       source TEXT NOT NULL CHECK(source IN ('manual', 'ticket', 'file', 'url')),
+      is_private BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -187,6 +188,12 @@ try {
   if (!hasCategory) {
     db.exec("ALTER TABLE knowledge ADD COLUMN category TEXT DEFAULT 'Sonstiges'");
     console.log("Migration: Spalte 'category' zur Tabelle 'knowledge' hinzugefügt.");
+  }
+
+  const hasIsPrivate = tableInfoKnowledge.some(col => col.name === 'is_private');
+  if (!hasIsPrivate) {
+    db.exec("ALTER TABLE knowledge ADD COLUMN is_private BOOLEAN DEFAULT 0");
+    console.log("Migration: Spalte 'is_private' zur Tabelle 'knowledge' hinzugefügt.");
   }
   
   const tableInfoUsers = db.prepare("PRAGMA table_info(users)").all();
