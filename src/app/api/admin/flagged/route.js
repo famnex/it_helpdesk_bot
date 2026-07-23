@@ -12,7 +12,7 @@ export async function GET() {
     // Holt alle geflaggten Nachrichten, sortiert nach flagged_at absteigend
     const flaggedMessages = db.prepare(`
       SELECT m.id, m.chat_id as chatId, m.text, m.flagged_at as flaggedAt,
-             m.flagged_reason as flaggedReason, c.user_email as userEmail
+             m.flagged_reason as flaggedReason, m.base_knowledge as baseKnowledge, c.user_email as userEmail
       FROM chat_messages m
       JOIN chats c ON m.chat_id = c.id
       WHERE m.is_flagged = 1 AND m.sender = 'bot'
@@ -29,8 +29,28 @@ export async function GET() {
         LIMIT 5
       `).all(msg.chatId, msg.id);
 
+      // Zugehörige Wissenseinträge auflösen
+      let resolvedKnowledge = [];
+      if (msg.baseKnowledge) {
+        const ids = msg.baseKnowledge.split(',').map(id => id.trim()).filter(Boolean);
+        if (ids.length > 0) {
+          // SQL IN-Klausel vorbereiten
+          const placeholders = ids.map(() => '?').join(',');
+          try {
+            resolvedKnowledge = db.prepare(`
+              SELECT id, title, fact 
+              FROM knowledge 
+              WHERE id IN (${placeholders})
+            `).all(...ids);
+          } catch (dbErr) {
+            console.error('Fehler beim Auflösen des Wissens für geflaggte Nachricht:', dbErr);
+          }
+        }
+      }
+
       return {
         ...msg,
+        resolvedKnowledge,
         context: context.reverse()
       };
     });

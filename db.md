@@ -316,3 +316,10 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ```sql
   ALTER TABLE tickets ADD COLUMN solution_context TEXT;
   ```
+
+### Update #13 (23.07.2026): Hinzufügen der Spalte `base_knowledge` zu `chat_messages`
+* **Ziel:** Speichern der IDs und Titel der verwendeten Wissenschunks, auf denen eine Bot-Nachricht basiert, um dies bei der Fehlersuche / geflaggten Nachrichten anzuzeigen.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chat_messages ADD COLUMN base_knowledge TEXT;
+  ```

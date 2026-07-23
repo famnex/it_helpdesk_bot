@@ -206,7 +206,9 @@ export async function POST(request) {
 
     // 4. Gemini aufrufen
     const isAgentOnBehalfMode = chat ? chat.isAgentOnBehalf === 1 : false;
-    let aiResponse = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0, isAgentOnBehalfMode);
+    const aiResult = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0, isAgentOnBehalfMode);
+    let aiResponse = aiResult.text;
+    const usedKnowledgeIds = aiResult.usedKnowledgeIds;
  
     // 5. Auf Ticket-Erstellung prüfen
     let ticketCreated = false;
@@ -292,8 +294,8 @@ export async function POST(request) {
     }
 
     // 6. Botnachricht speichern
-    const insertResult = db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, ?, ?)')
-      .run(chatId, 'bot', aiResponse);
+    const insertResult = db.prepare('INSERT INTO chat_messages (chat_id, sender, text, base_knowledge) VALUES (?, ?, ?, ?)')
+      .run(chatId, 'bot', aiResponse, usedKnowledgeIds);
     const botMessageId = insertResult.lastInsertRowid;
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Botnachricht dort spiegeln

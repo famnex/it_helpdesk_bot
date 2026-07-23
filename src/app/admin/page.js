@@ -2251,6 +2251,23 @@ export default function AdminDashboardPage() {
                       </div>
                     )}
 
+                    {msg.resolvedKnowledge && msg.resolvedKnowledge.length > 0 && (
+                      <div className="mx-5 mt-4 p-3.5 bg-violet-950/20 border border-violet-500/20 rounded-xl text-xs text-violet-200 shadow-inner flex items-start gap-2.5">
+                        <div className="text-violet-400 bg-violet-500/10 p-1.5 rounded-lg shrink-0 mt-0.5"><i className="fa-solid fa-brain"></i></div>
+                        <div>
+                          <strong className="text-violet-400 block mb-1">Verwendete Wissensbasis für diese Antwort:</strong>
+                          <div className="space-y-2">
+                            {msg.resolvedKnowledge.map(k => (
+                              <div key={k.id} className="border-l-2 border-violet-500/40 pl-2">
+                                <span className="font-bold text-white block">{k.title}</span>
+                                <span className="text-[10px] text-slate-400 font-mono">({k.id}) — {k.fact}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Chatverlauf Context */}
                     <div className="p-5 space-y-4 bg-slate-900/25">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chat-Kontext (die letzten 5 Nachrichten):</p>

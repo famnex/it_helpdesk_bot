@@ -153,6 +153,11 @@ WICHTIGSTE ANWEISUNG FÜR DIE WISSENSDATENBANK:
 Wenn du Informationen aus der Wissensdatenbank nutzt, verweise NIEMALS nur faul auf den Namen oder Titel des Artikels (z. B. "Hast du die Schritte aus der Lösung 'Beamer-Signalquelle wechseln...' ausprobiert?"). Das ist strengstens untersagt!
 Stattdessen musst du die konkreten Anweisungen, Lösungswege und Schritte aus dem Inhalt des Artikels immer direkt und verständlich selbst im Chat aufschreiben und erklären!
 
+ERKENNUNG VORHANDENEN WISSENS (SEHR WICHTIG):
+Wenn deine Antwort auf einem oder mehreren Chunks/Einträgen aus der obigen WISSENSDATENBANK basiert, musst du ZWINGEND am allerletzten Ende deiner Nachricht folgendes Tag ausgeben:
+[USED_KNOWLEDGE: ID1, ID2, ...] (wobei ID1, ID2 etc. durch die genauen IDs der verwendeten Wissenseinträge ersetzt werden müssen, z. B. [USED_KNOWLEDGE: wifi-chunk-1]).
+Gib dieses Tag NUR aus, wenn du wirklich konkretes Wissen aus der Liste für deine Antwort herangezogen hast.
+
 ERKENNUNG VON MISSBRAUCH / BELEIDIGUNGEN / TROLLING:
 Falls der Benutzer den Chat missbraucht (z.B. durch unhöfliches Verhalten, Beleidigungen, Drohungen, ununterbrochenes Schimpfen, Fäkalsprache oder absichtliches Ärgern/Trollen), musst du:
 1. Professionell, extrem sachlich und distanziert reagieren.
@@ -233,7 +238,21 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
     systemInstruction: { parts: [{ text: systemInstruction }] }
   };
 
-  return callGemini(chatModel, payload);
+  const rawResultText = await callGemini(chatModel, payload);
+
+  // Verwendetes Wissen extrahieren
+  let usedKnowledgeIds = null;
+  let cleanedResultText = rawResultText;
+  const match = rawResultText.match(/\[USED_KNOWLEDGE:\s*([^\]]+)\]/);
+  if (match) {
+    usedKnowledgeIds = match[1].split(',').map(id => id.trim()).filter(Boolean).join(',');
+    cleanedResultText = rawResultText.replace(/\[USED_KNOWLEDGE:\s*[^\]]+\]/, '').trim();
+  }
+
+  return {
+    text: cleanedResultText,
+    usedKnowledgeIds
+  };
 }
 
 /**

@@ -254,6 +254,12 @@ try {
     db.exec("ALTER TABLE chat_messages ADD COLUMN image_url TEXT");
     console.log("Migration: Spalte 'image_url' zur Tabelle 'chat_messages' hinzugefügt.");
   }
+
+  const hasBaseKnowledge = tableInfoChatMessages.some(col => col.name === 'base_knowledge');
+  if (!hasBaseKnowledge) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN base_knowledge TEXT");
+    console.log("Migration: Spalte 'base_knowledge' zur Tabelle 'chat_messages' hinzugefügt.");
+  }
 } catch (e) {
   if (e.message && e.message.includes('duplicate column name')) {
     // Ignorieren, da ein anderer Next.js Build-Worker die Spalte bereits hinzugefügt hat
