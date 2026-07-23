@@ -24,6 +24,13 @@ export default function CustomerChatPage() {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consentCheckbox, setConsentCheckbox] = useState(false);
 
+  // Chatbot Deactivation & Direct Ticket States
+  const [isChatbotDisabled, setIsChatbotDisabled] = useState(false);
+  const [directTicketStep, setDirectTicketStep] = useState(0); // 0 = not started, 1 = awaiting title, 2 = awaiting description
+  const [directTicketTitle, setDirectTicketTitle] = useState('');
+  const [directTicketTexts, setDirectTicketTexts] = useState([]); // Array to store description messages
+  const [directTicketPhotos, setDirectTicketPhotos] = useState([]); // Array to store uploaded photo objects/paths
+
   const handleAcceptConsent = () => {
     localStorage.setItem('it_helpdesk_bot_consent', 'true');
     setShowConsentModal(false);
@@ -303,12 +310,65 @@ export default function CustomerChatPage() {
     setInputValue('');
     handleDiscardPhoto();
     
-    // User-Nachricht lokal hinzufügen (mit lokaler Bildvorschau, falls vorhanden)
+    // User-Nachricht lokal im Chat anzeigen
     setMessages(prev => [...prev, { 
       sender: 'user', 
       text: userText,
       imageUrl: currentPreview 
     }]);
+
+    // Wenn der Chatbot deaktiviert ist, nutzen wir den direkten Ablauf
+    if (isChatbotDisabled) {
+      if (directTicketStep === 1) {
+        // Schritt 1 abgeschlossen: Wir haben den Titel
+        setDirectTicketTitle(userText);
+        setDirectTicketStep(2);
+        
+        setIsTyping(true);
+        setTimeout(() => {
+          setMessages(prev => [
+            ...prev,
+            {
+              sender: 'bot',
+              text: `Alles klar. Der Betreff deines Tickets lautet: **"${userText}"**.\n\nBeschreibe nun bitte genau dein Problem. Du kannst auch mehrere Nachrichten hintereinander schreiben oder Bilder hochladen. Wenn du fertig bist, klicke unten auf **"Ticket jetzt einsenden"**.`
+            }
+          ]);
+          setIsTyping(false);
+        }, 800);
+      } else if (directTicketStep === 2) {
+        // Schritt 2: Problembeschreibungen sammeln
+        if (userText.trim()) {
+          setDirectTicketTexts(prev => [...prev, userText]);
+        }
+        if (currentPhoto) {
+          // Foto hochladen
+          setIsTyping(true);
+          try {
+            const formData = new FormData();
+            formData.append('chatId', chatId);
+            formData.append('photo', currentPhoto);
+            
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              body: formData
+            });
+            if (res.ok) {
+              const data = await res.json();
+              // Wir merken uns den Pfad des hochgeladenen Bildes zur späteren Zuordnung
+              if (data.imageUrl || currentPreview) {
+                setDirectTicketPhotos(prev => [...prev, data.imageUrl || currentPreview]);
+              }
+            }
+          } catch (err) {
+            console.error('Fehler beim Hochladen des Bildes im Direktmodus:', err);
+          } finally {
+            setIsTyping(false);
+          }
+        }
+      }
+      return;
+    }
+
     setIsTyping(true);
  
     try {
@@ -441,6 +501,106 @@ export default function CustomerChatPage() {
     }
   };
  
+  // Direktes Ticket absenden im Deaktiviert-Modus
+  const submitDirectTicket = async () => {
+    if (!directTicketTitle.trim()) return;
+
+    let finalDesc = '';
+    if (directTicketTexts.length > 0) {
+      finalDesc = directTicketTexts.join('\n\n');
+    } else {
+      finalDesc = 'Keine Beschreibung angegeben.';
+    }
+
+    if (directTicketPhotos.length > 0) {
+      finalDesc += '\n\n**Angehängte Bilder:**\n' + directTicketPhotos.map(p => `- [Bild anzeigen](${p})`).join('\n');
+    }
+
+    setTicketCreationLoading(true);
+    
+    // Zuerst Chatverlauf in DB spiegeln
+    try {
+      for (const txt of directTicketTexts) {
+        await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId, text: txt })
+        });
+      }
+    } catch (err) {
+      console.error('Fehler beim Vorbereiten des Chats in DB:', err);
+    }
+
+    const emailToUse = user ? user.email : guestEmail;
+
+    if (!emailToUse) {
+      // Wenn nicht eingeloggt, E-Mail abfragen
+      setPendingTicketTitle(directTicketTitle);
+      setShowEmailPrompt(true);
+      setTicketCreationLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          title: directTicketTitle, 
+          creator_email: emailToUse, 
+          chat_id: chatId 
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Systemnachricht hinzufügen
+        setMessages(prev => [...prev, {
+          sender: 'system',
+          text: `Dein Support-Ticket ${data.ticketId} wurde erfolgreich erstellt! Ein IT-Administrator wird sich darum kümmern.`,
+          isTicketUI: true,
+          ticketId: data.ticketId
+        }]);
+
+        // Zustand zurücksetzen
+        setDirectTicketStep(0);
+        setDirectTicketTitle('');
+        setDirectTicketTexts([]);
+        setDirectTicketPhotos([]);
+        setIsChatbotDisabled(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Fehler beim Erstellen des Tickets.');
+    } finally {
+      setTicketCreationLoading(false);
+    }
+  };
+
+  // Chatbot Toggle Handler
+  const handleChatbotToggle = (checked) => {
+    setIsChatbotDisabled(checked);
+    if (checked) {
+      setDirectTicketStep(1);
+      setDirectTicketTitle('');
+      setDirectTicketTexts([]);
+      setDirectTicketPhotos([]);
+      setMessages([
+        {
+          sender: 'bot',
+          text: 'Der KI-Assistent wurde deaktiviert. Du kommunizierst nun direkt mit unserem IT-Admin-Team.\n\nBitte nenne mir zuerst einen aussagekräftigen **Betreff / Titel** für deine Support-Anfrage:'
+        }
+      ]);
+    } else {
+      setDirectTicketStep(0);
+      setMessages([
+        {
+          sender: 'bot',
+          text: getGreetingText(user)
+        }
+      ]);
+    }
+  };
+
   // Ticket als Gast erstellen (nach E-Mail-Eingabe)
   const handleCreateGuestTicket = async (e) => {
     e.preventDefault();
@@ -448,10 +608,25 @@ export default function CustomerChatPage() {
  
     setTicketCreationLoading(true);
     try {
+      // Falls wir im Direktmodus sind und der Chat noch nicht in der DB gespiegelt wurde
+      if (isChatbotDisabled && directTicketTexts.length > 0) {
+        for (const txt of directTicketTexts) {
+          await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId, text: txt })
+          });
+        }
+      }
+
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: pendingTicketTitle, creator_email: guestEmail, chat_id: chatId })
+        body: JSON.stringify({ 
+          title: pendingTicketTitle || directTicketTitle, 
+          creator_email: guestEmail, 
+          chat_id: chatId 
+        })
       });
       
       const data = await res.json();
@@ -461,12 +636,21 @@ export default function CustomerChatPage() {
       if (data.success) {
         setMessages(prev => [...prev, { 
           sender: 'system', 
-          text: `Support-Ticket ${data.ticketId} wurde erfolgreich für ${guestEmail} erstellt!`,
+          text: `Support-Ticket ${data.ticketId} wurde erfolgreich für ${guestEmail} erstellt! Ein IT-Administrator wird sich darum kümmern.`,
           isTicketUI: true,
           ticketId: data.ticketId
         }]);
         setGuestEmail('');
-        await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
+
+        if (isChatbotDisabled) {
+          setDirectTicketStep(0);
+          setDirectTicketTitle('');
+          setDirectTicketTexts([]);
+          setDirectTicketPhotos([]);
+          setIsChatbotDisabled(false);
+        } else {
+          await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
+        }
       } else {
         alert(data.error || 'Fehler beim Erstellen.');
       }
@@ -957,9 +1141,38 @@ export default function CustomerChatPage() {
         </div>
  
         {/* Input Area */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg flex flex-col gap-3">
           
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
+          {/* Chatbot Deactivation Toggle */}
+          <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/60 pb-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isChatbotDisabled}
+                onChange={(e) => handleChatbotToggle(e.target.checked)}
+                className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-900"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
+                <span className="text-[10px] text-slate-500">
+                  Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
+                </span>
+              </div>
+            </label>
+            {isChatbotDisabled && directTicketStep === 2 && (
+              <button
+                type="button"
+                onClick={submitDirectTicket}
+                disabled={ticketCreationLoading}
+                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+              >
+                <i className="fa-solid fa-paper-plane"></i>
+                <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
+              </button>
+            )}
+          </div>
+
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
             
             {/* Foto-Vorschau */}
             {photoPreview && (
@@ -1009,7 +1222,7 @@ export default function CustomerChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Beschreibe dein IT-Problem oder lade ein Foto hoch..."
+                placeholder={isChatbotDisabled ? (directTicketStep === 1 ? "Gib hier den Betreff/Titel deines Problems ein..." : "Beschreibe hier dein Problem ausführlicher...") : "Beschreibe dein IT-Problem oder lade ein Foto hoch..."}
                 rows="1"
                 className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-1 text-sm text-slate-200 placeholder-slate-600 outline-none"
               />
@@ -1185,7 +1398,7 @@ export default function CustomerChatPage() {
                 ⚠️ Bitte trage niemals Passwörter, Geburtsdaten oder andere sensible persönliche Daten in das Chatfenster ein!
               </p>
               <p>
-                Die Nutzung des Chat-Assistenten ist freiwillig. Du kannst alternativ jederzeit über die Schaltfläche oben direkt ein Ticket im Service-Desk anlegen.
+                Die Nutzung des Chat-Assistenten ist freiwillig. Du kannst alternativ jederzeit den Chatbot über das Kontrollkästchen direkt am Nachrichtenfeld deaktivieren, um dein Anliegen ohne KI-Unterstützung an das Support-Team zu senden. Bitte beachte, dass sich die Bearbeitungszeit dadurch verlängern kann, da das Ticket in diesem Fall manuell geprüft werden muss.
               </p>
             </div>
             
