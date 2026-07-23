@@ -71,6 +71,13 @@ export async function POST(request) {
       text = formData.get('text') || '';
       isAgentOnBehalf = formData.get('isAgentOnBehalf') === 'true';
       
+      let skipBotVal = formData.get('skipBot');
+      if (skipBotVal === null) {
+        // support both skip_bot and skipBot
+        skipBotVal = formData.get('skip_bot');
+      }
+      var skipBot = skipBotVal === 'true';
+      
       const photoFile = formData.get('photo'); // File-Objekt
       
       if (photoFile && photoFile.size > 0) {
@@ -103,6 +110,7 @@ export async function POST(request) {
       chatId = body.chatId;
       text = body.text;
       isAgentOnBehalf = !!body.isAgentOnBehalf;
+      var skipBot = !!body.skipBot || !!body.skip_bot;
     }
 
     if (!text && !relativePath) {
@@ -152,6 +160,25 @@ export async function POST(request) {
     if (shouldInsert) {
       db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
         .run(chatId, 'user', text, relativePath);
+    }
+
+    // Falls skipBot wahr ist, an dieser Stelle direkt Erfolg zurückmelden (keine KI-Generierung!)
+    if (skipBot) {
+      // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
+      if (!isSystemEvent) {
+        try {
+          const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
+          if (ticket) {
+            db.prepare(`
+              INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+              VALUES (?, ?, 'customer', ?)
+            `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Foto hochgeladen)');
+          }
+        } catch (e) {
+          console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
+        }
+      }
+      return NextResponse.json({ success: true, imageUrl: relativePath });
     }
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)

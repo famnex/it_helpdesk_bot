@@ -341,12 +341,13 @@ export default function CustomerChatPage() {
           setDirectTicketTexts(prev => [...prev, userText]);
         }
         if (currentPhoto) {
-          // Foto hochladen
+          // Foto hochladen (mit skip_bot = true)
           setIsTyping(true);
           try {
             const formData = new FormData();
             formData.append('chatId', chatId);
             formData.append('photo', currentPhoto);
+            formData.append('skip_bot', 'true');
             
             const res = await fetch('/api/chat', {
               method: 'POST',
@@ -518,13 +519,13 @@ export default function CustomerChatPage() {
 
     setTicketCreationLoading(true);
     
-    // Zuerst Chatverlauf in DB spiegeln
+    // Zuerst Chatverlauf in DB spiegeln (mit skip_bot = true)
     try {
       for (const txt of directTicketTexts) {
         await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatId, text: txt })
+          body: JSON.stringify({ chatId, text: txt, skip_bot: true })
         });
       }
     } catch (err) {
@@ -548,7 +549,8 @@ export default function CustomerChatPage() {
         body: JSON.stringify({ 
           title: directTicketTitle, 
           creator_email: emailToUse, 
-          chat_id: chatId 
+          chat_id: chatId,
+          skip_ai: true
         })
       });
       const data = await res.json();
@@ -614,7 +616,7 @@ export default function CustomerChatPage() {
           await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId, text: txt })
+            body: JSON.stringify({ chatId, text: txt, skip_bot: true })
           });
         }
       }
@@ -625,7 +627,8 @@ export default function CustomerChatPage() {
         body: JSON.stringify({ 
           title: pendingTicketTitle || directTicketTitle, 
           creator_email: guestEmail, 
-          chat_id: chatId 
+          chat_id: chatId,
+          skip_ai: true
         })
       });
       

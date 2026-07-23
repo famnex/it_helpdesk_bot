@@ -84,8 +84,8 @@ export async function POST(request) {
     let title = data.title || 'Support-Anfrage über Chat-Assistent';
     const chatId = data.chat_id || null;
 
-    // Wenn ein Chat verknüpft ist, generiere den Titel per KI
-    if (chatId) {
+    // Wenn ein Chat verknüpft ist, generiere den Titel per KI (außer skip_ai ist wahr)
+    if (chatId && !data.skip_ai) {
       try {
         const chatMessages = db.prepare(`
           SELECT sender, text FROM chat_messages 
