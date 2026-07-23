@@ -7,8 +7,17 @@ import { useRouter } from 'next/navigation';
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'import', 'settings', 'update'
+  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'update'
   const router = useRouter();
+
+  // Solutions (Saved closed solutions) States
+  const [solutions, setSolutions] = useState([]);
+  const [solutionsLoading, setSolutionsLoading] = useState(false);
+  const [solutionsSearch, setSolutionsSearch] = useState('');
+
+  // Statistics States
+  const [statistics, setStatistics] = useState([]);
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
 
   // Knowledge States
   const [knowledge, setKnowledge] = useState([]);
@@ -98,6 +107,10 @@ export default function AdminDashboardPage() {
       loadFlaggedMessages();
     } else if (activeTab === 'abusive') {
       loadAbusiveChats();
+    } else if (activeTab === 'solutions') {
+      loadSolutions();
+    } else if (activeTab === 'statistics') {
+      loadStatistics();
     }
   }, [activeTab]);
 
@@ -162,6 +175,55 @@ export default function AdminDashboardPage() {
       console.error('Fehler beim Laden missbräuchlicher Chats:', e);
     } finally {
       setIsAbusiveLoading(false);
+    }
+  };
+
+  const loadSolutions = async () => {
+    setSolutionsLoading(true);
+    try {
+      const res = await fetch('/api/admin/solutions');
+      if (res.ok) {
+        const data = await res.json();
+        setSolutions(data.solutions || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Lösungen:', e);
+    } finally {
+      setSolutionsLoading(false);
+    }
+  };
+
+  const handleForgetSolution = async (ticketId) => {
+    if (!confirm('Möchtest du diese gespeicherte Lösung wirklich aus der Wissensbasis löschen ("vergessen")?')) return;
+    try {
+      const res = await fetch('/api/admin/solutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, action: 'forget' })
+      });
+      if (res.ok) {
+        setSolutions(prev => prev.filter(sol => sol.id !== ticketId));
+      } else {
+        alert('Fehler beim Vergessen der Lösung.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    }
+  };
+
+  const loadStatistics = async () => {
+    setStatisticsLoading(true);
+    try {
+      const res = await fetch('/api/admin/statistics');
+      if (res.ok) {
+        const data = await res.json();
+        setStatistics(data.statistics || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Statistik:', e);
+    } finally {
+      setStatisticsLoading(false);
     }
   };
 
@@ -726,62 +788,91 @@ export default function AdminDashboardPage() {
 
       {/* Tabs */}
       <div className="bg-slate-900 border-b border-slate-800 px-6 flex overflow-x-auto gap-4 scrollbar-none shrink-0">
-        <button 
-          onClick={() => setActiveTab('knowledge')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'knowledge' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-brain"></i>
-          <span>Öffentliches Wissen</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('private_knowledge')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'private_knowledge' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-user-lock"></i>
-          <span>Internes Wissen (KI)</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('import')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'import' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-cloud-arrow-up"></i>
-          <span>KI-Import</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('settings')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'settings' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-sliders"></i>
-          <span>Einstellungen</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('users')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'users' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-users"></i>
-          <span>Benutzerverwaltung</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('flagged')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'flagged' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-flag"></i>
-          <span>Geflaggte Antworten</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('abusive')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'abusive' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-solid fa-triangle-exclamation"></i>
-          <span>Missbrauchsmeldungen</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('update')}
-          className={`py-4 px-2 border-b-2 font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-2 ${activeTab === 'update' ? 'border-violet-500 text-violet-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
-        >
-          <i className="fa-brands fa-github"></i>
-          <span>System-Update</span>
-        </button>
+        
+        {/* Hauptmenü: Wissen */}
+        <div className="flex items-center gap-1 border-r border-slate-800/80 pr-4 my-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pl-2 mr-2">Wissen:</span>
+          <button 
+            onClick={() => setActiveTab('knowledge')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'knowledge' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-brain"></i>
+            <span>Öffentlich</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('private_knowledge')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'private_knowledge' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-user-lock"></i>
+            <span>Intern</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('solutions')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'solutions' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+            title="Lösungen aus geschlossenen Tickets verwalten"
+          >
+            <i className="fa-solid fa-circle-check text-emerald-400"></i>
+            <span>Lösungen</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('import')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'import' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-cloud-arrow-up"></i>
+            <span>KI-Import</span>
+          </button>
+        </div>
+
+        {/* Hauptmenü: Benutzer */}
+        <div className="flex items-center gap-1 border-r border-slate-800/80 pr-4 my-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pl-2 mr-2">Benutzer:</span>
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'users' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-users"></i>
+            <span>Benutzerverwaltung</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('statistics')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'statistics' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-chart-line text-sky-400"></i>
+            <span>Statistik</span>
+          </button>
+        </div>
+
+        {/* System & Sonstiges */}
+        <div className="flex items-center gap-1 my-2">
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'settings' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-sliders"></i>
+            <span>Einstellungen</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('flagged')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'flagged' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-flag"></i>
+            <span>Geflaggte Antworten</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('abusive')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'abusive' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-solid fa-triangle-exclamation"></i>
+            <span>Missbrauchsmeldungen</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('update')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'update' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+          >
+            <i className="fa-brands fa-github"></i>
+            <span>System-Update</span>
+          </button>
+        </div>
       </div>
 
       {/* Content Container */}
@@ -1806,6 +1897,87 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* Tab 1c: Gespeicherte Lösungen */}
+        {activeTab === 'solutions' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl flex justify-between items-center gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Gespeicherte Lösungen</h3>
+                <p className="text-xs text-slate-400">Hier sind alle Problemlösungen aufgeführt, die beim Schließen von IT-Tickets erfasst wurden. Nutze die "Vergessen"-Schaltfläche, um Einträge aus der Datenbank zu entfernen.</p>
+              </div>
+            </div>
+
+            {/* Suche für Lösungen */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+              <div className="flex-1 w-full sm:max-w-md relative">
+                <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+                <input 
+                  type="text" 
+                  value={solutionsSearch}
+                  onChange={(e) => setSolutionsSearch(e.target.value)}
+                  placeholder="Lösungen durchsuchen (Betreff oder Text)..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            </div>
+
+            {solutionsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : solutions.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine gespeicherten Ticket-Lösungen vorhanden.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {solutions
+                  .filter(s => {
+                    const term = solutionsSearch.toLowerCase();
+                    return s.title.toLowerCase().includes(term) || s.solution.toLowerCase().includes(term) || s.id.toLowerCase().includes(term);
+                  })
+                  .map(sol => (
+                    <div key={sol.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/30 hover:bg-slate-850/10 transition-all select-none animate-fade-in">
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleForgetSolution(sol.id)}
+                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-[10px] px-2.5 py-1 rounded-xl transition-all"
+                          title="Lösung vergessen (Löschen)"
+                        >
+                          <i className="fa-solid fa-eraser mr-1"></i>
+                          <span>Vergessen</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase font-mono">
+                            {sol.id}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            Geschlossen: {new Date(sol.updatedAt).toLocaleDateString('de-DE')}
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm font-bold text-white pr-16">{sol.title}</h4>
+
+                        <div className="space-y-1">
+                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Erfasste Problemlösung:</div>
+                          <p className="text-xs text-slate-350 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{sol.solution}</p>
+                        </div>
+                        
+                        <div className="text-[9px] text-slate-500">
+                          Erstellt durch: <span className="font-mono text-slate-400">{sol.creatorEmail}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tab 5: Benutzerverwaltung */}
         {activeTab === 'users' && (
           <div className="space-y-6">
@@ -1910,6 +2082,80 @@ export default function AdminDashboardPage() {
                             >
                               Löschen
                             </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 5b: Statistiken */}
+        {activeTab === 'statistics' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
+              <h3 className="text-sm font-bold text-white mb-1">Mitarbeiter-Statistiken (Tickets pro Agent / Admin)</h3>
+              <p className="text-xs text-slate-400">Übersicht der Ticketbearbeitungen. Die Durchschnittswerte basieren auf den erledigten Support-Anfragen der jeweiligen Zeiträume.</p>
+            </div>
+
+            {statisticsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : statistics.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine Statistiken verfügbar.
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950 border-b border-slate-850 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                        <th className="px-6 py-4">Mitarbeiter</th>
+                        <th className="px-6 py-4">Rolle</th>
+                        <th className="px-6 py-4 text-center">Aktive Tickets</th>
+                        <th className="px-6 py-4 text-center">Ø pro Tag</th>
+                        <th className="px-6 py-4 text-center">Ø pro Woche</th>
+                        <th className="px-6 py-4 text-center">Ø pro Monat</th>
+                        <th className="px-6 py-4 text-center">Gesamt (Jahr)</th>
+                        <th className="px-6 py-4 text-center">Gesamt (All-Time)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {statistics.map(stat => (
+                        <tr key={stat.agentId} className="hover:bg-slate-850/20 transition-colors text-xs text-slate-200">
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-white">{stat.name}</span>
+                              <span className="text-[10px] text-slate-500 font-mono mt-0.5">{stat.email}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${stat.role === 'admin' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'}`}>
+                              {stat.role === 'admin' ? 'Admin' : 'Agent'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-amber-400">
+                            {stat.openCount}
+                          </td>
+                          <td className="px-6 py-4 text-center font-mono">
+                            {stat.ticketsDayAvg}
+                          </td>
+                          <td className="px-6 py-4 text-center font-mono">
+                            {stat.ticketsWeekAvg}
+                          </td>
+                          <td className="px-6 py-4 text-center font-mono">
+                            {stat.ticketsMonthAvg}
+                          </td>
+                          <td className="px-6 py-4 text-center font-semibold text-sky-400">
+                            {stat.ticketsYearTotal}
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-white">
+                            {stat.totalClosed}
                           </td>
                         </tr>
                       ))}
