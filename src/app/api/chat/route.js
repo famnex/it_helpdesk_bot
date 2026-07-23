@@ -216,6 +216,49 @@ export async function POST(request) {
           WHERE id = ?
         `).run(chatId);
         console.log(`Chat ${chatId} wurde als missbräuchlich markiert.`);
+
+        // E-Mail-Benachrichtigung an alle Admins senden
+        try {
+          const admins = db.prepare("SELECT email FROM users WHERE role = 'admin'").all();
+          const adminEmails = admins.map(a => a.email).filter(Boolean);
+          if (adminEmails.length > 0) {
+            const { sendMail } = await import('@/lib/mailer');
+            const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+            const link = `${host}/admin`;
+
+            const subject = `⚠️ Systemwarnung: Missbrauch im Chat-Bot erkannt (${chatId})`;
+            const text = `Hallo,\n\nder KI-Bot hat soeben im Chat "${chatId}" missbräuchliches, beleidigendes oder unangemessenes Verhalten erkannt.\n\nDer betroffene Chat wurde gesperrt und zur Überprüfung freigegeben.\n\nNutzer-Name: ${chat ? chat.userName || 'Gast' : 'Gast'}\nNutzer-E-Mail: ${email || 'Keine (nicht angemeldet)'}\nIP-Adresse: ${userIp || 'Unbekannt'}\nSitzungs-ID: ${userSessionId || 'Unbekannt'}\n\nBitte prüfen Sie den Fall im Admin-Backend:\n${link}`;
+            const html = `
+              <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; background-color: #fef2f2;">
+                <h2 style="color: #dc2626; margin-top: 0; display: flex; items-center: center; gap: 8px;">
+                  <span>⚠️</span> Missbrauch im Chat-Bot erkannt
+                </h2>
+                <p>Hallo Admin-Team,</p>
+                <p>der KI-Bot hat soeben im Chat <strong style="font-family: monospace;">${chatId}</strong> missbräuchliches, beleidigendes oder unangemessenes Verhalten erkannt und das Gespräch beendet.</p>
+                
+                <div style="background-color: #ffffff; border: 1px solid #fca5a5; border-radius: 8px; padding: 15px; margin: 20px 0; font-size: 13px;">
+                  <strong style="color: #991b1b; display: block; margin-bottom: 8px;">Details zum Vorfall:</strong>
+                  <table style="width: 100%; font-size: 13px; color: #374151;">
+                    <tr><td style="font-weight: bold; width: 120px; padding: 4px 0;">Nutzer-Name:</td><td>${chat ? chat.userName || 'Gast' : 'Gast'}</td></tr>
+                    <tr><td style="font-weight: bold; padding: 4px 0;">Nutzer-E-Mail:</td><td>${email || 'Keine (nicht angemeldet)'}</td></tr>
+                    <tr><td style="font-weight: bold; padding: 4px 0;">IP-Adresse:</td><td style="font-family: monospace;">${userIp || 'Unbekannt'}</td></tr>
+                    <tr><td style="font-weight: bold; padding: 4px 0;">Sitzungs-ID:</td><td style="font-family: monospace;">${userSessionId || 'Unbekannt'}</td></tr>
+                  </table>
+                </div>
+                
+                <p style="margin: 30px 0; text-align: center;">
+                  <a href="${link}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Admin-Backend aufrufen</a>
+                </p>
+              </div>
+            `;
+
+            for (const adminEmail of adminEmails) {
+              await sendMail({ to: adminEmail, subject, html, text });
+            }
+          }
+        } catch (mailErr) {
+          console.error('Fehler beim Versenden der Missbrauchs-Admin-Mail:', mailErr);
+        }
       } catch (err) {
         console.error('Fehler beim Markieren von Missbrauch:', err);
       }
