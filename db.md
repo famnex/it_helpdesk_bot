@@ -302,3 +302,10 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ALTER TABLE chats ADD COLUMN user_ip TEXT;
   ALTER TABLE chats ADD COLUMN user_session_id TEXT;
   ```
+
+### Update #11 (23.07.2026): Hinzufügen der Spalte `solution_forgotten` zu `tickets`
+* **Ziel:** Markieren von gelösten Tickets, deren hinterlegte Lösung aus Datenschutz- oder Aktualitätsgründen "vergessen" (gelöscht und aus der Wissensbasis ausgeschlossen) wurde.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE tickets ADD COLUMN solution_forgotten BOOLEAN DEFAULT 0;
+  ```

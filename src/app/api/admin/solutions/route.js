@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 
 /**
  * GET: Alle gespeicherten Ticket-Lösungen laden.
- * Dies lädt alle Tickets mit gelöstem Status, die eine eingetragene Lösung haben.
+ * Dies lädt alle Tickets mit gelöstem Status, die eine eingetragene Lösung haben und nicht "vergessen" wurden.
  */
 export async function GET() {
   const user = await getSessionUser();
@@ -16,7 +16,12 @@ export async function GET() {
     const solutions = db.prepare(`
       SELECT id, title, solution, creator_email as creatorEmail, updated_at as updatedAt
       FROM tickets
-      WHERE status = 'closed' AND solution IS NOT NULL AND solution != ''
+      WHERE status = 'closed' 
+        AND solution IS NOT NULL 
+        AND solution != '' 
+        AND solution != 'Ohne Lösung geschlossen'
+        AND LOWER(solution) NOT LIKE 'ticket wurde%geschlossen%'
+        AND (solution_forgotten IS NULL OR solution_forgotten = 0)
       ORDER BY updated_at DESC
     `).all();
 
@@ -42,8 +47,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Ungültige Parameter.' }, { status: 400 });
     }
 
-    // Lösung vergessen: Spalte solution in Tabelle tickets leeren bzw. auf neutralen Text setzen
-    db.prepare("UPDATE tickets SET solution = 'Ohne Lösung geschlossen' WHERE id = ?").run(ticketId);
+    // Lösung vergessen: Spalte solution in Tabelle tickets leeren bzw. auf neutralen Text setzen und solution_forgotten flaggen
+    db.prepare("UPDATE tickets SET solution = 'Ohne Lösung geschlossen', solution_forgotten = 1 WHERE id = ?").run(ticketId);
 
     // Optional: Einen Systemkommentar im Verlauf des Tickets anlegen, damit es dokumentiert ist
     db.prepare(`

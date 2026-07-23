@@ -236,6 +236,12 @@ try {
     console.log("Migration: Spalte 'chat_id' zur Tabelle 'tickets' hinzugefügt.");
   }
 
+  const hasSolutionForgotten = tableInfoTickets.some(col => col.name === 'solution_forgotten');
+  if (!hasSolutionForgotten) {
+    db.exec("ALTER TABLE tickets ADD COLUMN solution_forgotten BOOLEAN DEFAULT 0");
+    console.log("Migration: Spalte 'solution_forgotten' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
   const tableInfoChatMessages = db.prepare("PRAGMA table_info(chat_messages)").all();
   const hasImageUrl = tableInfoChatMessages.some(col => col.name === 'image_url');
   if (!hasImageUrl) {
