@@ -32,8 +32,10 @@ export async function GET() {
   }
 }
 
+import { generateSolutionContext } from '@/lib/gemini';
+
 /**
- * POST (Aktion 'forget'): Ermöglicht das "Vergessen" (Löschen der hinterlegten Lösung / Zurücksetzen auf neutralen Text).
+ * POST (Aktion 'forget' oder 'generate-context'): Ermöglicht das "Vergessen" oder das nachträgliche Generieren einer Zusammenfassung.
  */
 export async function POST(request) {
   const user = await getSessionUser();
@@ -43,22 +45,48 @@ export async function POST(request) {
 
   try {
     const { ticketId, action } = await request.json();
-    if (!ticketId || action !== 'forget') {
+    if (!ticketId || !['forget', 'generate-context'].includes(action)) {
       return NextResponse.json({ error: 'Ungültige Parameter.' }, { status: 400 });
     }
 
-    // Lösung vergessen: Spalte solution in Tabelle tickets leeren bzw. auf neutralen Text setzen und solution_forgotten flaggen
-    db.prepare("UPDATE tickets SET solution = 'Ohne Lösung geschlossen', solution_forgotten = 1 WHERE id = ?").run(ticketId);
+    if (action === 'forget') {
+      // Lösung vergessen: Spalte solution in Tabelle tickets leeren bzw. auf neutralen Text setzen und solution_forgotten flaggen
+      db.prepare("UPDATE tickets SET solution = 'Ohne Lösung geschlossen', solution_forgotten = 1 WHERE id = ?").run(ticketId);
 
-    // Optional: Einen Systemkommentar im Verlauf des Tickets anlegen, damit es dokumentiert ist
-    db.prepare(`
-      INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) 
-      VALUES (?, 'system', 'system', 'Die hinterlegte Lösung dieses Tickets wurde von einem Administrator aus der Wissensbasis gelöscht (Vergessen-Funktion).')
-    `).run(ticketId);
+      // Einen Systemkommentar im Verlauf des Tickets anlegen
+      db.prepare(`
+        INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) 
+        VALUES (?, 'system', 'system', 'Die hinterlegte Lösung dieses Tickets wurde von einem Administrator aus der Wissensbasis gelöscht (Vergessen-Funktion).')
+      `).run(ticketId);
 
-    return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'generate-context') {
+      // Ticket laden
+      const ticket = db.prepare('SELECT title, solution FROM tickets WHERE id = ?').get(ticketId);
+      if (!ticket) {
+        return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
+      }
+
+      // Ticket-Verlauf laden
+      const messages = db.prepare('SELECT sender_role, text FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC').all(ticketId);
+      
+      let ticketHistoryText = `TICKET: ${ticketId}\nTHEMA: ${ticket.title}\n\nVERLAUF:\n`;
+      messages.forEach(m => {
+        ticketHistoryText += `${m.sender_role.toUpperCase()}: ${m.text}\n`;
+      });
+      ticketHistoryText += `\nLÖSUNG: ${ticket.solution}`;
+
+      // Zusammenfassung erstellen
+      const computedContext = await generateSolutionContext(ticketHistoryText);
+      db.prepare('UPDATE tickets SET solution_context = ? WHERE id = ?').run(computedContext, ticketId);
+
+      return NextResponse.json({ success: true, solutionContext: computedContext });
+    }
+
   } catch (err) {
-    console.error('Fehler beim Vergessen der Lösung:', err);
-    return NextResponse.json({ error: 'Serverfehler beim Vergessen der Lösung.' }, { status: 500 });
+    console.error('Fehler bei der Solutions-Aktion:', err);
+    return NextResponse.json({ error: 'Serverfehler bei der Ausführung der Aktion.' }, { status: 500 });
   }
 }

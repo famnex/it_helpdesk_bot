@@ -1961,12 +1961,33 @@ export default function AdminDashboardPage() {
 
                         <h4 className="text-sm font-bold text-white pr-16">{sol.title}</h4>
 
-                        {sol.solutionContext && (
+                        {sol.solutionContext ? (
                           <div className="space-y-1">
                             <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider">Problem-Kontext (KI-Zusammenfassung):</div>
                             <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans italic">
                               {sol.solutionContext}
                             </p>
+                          </div>
+                        ) : (
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateSolutionContext(sol.id)}
+                              disabled={generatingContextId === sol.id}
+                              className="bg-sky-950/30 hover:bg-sky-900 border border-sky-500/20 text-sky-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-40"
+                            >
+                              {generatingContextId === sol.id ? (
+                                <>
+                                  <i className="fa-solid fa-circle-notch animate-spin mr-1.5"></i>
+                                  <span>Zusammenfassung wird erstellt...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i>
+                                  <span>KI-Zusammenfassung generieren</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         )}
 
