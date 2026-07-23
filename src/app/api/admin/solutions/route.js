@@ -14,7 +14,7 @@ export async function GET() {
 
   try {
     const solutions = db.prepare(`
-      SELECT id, title, solution, creator_email as creatorEmail, updated_at as updatedAt
+      SELECT id, title, solution, solution_context as solutionContext, creator_email as creatorEmail, updated_at as updatedAt
       FROM tickets
       WHERE status = 'closed' 
         AND solution IS NOT NULL 

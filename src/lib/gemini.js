@@ -505,3 +505,31 @@ ${chatText}`;
     };
   }
 }
+
+/**
+ * Erstellt eine kurze, prägnante Zusammenfassung (Problem & Kontext) aus dem Ticketverlauf.
+ */
+export async function generateSolutionContext(ticketHistoryText) {
+  const { extractionModel } = getModelNames();
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return 'Keine Gemini API-Key Konfiguration vorhanden.';
+  }
+
+  const prompt = `Analysiere den folgenden Ticket-Verlauf und erstelle eine prägnante Zusammenfassung (maximal 2-3 Sätze) des ursprünglichen IT-Problems und des Kontextes, bevor es gelöst wurde. Antworte in deutscher Sprache und komm direkt zum Punkt ohne Einleitung.
+
+Ticket-Verlauf:
+${ticketHistoryText}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+
+  try {
+    const responseText = await callGemini(extractionModel, payload);
+    return responseText.trim();
+  } catch (err) {
+    console.error('Fehler bei generateSolutionContext:', err);
+    return 'Kontext konnte nicht generiert werden.';
+  }
+}

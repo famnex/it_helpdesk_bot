@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { extractKnowledgeChunks, processAndSaveChunks } from '@/lib/gemini';
+import { extractKnowledgeChunks, processAndSaveChunks, generateSolutionContext } from '@/lib/gemini';
 import { sendTicketResolvedNotification } from '@/lib/mailer';
 
 export async function POST(request, { params }) {
@@ -31,6 +31,7 @@ export async function POST(request, { params }) {
     }
 
     const sol = isSilent ? 'Ohne Lösung geschlossen' : solution;
+    let computedContext = null;
 
     // Status aktualisieren und Lösung eintragen
     db.prepare('UPDATE tickets SET status = \'closed\', solution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -73,6 +74,10 @@ export async function POST(request, { params }) {
       ticketHistoryText += `\nLÖSUNG: ${sol}`;
 
       try {
+        // 0. Kurze Zusammenfassung des Problems erstellen
+        computedContext = await generateSolutionContext(ticketHistoryText);
+        db.prepare('UPDATE tickets SET solution_context = ? WHERE id = ?').run(computedContext, id);
+
         // 1. Chunks extrahieren (Gemini 2.5 Flash)
         const extractedChunks = await extractKnowledgeChunks(ticketHistoryText);
         
@@ -87,6 +92,7 @@ export async function POST(request, { params }) {
     return NextResponse.json({ 
       success: true, 
       message: 'Ticket wurde geschlossen.',
+      solutionContext: computedContext,
       savedChunks 
     });
 

@@ -309,3 +309,10 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
   ```sql
   ALTER TABLE tickets ADD COLUMN solution_forgotten BOOLEAN DEFAULT 0;
   ```
+
+### Update #12 (23.07.2026): Hinzufügen der Spalte `solution_context` zu `tickets`
+* **Ziel:** Speichern einer KI-generierten Kurzzusammenfassung des Problem-Kontexts bei der Lösungserfassung, um diese im Adminbereich anzuzeigen.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE tickets ADD COLUMN solution_context TEXT;
+  ```
