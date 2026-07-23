@@ -157,3 +157,47 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
   }
 }
+
+/**
+ * PUT: Ticket-Metadaten (z.B. Thema/Titel) aktualisieren (nur für Mitarbeiter)
+ */
+export async function PUT(request, { params }) {
+  const { id } = await params;
+  const user = await getSessionUser();
+
+  if (!user || !['agent', 'admin'].includes(user.role)) {
+    return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
+  }
+
+  try {
+    const { title } = await request.json();
+    if (!title || title.trim().length === 0) {
+      return NextResponse.json({ error: 'Titel darf nicht leer sein.' }, { status: 400 });
+    }
+
+    const ticket = db.prepare('SELECT title FROM tickets WHERE id = ?').get(id);
+    if (!ticket) {
+      return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
+    }
+
+    const oldTitle = ticket.title;
+    const newTitle = title.trim();
+
+    if (oldTitle !== newTitle) {
+      // Titel in DB aktualisieren
+      db.prepare('UPDATE tickets SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(newTitle, id);
+
+      // Systemnachricht im Ticket hinterlassen
+      db.prepare(`
+        INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, is_internal)
+        VALUES (?, 'system', 'system', ?, 0)
+      `).run(id, `Thema des Tickets wurde von "${oldTitle}" in "${newTitle}" geändert.`);
+    }
+
+    return NextResponse.json({ success: true, title: newTitle });
+  } catch (err) {
+    console.error('Fehler beim Aktualisieren des Tickets:', err);
+    return NextResponse.json({ error: 'Serverfehler beim Aktualisieren.' }, { status: 500 });
+  }
+}

@@ -22,6 +22,11 @@ export default function AgentTicketDetailPage() {
   const [closeSuccessChunks, setCloseSuccessChunks] = useState(null);
   const [isSilentClose, setIsSilentClose] = useState(false);
 
+  // Edit Title States
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
@@ -209,6 +214,31 @@ export default function AgentTicketDetailPage() {
     }
   };
 
+  const handleSaveTitle = async (e) => {
+    if (e) e.preventDefault();
+    if (!editedTitle.trim() || isSavingTitle) return;
+
+    setIsSavingTitle(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editedTitle.trim() })
+      });
+      if (res.ok) {
+        setIsEditingTitle(false);
+        await loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Ändern des Themas.');
+      }
+    } catch (err) {
+      console.error('Fehler beim Aktualisieren des Themas:', err);
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center flex-col gap-4">
@@ -240,8 +270,50 @@ export default function AgentTicketDetailPage() {
           </Link>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-bold text-white max-w-[200px] sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
+              {isEditingTitle ? (
+                <form onSubmit={handleSaveTitle} className="flex items-center gap-2 w-full max-w-lg">
+                  <input 
+                    type="text" 
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-violet-500 text-slate-200 flex-1"
+                    disabled={isSavingTitle}
+                    autoFocus
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={isSavingTitle || !editedTitle.trim()}
+                    className="bg-emerald-650 hover:bg-emerald-700 text-white p-2 rounded-xl text-xs flex items-center justify-center shrink-0 w-8 h-8 transition-colors disabled:opacity-40"
+                    title="Speichern"
+                  >
+                    <i className="fa-solid fa-check"></i>
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsEditingTitle(false)}
+                    disabled={isSavingTitle}
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 p-2 rounded-xl text-xs flex items-center justify-center shrink-0 w-8 h-8 transition-colors"
+                    title="Abbrechen"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap max-w-full">
+                  <h1 className="text-sm font-bold text-white max-w-[200px] sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
+                  <button
+                    onClick={() => {
+                      setEditedTitle(ticket.title);
+                      setIsEditingTitle(true);
+                    }}
+                    className="text-slate-500 hover:text-slate-300 p-1 transition-colors"
+                    title="Thema bearbeiten"
+                  >
+                    <i className="fa-solid fa-pen text-[10px]"></i>
+                  </button>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400 mt-0.5">
               <span>Ticket ID: <span className="font-mono">{ticket.id}</span></span>
