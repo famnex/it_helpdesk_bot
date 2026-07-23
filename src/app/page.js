@@ -903,7 +903,7 @@ export default function CustomerChatPage() {
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[72px] pb-[104px] md:pb-[92px]">
+      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[72px] pb-[180px] md:pb-[160px]">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
@@ -1138,6 +1138,8 @@ export default function CustomerChatPage() {
           )}
  
           <div ref={messagesEndRef} />
+          {/* Scroll Spacer to allow scrolling past fixed input container */}
+          <div className="h-40" />
         </div>
  
         {/* Input Area */}
