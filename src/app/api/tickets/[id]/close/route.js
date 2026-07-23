@@ -13,8 +13,10 @@ export async function POST(request, { params }) {
   }
 
   try {
-    const { solution } = await request.json();
-    if (!solution || solution.trim().length === 0) {
+    const { solution, silent } = await request.json();
+    const isSilent = !!silent;
+
+    if (!isSilent && (!solution || solution.trim().length === 0)) {
       return NextResponse.json({ error: 'Eine Lösung ist zum Schließen des Tickets erforderlich.' }, { status: 400 });
     }
 
@@ -28,46 +30,56 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Ticket ist bereits geschlossen.' }, { status: 400 });
     }
 
+    const sol = isSilent ? 'Ohne Lösung geschlossen' : solution;
+
     // Status aktualisieren und Lösung eintragen
     db.prepare('UPDATE tickets SET status = \'closed\', solution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(solution, id);
+      .run(sol, id);
 
-    // Systemkommentar einfügen
-    const systemText = ticket.creatorEmail 
-      ? `Ticket wurde geschlossen mit Lösung: ${solution} (Kunde per E-Mail benachrichtigt.)` 
-      : `Ticket wurde geschlossen mit Lösung: ${solution}`;
-    db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-      .run(id, systemText);
+    // Systemkommentar einfügen (nur wenn nicht lautlos geschlossen)
+    if (!isSilent) {
+      const systemText = ticket.creatorEmail 
+        ? `Ticket wurde geschlossen mit Lösung: ${sol} (Kunde per E-Mail benachrichtigt.)` 
+        : `Ticket wurde geschlossen mit Lösung: ${sol}`;
+      db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+        .run(id, systemText);
 
-    // Benachrichtige den Kunden über die Lösung per E-Mail
-    if (ticket.creatorEmail) {
-      try {
-        await sendTicketResolvedNotification(ticket.creatorEmail, id, ticket.title, solution);
-      } catch (mailErr) {
-        console.error('Fehler beim Senden der Lösungs-Benachrichtigung per E-Mail:', mailErr);
+      // Benachrichtige den Kunden über die Lösung per E-Mail
+      if (ticket.creatorEmail) {
+        try {
+          await sendTicketResolvedNotification(ticket.creatorEmail, id, ticket.title, sol);
+        } catch (mailErr) {
+          console.error('Fehler beim Senden der Lösungs-Benachrichtigung per E-Mail:', mailErr);
+        }
       }
+    } else {
+      // Systemkommentar für lautloses Schließen
+      db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+        .run(id, 'Ticket wurde ohne Benachrichtigung des Kunden und ohne Angabe einer Lösung geschlossen.');
     }
 
     // --- KI Wissens-Extraktion & Deduplizierung im Hintergrund (bzw. asynchron) ---
-    // Wir holen alle öffentlichen Nachrichten des Tickets
-    const messages = db.prepare('SELECT sender_role, text FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC').all(id);
-    
-    let ticketHistoryText = `TICKET: ${id}\nTHEMA: ${ticket.title}\n\nVERLAUF:\n`;
-    messages.forEach(m => {
-      ticketHistoryText += `${m.sender_role.toUpperCase()}: ${m.text}\n`;
-    });
-    ticketHistoryText += `\nLÖSUNG: ${solution}`;
-
+    // Nur durchführen, wenn nicht lautlos geschlossen wurde
     let savedChunks = [];
-    try {
-      // 1. Chunks extrahieren (Gemini 2.5 Flash)
-      const extractedChunks = await extractKnowledgeChunks(ticketHistoryText);
+    if (!isSilent) {
+      const messages = db.prepare('SELECT sender_role, text FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC').all(id);
       
-      // 2. Chunks deduplizieren und speichern (Gemini 2.5 Flash)
-      savedChunks = await processAndSaveChunks(extractedChunks, 'ticket');
-    } catch (kiErr) {
-      console.error('Fehler bei der KI-Chunkextraktion beim Schließen:', kiErr);
-      // Wir werfen hier keinen Fehler, da das Ticket bereits geschlossen wurde
+      let ticketHistoryText = `TICKET: ${id}\nTHEMA: ${ticket.title}\n\nVERLAUF:\n`;
+      messages.forEach(m => {
+        ticketHistoryText += `${m.sender_role.toUpperCase()}: ${m.text}\n`;
+      });
+      ticketHistoryText += `\nLÖSUNG: ${sol}`;
+
+      try {
+        // 1. Chunks extrahieren (Gemini 2.5 Flash)
+        const extractedChunks = await extractKnowledgeChunks(ticketHistoryText);
+        
+        // 2. Chunks deduplizieren und speichern (Gemini 2.5 Flash)
+        savedChunks = await processAndSaveChunks(extractedChunks, 'ticket');
+      } catch (kiErr) {
+        console.error('Fehler bei der KI-Chunkextraktion beim Schließen:', kiErr);
+        // Wir werfen hier keinen Fehler, da das Ticket bereits geschlossen wurde
+      }
     }
 
     return NextResponse.json({ 

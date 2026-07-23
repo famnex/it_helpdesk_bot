@@ -20,6 +20,7 @@ export default function AgentTicketDetailPage() {
   const [solutionText, setSolutionText] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeSuccessChunks, setCloseSuccessChunks] = useState(null);
+  const [isSilentClose, setIsSilentClose] = useState(false);
 
   const messagesEndRef = useRef(null);
   const router = useRouter();
@@ -181,14 +182,14 @@ export default function AgentTicketDetailPage() {
 
   const handleCloseTicket = async (e) => {
     e.preventDefault();
-    if (!solutionText.trim()) return;
+    if (!isSilentClose && !solutionText.trim()) return;
 
     setIsSending(true);
     try {
       const res = await fetch(`/api/tickets/${id}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ solution: solutionText })
+        body: JSON.stringify({ solution: solutionText, silent: isSilentClose })
       });
       const data = await res.json();
       setIsSending(false);
@@ -196,6 +197,8 @@ export default function AgentTicketDetailPage() {
       if (res.ok) {
         setCloseSuccessChunks(data.savedChunks || []);
         setShowCloseModal(false);
+        setSolutionText('');
+        setIsSilentClose(false);
         await loadData();
       } else {
         alert(data.error || 'Fehler beim Schließen.');
@@ -495,17 +498,33 @@ export default function AgentTicketDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
+             <div className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">Lösung (Pflichtfeld)</label>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">Lösung (Pflichtfeld, außer bei lautlosem Schließen)</label>
                 <textarea 
                   value={solutionText}
                   onChange={(e) => setSolutionText(e.target.value)}
                   placeholder="Beschreibe die genaue Lösung (z.B. Smartboard HDMI-Kabel an Wandpanel von Port 1 auf Port 2 umgesteckt)..."
                   rows="4"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  required={!isSilentClose}
+                  disabled={isSilentClose}
                 />
+              </div>
+
+              <div>
+                <label className="flex items-start gap-2.5 cursor-pointer py-1 select-none">
+                  <input
+                    type="checkbox"
+                    checked={isSilentClose}
+                    onChange={(e) => setIsSilentClose(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 mt-0.5"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-slate-200">Ticket ohne Nachricht und Speichern der Lösung schließen</span>
+                    <span className="text-[9px] text-slate-500">Es wird keine Lösungsbenachrichtigung an den Kunden gesendet, kein Lösungsvermerk abgefragt und keine KI-Wissensextraktion durchgeführt.</span>
+                  </div>
+                </label>
               </div>
               
               <div className="flex gap-2 pt-2">
@@ -520,9 +539,9 @@ export default function AgentTicketDetailPage() {
                 <button 
                   type="submit" 
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
-                  disabled={isSending || !solutionText.trim()}
+                  disabled={isSending || (!isSilentClose && !solutionText.trim())}
                 >
-                  {isSending ? 'Verarbeite...' : 'Lösung speichern'}
+                  {isSending ? 'Verarbeite...' : 'Ticket schließen'}
                 </button>
               </div>
             </div>
