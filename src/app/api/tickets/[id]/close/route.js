@@ -36,11 +36,13 @@ export async function POST(request, { params }) {
     db.prepare('UPDATE tickets SET status = \'closed\', solution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(sol, id);
 
+    const closingUserText = user.name ? `${user.name} (${user.email})` : user.email;
+
     // Systemkommentar einfügen (nur wenn nicht lautlos geschlossen)
     if (!isSilent) {
       const systemText = ticket.creatorEmail 
-        ? `Ticket wurde geschlossen mit Lösung: ${sol} (Kunde per E-Mail benachrichtigt.)` 
-        : `Ticket wurde geschlossen mit Lösung: ${sol}`;
+        ? `Ticket wurde von ${closingUserText} geschlossen mit Lösung: ${sol} (Kunde per E-Mail benachrichtigt.)` 
+        : `Ticket wurde von ${closingUserText} geschlossen mit Lösung: ${sol}`;
       db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
         .run(id, systemText);
 
@@ -55,7 +57,7 @@ export async function POST(request, { params }) {
     } else {
       // Systemkommentar für lautloses Schließen
       db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-        .run(id, 'Ticket wurde ohne Benachrichtigung des Kunden und ohne Angabe einer Lösung geschlossen.');
+        .run(id, `Ticket wurde von ${closingUserText} ohne Benachrichtigung des Kunden und ohne Angabe einer Lösung geschlossen.`);
     }
 
     // --- KI Wissens-Extraktion & Deduplizierung im Hintergrund (bzw. asynchron) ---
