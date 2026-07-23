@@ -11,7 +11,7 @@ export async function GET() {
   try {
     // Holt alle Chats, die als missbräuchlich markiert wurden
     const abusiveChats = db.prepare(`
-      SELECT id, user_email as userEmail, user_name as userName, abusive_flagged_at as flaggedAt
+      SELECT id, user_email as userEmail, user_name as userName, user_ip as userIp, user_session_id as userSessionId, abusive_flagged_at as flaggedAt
       FROM chats
       WHERE is_abusive = 1
       ORDER BY abusive_flagged_at DESC
@@ -27,9 +27,20 @@ export async function GET() {
         LIMIT 20
       `).all(chat.id);
 
+      // Rekonstruieren früherer Anmeldungen/Identitäten über die Session ID
+      let linkedIdentities = [];
+      if (chat.userSessionId) {
+        linkedIdentities = db.prepare(`
+          SELECT DISTINCT user_email as email, user_name as name
+          FROM chats
+          WHERE user_session_id = ? AND user_email IS NOT NULL AND user_email != ''
+        `).all(chat.userSessionId);
+      }
+
       return {
         ...chat,
-        messages
+        messages,
+        linkedIdentities
       };
     });
 

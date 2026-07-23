@@ -182,6 +182,14 @@ export default function CustomerChatPage() {
     const newChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
     sessionStorage.setItem('support_chat_id', newChatId);
     setChatId(newChatId);
+
+    // Persistente Sitzungs-ID für Missbrauchsnachverfolgung generieren
+    let persistentSessionId = localStorage.getItem('it_helpdesk_session_uuid');
+    if (!persistentSessionId) {
+      persistentSessionId = 'sess-' + Math.floor(100000 + Math.random() * 900000) + '-' + Date.now();
+      localStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
+    }
+    sessionStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
  
     // Chatverlauf laden (für den neuen leeren Chat)
     fetch(`/api/chat?chatId=${newChatId}`)
@@ -308,8 +316,13 @@ export default function CustomerChatPage() {
         formData.append('photo', currentPhoto);
       }
 
+      const persistentSessionId = sessionStorage.getItem('it_helpdesk_session_uuid') || '';
+
       const res = await fetch('/api/chat', {
         method: 'POST',
+        headers: {
+          'X-User-Session-Id': persistentSessionId
+        },
         body: formData
       });
  
@@ -342,9 +355,14 @@ export default function CustomerChatPage() {
   const sendSystemEventToBot = async (eventText) => {
     setIsTyping(true);
     try {
+      const persistentSessionId = sessionStorage.getItem('it_helpdesk_session_uuid') || '';
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Session-Id': persistentSessionId
+        },
         body: JSON.stringify({ 
           chatId, 
           text: eventText

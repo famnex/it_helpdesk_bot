@@ -112,16 +112,29 @@ export async function POST(request) {
     const user = await getSessionUser();
     const email = user ? user.email : null;
 
+    // IP-Adresse extrahieren
+    const xForwardedFor = request.headers.get('x-forwarded-for');
+    let userIp = '';
+    if (xForwardedFor) {
+      userIp = xForwardedFor.split(',')[0].trim();
+    } else {
+      userIp = request.headers.get('x-real-ip') || '';
+    }
+
+    // Persistente Session ID aus Header extrahieren
+    const userSessionId = request.headers.get('x-user-session-id') || '';
+
     // 1. Sicherstellen, dass der Chat existiert
     let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(chatId);
     if (!chat) {
-      db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf) VALUES (?, ?, ?, ?)').run(chatId, email, user ? user.name : null, isAgentOnBehalf ? 1 : 0);
+      db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(chatId, email, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId);
       chat = { id: chatId, ticketCreated: 0, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0 };
     } else {
-      // Immer versuchen, E-Mail und Name des angemeldeten Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
+      // Immer versuchen, E-Mail, Name, IP und Session-ID des angemeldeten Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
       if (chat.isAgentOnBehalf !== 1) {
-        db.prepare('UPDATE chats SET user_email = ?, user_name = ? WHERE id = ?')
-          .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, chatId);
+        db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ? WHERE id = ?')
+          .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, chatId);
       }
     }
 

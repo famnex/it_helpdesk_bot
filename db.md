@@ -94,6 +94,8 @@ Speichert private Chats von Kunden mit dem Bot.
       user_name TEXT,
       is_abusive BOOLEAN DEFAULT 0,
       abusive_flagged_at DATETIME,
+      user_ip TEXT,
+      user_session_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   ```
@@ -105,6 +107,8 @@ Speichert private Chats von Kunden mit dem Bot.
   * `user_name`: Name des Benutzers (für unregistrierte Benutzer oder Behalf-Tickets).
   * `is_abusive`: Missbrauch-Erkennungs-Flag.
   * `abusive_flagged_at`: Zeitstempel der Missbrauch-Erkennung.
+  * `user_ip`: IP-Adresse des Benutzers zum Zeitpunkt des Chats (zur Nachverfolgung von Missbrauch).
+  * `user_session_id`: Persistente Browser-Sitzungs-ID (gespeichert in `localStorage`), um Gast-Chats auch nach einer Abmeldung früheren Anmeldungen desselben Browsers zuordnen zu können.
   * `created_at`: Erstelldatum des Chats.
 
 ---
@@ -289,4 +293,12 @@ Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-
 * **Migration (ausgeführt in `src/lib/db.js`):**
   ```sql
   ALTER TABLE knowledge ADD COLUMN is_private BOOLEAN DEFAULT 0;
+  ```
+
+### Update #10 (23.07.2026): Hinzufügen der Spalten `user_ip` und `user_session_id` zu `chats`
+* **Ziel:** Erfassen von IP-Adresse und persistenten Sitzungs-IDs (auch nach Abmeldung), um missbräuchliche Nutzung von Gast-Chats zurückzuverfolgen.
+* **Migration (ausgeführt in `src/lib/db.js`):**
+  ```sql
+  ALTER TABLE chats ADD COLUMN user_ip TEXT;
+  ALTER TABLE chats ADD COLUMN user_session_id TEXT;
   ```

@@ -2013,28 +2013,62 @@ export default function AdminDashboardPage() {
                 {abusiveChats.map((chat) => (
                   <div key={chat.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
                     {/* Header */}
-                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-wrap justify-between items-center gap-2">
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
-                          {chat.id}
-                        </span>
-                        <span className="text-slate-400">
-                          Erkannt: <strong className="text-slate-200">{new Date(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
-                        </span>
-                        <span className="text-slate-400">
-                          Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
-                        </span>
-                        <span className="text-slate-400">
-                          Nutzer-E-Mail: <strong className="text-white">{chat.userEmail || 'Keine (nicht angemeldet)'}</strong>
-                        </span>
+                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-col gap-2">
+                      <div className="flex flex-wrap justify-between items-center gap-2">
+                        <div className="flex items-center gap-3 text-xs flex-wrap">
+                          <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
+                            {chat.id}
+                          </span>
+                          <span className="text-slate-400">
+                            Erkannt: <strong className="text-slate-200">{new Date(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                          </span>
+                          <span className="text-slate-400">
+                            Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
+                          </span>
+                          <span className="text-slate-400">
+                            Nutzer-E-Mail: <strong className="text-white">{chat.userEmail || 'Keine (nicht angemeldet)'}</strong>
+                          </span>
+                          {chat.userIp && (
+                            <span className="text-slate-400">
+                              IP: <strong className="text-slate-200 font-mono">{chat.userIp}</strong>
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleResolveAbusive(chat.id)}
+                          className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                        >
+                          <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
+                          Als gelöst markieren (Meldung löschen)
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleResolveAbusive(chat.id)}
-                        className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
-                      >
-                        <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
-                        Als gelöst markieren (Meldung löschen)
-                      </button>
+
+                      {/* IP und Session-ID Infos + rekonstruierte Anmeldungen */}
+                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-850/60 text-[10px] text-slate-500">
+                        {chat.userSessionId && (
+                          <div>
+                            Sitzungs-ID: <span className="font-mono text-slate-400">{chat.userSessionId}</span>
+                          </div>
+                        )}
+                        {chat.linkedIdentities && chat.linkedIdentities.length > 0 && (
+                          <div className="bg-red-950/45 border border-red-900/40 text-red-200 p-2.5 rounded-xl flex items-start gap-2 animate-fade-in mt-1">
+                            <i className="fa-solid fa-mask text-[12px] text-red-400 mt-0.5"></i>
+                            <div>
+                              <strong className="text-red-400 block font-bold">Identitäts-Spur rekonstruiert:</strong>
+                              <span className="leading-relaxed">
+                                Über dieselbe Browser-Sitzung wurden früher folgende Anmeldungen vorgenommen:
+                              </span>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {chat.linkedIdentities.map((identity, idIdx) => (
+                                  <span key={idIdx} className="bg-red-900/40 border border-red-500/20 px-2 py-0.5 rounded text-[9px] font-semibold text-white">
+                                    {identity.name ? `${identity.name} (${identity.email})` : identity.email}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Chatverlauf Context */}

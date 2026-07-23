@@ -49,6 +49,8 @@ db.exec(`
       user_name TEXT,
       is_abusive BOOLEAN DEFAULT 0,
       abusive_flagged_at DATETIME,
+      user_ip TEXT,
+      user_session_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -174,6 +176,18 @@ try {
   if (!hasIsAgentOnBehalf) {
     db.exec("ALTER TABLE chats ADD COLUMN is_agent_on_behalf BOOLEAN DEFAULT 0;");
     console.log("Migration: Spalte 'is_agent_on_behalf' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const hasUserIp = tableInfoChatsAbuse.some(col => col.name === 'user_ip');
+  if (!hasUserIp) {
+    db.exec("ALTER TABLE chats ADD COLUMN user_ip TEXT;");
+    console.log("Migration: Spalte 'user_ip' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const hasUserSessionId = tableInfoChatsAbuse.some(col => col.name === 'user_session_id');
+  if (!hasUserSessionId) {
+    db.exec("ALTER TABLE chats ADD COLUMN user_session_id TEXT;");
+    console.log("Migration: Spalte 'user_session_id' zur Tabelle 'chats' hinzugefügt.");
   }
 
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();
