@@ -143,7 +143,10 @@ export default function CustomerChatPage() {
         }
 
         // 3. Normale Session prüfen
-        fetch('/api/auth/me')
+        const sessionId = localStorage.getItem('it_helpdesk_session_uuid') || '';
+        fetch('/api/auth/me', {
+          headers: { 'X-User-Session-Id': sessionId }
+        })
           .then(res => res.json())
           .then(data => {
             let currentUser = null;

@@ -4,10 +4,42 @@ import db from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser) {
     return NextResponse.json({ user: null });
+  }
+
+  // IP-Adresse extrahieren
+  const xForwardedFor = request.headers.get('x-forwarded-for');
+  let userIp = '';
+  if (xForwardedFor) {
+    userIp = xForwardedFor.split(',')[0].trim();
+  } else {
+    userIp = request.headers.get('x-real-ip') || '';
+  }
+
+  // Session ID aus dem Client-Header lesen
+  const userSessionId = request.headers.get('x-user-session-id') || '';
+
+  // Wenn der Benutzer angemeldet ist und wir eine Session-ID haben, verknüpfen wir diese im Hintergrund in der chats-Tabelle
+  if (sessionUser.email && userSessionId) {
+    try {
+      // Prüfen, ob für diese Session ID schon eine Verknüpfung existiert
+      const existing = db.prepare('SELECT id FROM chats WHERE user_session_id = ? AND user_email = ?').get(userSessionId, sessionUser.email);
+      if (!existing) {
+        // Ein neuer leerer Chat-Datensatz wird angelegt, um die Verknüpfung festzuhalten
+        const linkChatId = `link-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
+        db.prepare('INSERT INTO chats (id, user_email, user_name, user_ip, user_session_id) VALUES (?, ?, ?, ?, ?)')
+          .run(linkChatId, sessionUser.email, sessionUser.name || null, userIp || null, userSessionId);
+      } else {
+        // Bestehende Verknüpfung mit aktueller IP/Name aktualisieren
+        db.prepare('UPDATE chats SET user_ip = ?, user_name = ? WHERE user_session_id = ? AND user_email = ?')
+          .run(userIp || null, sessionUser.name || null, userSessionId, sessionUser.email);
+      }
+    } catch (dbErr) {
+      console.error('Fehler beim Assoziieren der Session-ID bei /api/auth/me:', dbErr);
+    }
   }
 
   // IdP-Logout-Alternativtext abfragen
