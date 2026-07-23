@@ -485,6 +485,16 @@ export default function AgentTicketDetailPage() {
                       <div 
                         className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                       >
+                        {msg.imageUrl && (
+                          <div className="mb-2 max-w-xs overflow-hidden rounded-lg border border-slate-800 shadow-sm bg-slate-950">
+                            <img 
+                              src={msg.imageUrl} 
+                              alt="Angehängtes Bild" 
+                              className="max-h-48 w-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(msg.imageUrl, '_blank')}
+                            />
+                          </div>
+                        )}
                         <div 
                           className="markdown-content"
                           dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
