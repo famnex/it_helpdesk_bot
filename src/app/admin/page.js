@@ -31,6 +31,7 @@ export default function AdminDashboardPage() {
   const [usersList, setUsersList] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState('');
+  const [userSearch, setUserSearch] = useState('');
   
   // Import States
   const [importUrl, setImportUrl] = useState('');
@@ -585,6 +586,12 @@ export default function AdminDashboardPage() {
       k.fact.toLowerCase().includes(knowledgeSearch.toLowerCase());
     const matchesCategory = adminSelectedPrivateCategory === 'Alle' || (k.category || 'Sonstiges') === adminSelectedPrivateCategory;
     return matchesSearch && matchesCategory;
+  });
+
+  const filteredUsersList = usersList.filter(u => {
+    const matchesName = (u.name || '').toLowerCase().includes(userSearch.toLowerCase());
+    const matchesEmail = (u.email || '').toLowerCase().includes(userSearch.toLowerCase());
+    return matchesName || matchesEmail;
   });
 
   if (isLoading) {
@@ -1814,13 +1821,27 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
+            {/* Search Input for Users */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+              <div className="flex-1 w-full sm:max-w-md relative">
+                <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+                <input 
+                  type="text" 
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Benutzer nach Name oder E-Mail suchen..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            </div>
+
             {usersLoading ? (
               <div className="flex justify-center py-12">
                 <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : usersList.length === 0 ? (
+            ) : filteredUsersList.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
-                Keine Benutzer registriert.
+                Keine passenden Benutzer gefunden.
               </div>
             ) : (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg border-slate-800/60">
@@ -1837,7 +1858,7 @@ export default function AdminDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/50">
-                      {usersList.map((usr) => (
+                      {filteredUsersList.map((usr) => (
                         <tr key={usr.id} className="hover:bg-slate-850/40 transition-colors">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
