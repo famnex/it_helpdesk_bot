@@ -1955,7 +1955,7 @@ export default function AdminDashboardPage() {
                             {sol.id}
                           </span>
                           <span className="text-[10px] font-semibold text-slate-500">
-                            Geschlossen: {new Date(sol.updatedAt).toLocaleDateString('de-DE')}
+                            Geschlossen: {sol.updatedAt ? new Date(sol.updatedAt).toLocaleDateString('de-DE') : 'Unbekannt'}
                           </span>
                         </div>
 
