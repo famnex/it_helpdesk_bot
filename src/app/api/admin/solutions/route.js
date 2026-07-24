@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { generateSolutionContext } from '@/lib/gemini';
 
 /**
  * GET: Alle gespeicherten Ticket-Lösungen laden.
@@ -31,8 +32,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Serverfehler beim Laden der Lösungen.' }, { status: 500 });
   }
 }
-
-import { generateSolutionContext } from '@/lib/gemini';
 
 /**
  * POST (Aktion 'forget' oder 'generate-context'): Ermöglicht das "Vergessen" oder das nachträgliche Generieren einer Zusammenfassung.
