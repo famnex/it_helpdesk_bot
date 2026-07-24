@@ -20,6 +20,14 @@ export default function AdminDashboardPage() {
   const [statistics, setStatistics] = useState([]);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
 
+  // Chats States
+  const [chatsList, setChatsList] = useState([]);
+  const [chatsLoading, setChatsLoading] = useState(false);
+  const [chatsSearch, setChatsSearch] = useState('');
+  const [selectedChatDetails, setSelectedChatDetails] = useState(null);
+  const [selectedChatMessages, setSelectedChatMessages] = useState([]);
+  const [chatDetailsLoading, setChatDetailsLoading] = useState(false);
+
   // Knowledge States
   const [knowledge, setKnowledge] = useState([]);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
@@ -112,6 +120,8 @@ export default function AdminDashboardPage() {
       loadSolutions();
     } else if (activeTab === 'statistics') {
       loadStatistics();
+    } else if (activeTab === 'chats') {
+      loadChats();
     }
   }, [activeTab]);
 
@@ -247,6 +257,56 @@ export default function AdminDashboardPage() {
       console.error('Fehler beim Laden der Statistik:', e);
     } finally {
       setStatisticsLoading(false);
+    }
+  };
+
+  const loadChats = async () => {
+    setChatsLoading(true);
+    try {
+      const res = await fetch('/api/admin/chats');
+      if (res.ok) {
+        const data = await res.json();
+        setChatsList(data.chats || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Chats:', e);
+    } finally {
+      setChatsLoading(false);
+    }
+  };
+
+  const loadChatDetails = async (chatId) => {
+    setChatDetailsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/chats?chatId=${chatId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedChatDetails(data.chat);
+        setSelectedChatMessages(data.messages || []);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Chat-Details:', e);
+    } finally {
+      setChatDetailsLoading(false);
+    }
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    if (!confirm('Diesen Chat und alle seine Nachrichten unwiderruflich löschen?')) return;
+    try {
+      const res = await fetch(`/api/admin/chats?chatId=${chatId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setChatsList(prev => prev.filter(c => c.id !== chatId));
+        if (selectedChatDetails?.id === chatId) {
+          setSelectedChatDetails(null);
+          setSelectedChatMessages([]);
+        }
+      } else {
+        alert('Löschen fehlgeschlagen.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
     }
   };
 
@@ -873,6 +933,14 @@ export default function AdminDashboardPage() {
           >
             <i className="fa-solid fa-sliders"></i>
             <span>Einstellungen</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('chats')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'chats' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+            title="Alle gespeicherten Chats durchsuchen und verwalten"
+          >
+            <i className="fa-solid fa-comments text-sky-400"></i>
+            <span>Chats</span>
           </button>
           <button 
             onClick={() => setActiveTab('flagged')}
@@ -2028,6 +2096,290 @@ export default function AdminDashboardPage() {
                 }
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab 1c: Gespeicherte Lösungen */}
+        {activeTab === 'solutions' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl flex justify-between items-center gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Gespeicherte Lösungen</h3>
+                <p className="text-xs text-slate-400">Hier sind alle Problemlösungen aufgeführt, die beim Schließen von IT-Tickets erfasst wurden. Nutze die "Vergessen"-Schaltfläche, um Einträge aus der Datenbank zu entfernen.</p>
+              </div>
+            </div>
+
+            {/* Suche für Lösungen */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+              <div className="flex-1 w-full sm:max-w-md relative">
+                <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+                <input 
+                  type="text" 
+                  value={solutionsSearch}
+                  onChange={(e) => setSolutionsSearch(e.target.value)}
+                  placeholder="Lösungen durchsuchen (Betreff oder Text)..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            </div>
+
+            {solutionsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : solutions.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                Keine gespeicherten Ticket-Lösungen vorhanden.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {solutions
+                  .filter(s => {
+                    const term = solutionsSearch.toLowerCase();
+                    return s.title.toLowerCase().includes(term) || s.solution.toLowerCase().includes(term) || s.id.toLowerCase().includes(term);
+                  })
+                  .map(sol => (
+                    <div key={sol.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/30 hover:bg-slate-850/10 transition-all select-none animate-fade-in">
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleForgetSolution(sol.id)}
+                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-[10px] px-2.5 py-1 rounded-xl transition-all"
+                          title="Lösung vergessen (Löschen)"
+                        >
+                          <i className="fa-solid fa-eraser mr-1"></i>
+                          <span>Vergessen</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase font-mono">
+                            {sol.id}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            Geschlossen: {sol.updatedAt ? new Date(sol.updatedAt).toLocaleDateString('de-DE') : 'Unbekannt'}
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm font-bold text-white pr-16">{sol.title}</h4>
+
+                        {sol.solutionContext ? (
+                          <div className="space-y-1">
+                            <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider">Problem-Kontext (KI-Zusammenfassung):</div>
+                            <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans italic">
+                              {sol.solutionContext}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateSolutionContext(sol.id)}
+                              disabled={generatingContextId === sol.id}
+                              className="bg-sky-950/30 hover:bg-sky-900 border border-sky-500/20 text-sky-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-40"
+                            >
+                              {generatingContextId === sol.id ? (
+                                <>
+                                  <i className="fa-solid fa-circle-notch animate-spin mr-1.5"></i>
+                                  <span>Zusammenfassung wird erstellt...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i>
+                                  <span>KI-Zusammenfassung generieren</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Erfasste Problemlösung:</div>
+                          <p className="text-xs text-slate-350 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{sol.solution}</p>
+                        </div>
+                        
+                        <div className="text-[9px] text-slate-500">
+                          Erstellt durch: <span className="font-mono text-slate-400">{sol.creatorEmail}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 1d: Alle gespeicherten Chats */}
+        {activeTab === 'chats' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
+              <h3 className="text-sm font-bold text-white mb-1">Zwischengespeicherte Chats durchsuchen</h3>
+              <p className="text-xs text-slate-400">Hier können alle Chat-Sitzungen (inklusive Gästen, die kein Ticket erstellt haben) gesucht, eingesehen und bereinigt werden.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Chat-Liste */}
+              <div className="lg:col-span-1 space-y-4">
+                <div className="relative">
+                  <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+                  <input 
+                    type="text" 
+                    value={chatsSearch}
+                    onChange={(e) => setChatsSearch(e.target.value)}
+                    placeholder="Ersteller, IP, Session-ID suchen..."
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+
+                {chatsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-6 h-6 border-3 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : chatsList.length === 0 ? (
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-slate-500 text-xs">
+                    Keine Chats in der Datenbank.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                    {chatsList
+                      .filter(c => {
+                        const term = chatsSearch.toLowerCase();
+                        return (c.id || '').toLowerCase().includes(term) ||
+                               (c.userEmail || '').toLowerCase().includes(term) ||
+                               (c.userName || '').toLowerCase().includes(term) ||
+                               (c.userIp || '').toLowerCase().includes(term) ||
+                               (c.userSessionId || '').toLowerCase().includes(term);
+                      })
+                      .map(c => (
+                        <div 
+                          key={c.id} 
+                          onClick={() => loadChatDetails(c.id)}
+                          className={`p-3.5 border rounded-xl text-left cursor-pointer transition-all select-none flex flex-col gap-2 ${selectedChatDetails?.id === c.id ? 'bg-violet-650/10 border-violet-500 shadow-md' : 'bg-slate-900 border-slate-800/80 hover:border-slate-700'}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-mono font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded">
+                              {c.id}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-mono">
+                              {new Date(c.createdAt).toLocaleDateString('de-DE')}
+                            </span>
+                          </div>
+                          
+                          <div className="text-xs">
+                            <strong className="text-slate-200 block truncate">{c.userName || c.userEmail || 'Gast'}</strong>
+                            {c.userEmail && <span className="text-[10px] text-slate-500 font-mono block truncate">{c.userEmail}</span>}
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 items-center mt-1">
+                            {c.ticketCreated === 1 && (
+                              <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                Ticket erstellt
+                              </span>
+                            )}
+                            {c.isAbusive === 1 && (
+                              <span className="text-[8px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded">
+                                Missbrauch
+                              </span>
+                            )}
+                            {c.userIp && (
+                              <span className="text-[8px] font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded">
+                                IP: {c.userIp}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* Chat-Details Inspektor */}
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 min-h-[400px] flex flex-col justify-between">
+                {chatDetailsLoading ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : selectedChatDetails ? (
+                  <div className="space-y-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      {/* Header */}
+                      <div className="flex justify-between items-start border-b border-slate-800 pb-3 mb-4 gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
+                              ID: {selectedChatDetails.id}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              Erstellt am: {new Date(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                            <i className="fa-solid fa-user text-slate-500 text-xs"></i>
+                            <span>{selectedChatDetails.userName || 'Gast'}</span>
+                            {selectedChatDetails.userEmail && <span className="text-xs text-slate-400 font-mono">({selectedChatDetails.userEmail})</span>}
+                          </h4>
+                          
+                          <div className="text-[10px] text-slate-500 mt-2 space-y-1 font-mono">
+                            {selectedChatDetails.userIp && <div>IP-Adresse: <span className="text-slate-350">{selectedChatDetails.userIp}</span></div>}
+                            {selectedChatDetails.userSessionId && <div>Browser Session-ID: <span className="text-slate-350">{selectedChatDetails.userSessionId}</span></div>}
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all"
+                        >
+                          <i className="fa-solid fa-trash-can mr-1.5"></i>
+                          <span>Chat löschen</span>
+                        </button>
+                      </div>
+
+                      {/* Verlauf */}
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 border-l border-slate-800 pl-4 py-1">
+                        {selectedChatMessages.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Keine Nachrichten in diesem Chat vorhanden.</p>
+                        ) : (
+                          selectedChatMessages.map(msg => {
+                            const isUser = msg.sender === 'user';
+                            return (
+                              <div key={msg.id} className="space-y-1">
+                                <div className="flex items-center gap-2 text-[10px] font-bold">
+                                  <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
+                                    {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
+                                  </span>
+                                  <span className="text-slate-600 font-normal">
+                                    {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                  </span>
+                                </div>
+                                
+                                {msg.imageUrl && (
+                                  <div className="max-w-[200px] mb-1">
+                                    <img src={msg.imageUrl} alt="Anhang" className="rounded-xl border border-slate-800 max-h-32 object-cover" />
+                                  </div>
+                                )}
+
+                                <p className="text-xs text-slate-300 bg-slate-950/40 p-2 rounded-xl border border-slate-850/30 whitespace-pre-wrap leading-relaxed">
+                                  {msg.text}
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center py-20 text-slate-500">
+                    <i className="fa-solid fa-comments text-4xl text-slate-700 mb-3"></i>
+                    <p className="text-xs">Wähle links einen Chat aus der Liste aus, um den Verlauf einzusehen.</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
