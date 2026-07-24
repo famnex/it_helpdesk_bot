@@ -14,6 +14,7 @@ export default function AdminDashboardPage() {
   const [solutions, setSolutions] = useState([]);
   const [solutionsLoading, setSolutionsLoading] = useState(false);
   const [solutionsSearch, setSolutionsSearch] = useState('');
+  const [generatingContextId, setGeneratingContextId] = useState(null);
 
   // Statistics States
   const [statistics, setStatistics] = useState([]);
@@ -209,6 +210,28 @@ export default function AdminDashboardPage() {
     } catch (e) {
       console.error(e);
       alert('Verbindungsfehler.');
+    }
+  };
+
+  const handleGenerateSolutionContext = async (ticketId) => {
+    setGeneratingContextId(ticketId);
+    try {
+      const res = await fetch('/api/admin/solutions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, action: 'generate-context' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSolutions(prev => prev.map(sol => sol.id === ticketId ? { ...sol, solutionContext: data.solutionContext } : sol));
+      } else {
+        alert('Fehler beim Generieren der Zusammenfassung.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    } finally {
+      setGeneratingContextId(null);
     }
   };
 
