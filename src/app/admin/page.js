@@ -27,6 +27,7 @@ export default function AdminDashboardPage() {
   const [selectedChatDetails, setSelectedChatDetails] = useState(null);
   const [selectedChatMessages, setSelectedChatMessages] = useState([]);
   const [chatDetailsLoading, setChatDetailsLoading] = useState(false);
+  const [showMobileChatModal, setShowMobileChatModal] = useState(false);
 
   // Knowledge States
   const [knowledge, setKnowledge] = useState([]);
@@ -277,6 +278,7 @@ export default function AdminDashboardPage() {
 
   const loadChatDetails = async (chatId) => {
     setChatDetailsLoading(true);
+    setShowMobileChatModal(true);
     try {
       const res = await fetch(`/api/admin/chats?chatId=${chatId}`);
       if (res.ok) {
@@ -300,6 +302,7 @@ export default function AdminDashboardPage() {
         if (selectedChatDetails?.id === chatId) {
           setSelectedChatDetails(null);
           setSelectedChatMessages([]);
+          setShowMobileChatModal(false);
         }
       } else {
         alert('Löschen fehlgeschlagen.');
@@ -2381,8 +2384,8 @@ export default function AdminDashboardPage() {
                 )}
               </div>
 
-              {/* Chat-Details Inspektor */}
-              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 min-h-[400px] flex flex-col justify-between">
+              {/* Chat-Details Inspektor (Desktop: In-place, Mobile: Versteckt) */}
+              <div className="hidden lg:flex bg-slate-900 border border-slate-800 rounded-2xl p-5 min-h-[400px] flex-col justify-between">
                 {chatDetailsLoading ? (
                   <div className="flex justify-center items-center h-64">
                     <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2465,6 +2468,115 @@ export default function AdminDashboardPage() {
               </div>
 
             </div>
+
+            {/* Mobile Modal Inspector (Nur auf kleinen Bildschirmen < lg) */}
+            {showMobileChatModal && (
+              <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md p-4 flex items-center justify-center animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+                  
+                  {/* Modal Header */}
+                  <div className="flex justify-between items-start p-4 border-b border-slate-800 bg-slate-950/40">
+                    <div>
+                      {selectedChatDetails ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
+                              ID: {selectedChatDetails.id}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                            <i className="fa-solid fa-user text-slate-500 text-xs"></i>
+                            <span>{selectedChatDetails.userName || 'Gast'}</span>
+                          </h4>
+                          {selectedChatDetails.userEmail && <span className="text-[11px] text-slate-400 font-mono block">{selectedChatDetails.userEmail}</span>}
+                        </>
+                      ) : (
+                        <h4 className="text-sm font-bold text-white">Chat-Details</h4>
+                      )}
+                    </div>
+
+                    <button 
+                      onClick={() => setShowMobileChatModal(false)}
+                      className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 transition-colors"
+                      title="Schließen"
+                    >
+                      <i className="fa-solid fa-xmark text-base"></i>
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-4 overflow-y-auto flex-1 space-y-4">
+                    {chatDetailsLoading ? (
+                      <div className="flex justify-center items-center py-12">
+                        <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    ) : selectedChatDetails ? (
+                      <div className="space-y-4">
+                        <div className="text-[10px] text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1 font-mono">
+                          <div>Erstellt: {new Date(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr</div>
+                          {selectedChatDetails.userIp && <div>IP: {selectedChatDetails.userIp}</div>}
+                          {selectedChatDetails.userSessionId && <div>Session: {selectedChatDetails.userSessionId}</div>}
+                        </div>
+
+                        {/* Verlauf */}
+                        <div className="space-y-3 border-l border-slate-800 pl-3 py-1">
+                          {selectedChatMessages.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic">Keine Nachrichten vorhanden.</p>
+                          ) : (
+                            selectedChatMessages.map(msg => {
+                              const isUser = msg.sender === 'user';
+                              return (
+                                <div key={msg.id} className="space-y-1">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold">
+                                    <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
+                                      {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
+                                    </span>
+                                    <span className="text-slate-600 font-normal">
+                                      {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                    </span>
+                                  </div>
+                                  
+                                  {msg.imageUrl && (
+                                    <div className="max-w-[200px] mb-1">
+                                      <img src={msg.imageUrl} alt="Anhang" className="rounded-xl border border-slate-800 max-h-32 object-cover" />
+                                    </div>
+                                  )}
+
+                                  <p className="text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 whitespace-pre-wrap leading-relaxed">
+                                    {msg.text}
+                                  </p>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Modal Footer */}
+                  {selectedChatDetails && (
+                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center">
+                      <button 
+                        onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                        className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all"
+                      >
+                        <i className="fa-solid fa-trash-can mr-1.5"></i>
+                        <span>Chat löschen</span>
+                      </button>
+
+                      <button 
+                        onClick={() => setShowMobileChatModal(false)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-4 py-2 rounded-xl transition-all"
+                      >
+                        Schließen
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            )}
           </div>
         )}
 
