@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { analyzeChatQuality } from '@/lib/gemini';
 
 /**
  * GET: Alle gespeicherten Chats für den Administrator auflisten
@@ -57,6 +58,29 @@ export async function GET(request) {
   } catch (err) {
     console.error('Fehler beim Abrufen der Admin-Chats:', err);
     return NextResponse.json({ error: 'Serverfehler beim Abrufen der Chats.' }, { status: 500 });
+  }
+}
+
+/**
+ * POST: Aktionen für Admin-Chats durchführen (z. B. KI-Analyse des Chats)
+ */
+export async function POST(request) {
+  const user = await getSessionUser();
+  if (!user || user.role !== 'admin') {
+    return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
+  }
+
+  try {
+    const { chatId, action } = await request.json();
+    if (!chatId || action !== 'analyze') {
+      return NextResponse.json({ error: 'Ungültige Parameter.' }, { status: 400 });
+    }
+
+    const analysis = await analyzeChatQuality(chatId);
+    return NextResponse.json({ success: true, analysis });
+  } catch (err) {
+    console.error('Fehler bei der Chat-Analyse:', err);
+    return NextResponse.json({ error: err.message || 'Serverfehler bei der Analyse.' }, { status: 500 });
   }
 }
 

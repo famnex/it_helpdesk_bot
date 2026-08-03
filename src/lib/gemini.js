@@ -552,3 +552,96 @@ ${ticketHistoryText}`;
     return 'Kontext konnte nicht generiert werden.';
   }
 }
+
+/**
+ * Analysiert einen Chatverlauf umfassend hinsichtlich Wissensnutzung, Wissenslücken und Feedback für die Prompt/Programm-Entwicklung.
+ */
+export async function analyzeChatQuality(chatId) {
+  const { extractionModel } = getModelNames();
+  
+  // Chat & Nachrichten laden
+  const chat = db.prepare('SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
+  if (!chat) {
+    throw new Error('Chat nicht gefunden.');
+  }
+
+  const messages = db.prepare('SELECT sender, text, base_knowledge as baseKnowledge, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC').all(chatId);
+  
+  let chatText = "";
+  let baseKnowledgeIds = new Set();
+  messages.forEach(m => {
+    chatText += `${m.sender === 'user' ? 'BENUTZER' : 'BOT'}: ${m.text}\n`;
+    if (m.baseKnowledge) {
+      m.baseKnowledge.split(',').forEach(id => baseKnowledgeIds.add(id.trim()));
+    }
+  });
+
+  // Verfügbares / genutztes Wissen aus der Datenbank laden
+  let usedKnowledgeText = "Verwendetes / Referenziertes Wissen in diesem Chat:\n";
+  if (baseKnowledgeIds.size > 0) {
+    const ids = Array.from(baseKnowledgeIds).filter(Boolean);
+    const placeholders = ids.map(() => '?').join(',');
+    try {
+      const chunks = db.prepare(`SELECT id, title, fact FROM knowledge WHERE id IN (${placeholders})`).all(...ids);
+      chunks.forEach(c => {
+        usedKnowledgeText += `- [ID: ${c.id}] ${c.title}: ${c.fact}\n`;
+      });
+    } catch (e) {
+      usedKnowledgeText += "(Konnte nicht aus der DB geladen werden)\n";
+    }
+  } else {
+    usedKnowledgeText += "Kein spezifischer Wissenschunk vom Bot geflaggt.\n";
+  }
+
+  // Gesamte Wissensdatenbank übersichtsweise mitsenden (für Lücken-Analyse)
+  let allKnowledgeOverview = "\nGesamte Wissensdatenbank im System:\n";
+  try {
+    const allChunks = db.prepare('SELECT id, title, fact FROM knowledge').all();
+    allChunks.forEach(c => {
+      allKnowledgeOverview += `- [ID: ${c.id}] ${c.title}: ${c.fact}\n`;
+    });
+  } catch (e) {
+    allKnowledgeOverview += "(Keine Einträge oder Fehler beim Laden)\n";
+  }
+
+  const systemPromptsInfo = `
+HERANGEZOGENER BOT-SYSTEMPROMPT (STANDARDS):
+- Persönlichkeit: Freundlicher IT-Support-Chatbot für eine Schule, spricht den Nutzer per Du ("du", "dir") an.
+- Wissensanweisung: Konkrete Anweisungen und Schritte aus dem Wissen auflisten, nicht nur faul auf den Artikel verweisen.
+- Wissens-Tagging: Am Ende [USED_KNOWLEDGE: ID1, ID2, ...] anfügen.
+- Missbrauchs-Tagging: Bei Beleidigungen höflich beenden und [CHAT_ABUSE_DETECTED] mitsenden.
+- Ticket-Erstellungsregeln: Ticket nur bei Fehlgeschlagen/Ablehnung/Expliziter Anforderung anbieten. Zwingend Raumnummer (bei Hardware vor Ort) & Fehlermeldung erfassen, danach [TICKET_CREATED] mitsenden ohne Fragezeichen.
+`;
+
+  const prompt = `Analysiere den folgenden Chatverlauf zwischen einem Benutzer und dem IT-Support-Chatbot sehr gründlich.
+
+SYSTEM-PROMPT UND REGELN DES BOTS:
+${systemPromptsInfo}
+
+${usedKnowledgeText}
+${allKnowledgeOverview}
+
+CHATVERLAUF ZUR ANALYSE:
+${chatText}
+
+AUFTRAG DER ANALYSE:
+Erstelle einen übersichtlichen, strukturierten Bericht in deutscher Sprache mit exakt folgenden Abschnitten (nutze Markdown-Überschriften):
+
+### 1. Bewertung der Wissensnutzung & Wissenslücken
+a) Wurde das zur Verfügung stehende Wissen korrekt, verständlich und vollständig genutzt oder sollte dies angepasst werden?
+b) Gibt es inhaltliche Wissenslücken im System bzgl. des vom Benutzer geschilderten Problems? (Welches Wissen sollte neu in die Wissensdatenbank aufgenommen werden?)
+
+### 2. Feedback für Entwickler (Prompts & KI-Programmierung)
+a) Welches konkrete Feedback sollte man der KI/den Entwicklern geben, die den System-Prompt für diesen Chatbot festgelegt haben? (Wo hat der Bot die Anweisungen missachtet oder ungeschickt agiert?)
+b) Sollte das Chatprogramm / der Ablauf / die Logik technisch angepasst oder verbessert werden? (z.B. Verhalten bei Nachfragen, Ticket-Triggering, Bildverarbeitung, etc.)
+
+Komm direkt zum Punkt, sei kritisch, konstruktiv und präzise.`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+
+  const responseText = await callGemini(extractionModel, payload);
+  return responseText.trim();
+}
+

@@ -28,6 +28,8 @@ export default function AdminDashboardPage() {
   const [selectedChatMessages, setSelectedChatMessages] = useState([]);
   const [chatDetailsLoading, setChatDetailsLoading] = useState(false);
   const [showMobileChatModal, setShowMobileChatModal] = useState(false);
+  const [chatAnalysis, setChatAnalysis] = useState(null);
+  const [isAnalyzingChat, setIsAnalyzingChat] = useState(false);
 
   // Knowledge States
   const [knowledge, setKnowledge] = useState([]);
@@ -279,6 +281,7 @@ export default function AdminDashboardPage() {
   const loadChatDetails = async (chatId) => {
     setChatDetailsLoading(true);
     setShowMobileChatModal(true);
+    setChatAnalysis(null);
     try {
       const res = await fetch(`/api/admin/chats?chatId=${chatId}`);
       if (res.ok) {
@@ -290,6 +293,30 @@ export default function AdminDashboardPage() {
       console.error('Fehler beim Laden der Chat-Details:', e);
     } finally {
       setChatDetailsLoading(false);
+    }
+  };
+
+  const handleAnalyzeChat = async (chatId) => {
+    setIsAnalyzingChat(true);
+    setChatAnalysis(null);
+    try {
+      const res = await fetch('/api/admin/chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, action: 'analyze' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatAnalysis(data.analysis);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler bei der Analyse des Chats.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler bei der Chat-Analyse.');
+    } finally {
+      setIsAnalyzingChat(false);
     }
   };
 
@@ -2306,10 +2333,10 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-slate-400">Hier können alle Chat-Sitzungen (inklusive Gästen, die kein Ticket erstellt haben) gesucht, eingesehen und bereinigt werden.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               
               {/* Chat-Liste */}
-              <div className="lg:col-span-1 space-y-4">
+              <div className="lg:col-span-2 space-y-4">
                 <div className="relative">
                   <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
                   <input 
@@ -2330,7 +2357,7 @@ export default function AdminDashboardPage() {
                     Keine Chats in der Datenbank.
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
                     {chatsList
                       .filter(c => {
                         const term = chatsSearch.toLowerCase();
@@ -2385,7 +2412,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Chat-Details Inspektor (Desktop: In-place, Mobile: Versteckt) */}
-              <div className="hidden lg:flex bg-slate-900 border border-slate-800 rounded-2xl p-5 min-h-[400px] flex-col justify-between">
+              <div className="hidden lg:flex lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-5 min-h-[500px] flex-col justify-between">
                 {chatDetailsLoading ? (
                   <div className="flex justify-center items-center h-64">
                     <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2416,17 +2443,60 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
 
-                        <button 
-                          onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all"
-                        >
-                          <i className="fa-solid fa-trash-can mr-1.5"></i>
-                          <span>Chat löschen</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            type="button"
+                            onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
+                            disabled={isAnalyzingChat}
+                            className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40"
+                          >
+                            {isAnalyzingChat ? (
+                              <>
+                                <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                <span>Analysiere...</span>
+                              </>
+                            ) : (
+                              <>
+                                <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Analysieren</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button 
+                            onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                            className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all"
+                          >
+                            <i className="fa-solid fa-trash-can mr-1.5"></i>
+                            <span>Chat löschen</span>
+                          </button>
+                        </div>
                       </div>
 
+                      {/* Analyse-Ergebnis (falls vorhanden) */}
+                      {chatAnalysis && (
+                        <div className="mb-5 p-4 bg-sky-950/20 border border-sky-500/30 rounded-xl text-xs text-slate-200 space-y-2 animate-fade-in">
+                          <div className="flex justify-between items-center border-b border-sky-500/20 pb-2">
+                            <span className="font-bold text-sky-400 flex items-center gap-1.5">
+                              <i className="fa-solid fa-wand-magic-sparkles"></i>
+                              <span>KI-Chat-Qualitätsanalyse:</span>
+                            </span>
+                            <button 
+                              onClick={() => setChatAnalysis(null)} 
+                              className="text-slate-400 hover:text-white text-xs"
+                            >
+                              <i className="fa-solid fa-xmark"></i>
+                            </button>
+                          </div>
+                          <div 
+                            className="markdown-content text-xs text-slate-300 leading-relaxed max-h-64 overflow-y-auto pr-1"
+                            dangerouslySetInnerHTML={{ __html: marked.parse(chatAnalysis) }}
+                          />
+                        </div>
+                      )}
+
                       {/* Verlauf */}
-                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 border-l border-slate-800 pl-4 py-1">
+                      <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 border-l border-slate-800 pl-4 py-1">
                         {selectedChatMessages.length === 0 ? (
                           <p className="text-xs text-slate-500 italic">Keine Nachrichten in diesem Chat vorhanden.</p>
                         ) : (
@@ -2518,6 +2588,25 @@ export default function AdminDashboardPage() {
                           {selectedChatDetails.userSessionId && <div>Session: {selectedChatDetails.userSessionId}</div>}
                         </div>
 
+                        {/* Analyse-Ergebnis (falls vorhanden) */}
+                        {chatAnalysis && (
+                          <div className="p-3.5 bg-sky-950/20 border border-sky-500/30 rounded-xl text-xs text-slate-200 space-y-2 animate-fade-in">
+                            <div className="flex justify-between items-center border-b border-sky-500/20 pb-1.5">
+                              <span className="font-bold text-sky-400 flex items-center gap-1.5">
+                                <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Analyse-Bericht:</span>
+                              </span>
+                              <button onClick={() => setChatAnalysis(null)} className="text-slate-400 hover:text-white text-xs">
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+                            <div 
+                              className="markdown-content text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto pr-1"
+                              dangerouslySetInnerHTML={{ __html: marked.parse(chatAnalysis) }}
+                            />
+                          </div>
+                        )}
+
                         {/* Verlauf */}
                         <div className="space-y-3 border-l border-slate-800 pl-3 py-1">
                           {selectedChatMessages.length === 0 ? (
@@ -2556,14 +2645,35 @@ export default function AdminDashboardPage() {
 
                   {/* Modal Footer */}
                   {selectedChatDetails && (
-                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center">
-                      <button 
-                        onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                        className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all"
-                      >
-                        <i className="fa-solid fa-trash-can mr-1.5"></i>
-                        <span>Chat löschen</span>
-                      </button>
+                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          type="button"
+                          onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
+                          disabled={isAnalyzingChat}
+                          className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1 disabled:opacity-40"
+                        >
+                          {isAnalyzingChat ? (
+                            <>
+                              <i className="fa-solid fa-circle-notch animate-spin"></i>
+                              <span>Analysiere...</span>
+                            </>
+                          ) : (
+                            <>
+                              <i className="fa-solid fa-wand-magic-sparkles"></i>
+                              <span>Analysieren</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button 
+                          onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3 py-2 rounded-xl transition-all"
+                        >
+                          <i className="fa-solid fa-trash-can mr-1"></i>
+                          <span>Löschen</span>
+                        </button>
+                      </div>
 
                       <button 
                         onClick={() => setShowMobileChatModal(false)}
