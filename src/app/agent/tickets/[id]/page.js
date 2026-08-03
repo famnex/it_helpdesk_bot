@@ -92,6 +92,7 @@ export default function AgentTicketDetailPage() {
                 senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
                 senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
                 text: m.text,
+                imageUrl: m.imageUrl,
                 createdAt: m.createdAt
               }));
 
@@ -103,6 +104,7 @@ export default function AgentTicketDetailPage() {
                   senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
                   senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
                   text: m.text,
+                  imageUrl: m.imageUrl,
                   createdAt: m.createdAt
                 }))
                 .filter(pm => {

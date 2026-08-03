@@ -22,12 +22,19 @@ export async function GET() {
     // Für jede geflaggte Nachricht laden wir die letzten 5 Nachrichten dieses Chats zur Einordnung für den Admin
     const enrichedMessages = flaggedMessages.map(msg => {
       const context = db.prepare(`
-        SELECT sender, text, created_at as createdAt
+        SELECT sender, text, image_url as imageUrl, created_at as createdAt
         FROM chat_messages
         WHERE chat_id = ? AND id <= ?
         ORDER BY id DESC
         LIMIT 5
       `).all(msg.chatId, msg.id);
+
+      const contextWithPrefix = context.map(m => {
+        if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
+          m.imageUrl = `/helpdesk${m.imageUrl.startsWith('/') ? '' : '/'}${m.imageUrl}`;
+        }
+        return m;
+      });
 
       // Zugehörige Wissenseinträge auflösen
       let resolvedKnowledge = [];
@@ -51,7 +58,7 @@ export async function GET() {
       return {
         ...msg,
         resolvedKnowledge,
-        context: context.reverse()
+        context: contextWithPrefix.reverse()
       };
     });
 

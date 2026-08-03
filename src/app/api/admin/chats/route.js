@@ -37,7 +37,7 @@ export async function GET(request) {
 
       const messagesWithPrefix = messages.map(m => {
         if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
-          m.imageUrl = `/helpdesk${m.imageUrl}`;
+          m.imageUrl = `/helpdesk${m.imageUrl.startsWith('/') ? '' : '/'}${m.imageUrl}`;
         }
         return m;
       });

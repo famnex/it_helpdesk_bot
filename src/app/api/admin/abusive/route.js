@@ -20,12 +20,19 @@ export async function GET() {
     // Für jeden Chat den kompletten Verlauf laden
     const enrichedChats = abusiveChats.map(chat => {
       const messages = db.prepare(`
-        SELECT id, sender, text, created_at as createdAt
+        SELECT id, sender, text, image_url as imageUrl, created_at as createdAt
         FROM chat_messages
         WHERE chat_id = ?
         ORDER BY id ASC
         LIMIT 20
       `).all(chat.id);
+
+      const messagesWithPrefix = messages.map(m => {
+        if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
+          m.imageUrl = `/helpdesk${m.imageUrl.startsWith('/') ? '' : '/'}${m.imageUrl}`;
+        }
+        return m;
+      });
 
       // Rekonstruieren früherer Anmeldungen/Identitäten über die Session ID
       let linkedIdentities = [];
@@ -39,7 +46,7 @@ export async function GET() {
 
       return {
         ...chat,
-        messages,
+        messages: messagesWithPrefix,
         linkedIdentities
       };
     });
