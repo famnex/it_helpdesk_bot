@@ -192,8 +192,8 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
    - Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter.
 2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
    - Raumnummer: Frage NUR nach der Raumnummer, wenn es sich um ein physisches Gerät (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) oder ein lokales Netzwerkproblem handelt. Bei Software-, Login- oder Account-Problemen NIEMALS nach Raumnummer oder Aufenthaltsort fragen.
-   - Fehlermeldung: Frage ZWINGEND nach einer Fehlermeldung. Der Benutzer muss die genaue Fehlermeldung nennen oder bestätigen, dass keine vorhanden ist. Erst dann sind alle Voraussetzungen erfüllt.
-   - ANTI-REDUNDANZ-PFLICHT (KRITISCH): Bevor du nach einer Information fragst, prüfe IMMER zuerst den gesamten bisherigen Chatverlauf! Wenn eine Pflichtinformation (Fehlermeldung, Raumnummer, Problembeschreibung) bereits im Verlauf genannt wurde, darfst du NIEMALS erneut danach fragen. Nutze bereits vorhandene Informationen direkt und schweige darüber, dass du sie kennst.
+   - Fehlermeldung: Frage nach einer Fehlermeldung, ABER NUR wenn es plausibel ist, dass eine Fehlermeldung auf dem Bildschirm erscheinen könnte. Wenn aus dem Kontext bereits klar hervorgeht, dass es keine Bildschirm-Fehlermeldung geben kann (z. B. "ich bekomme keine E-Mail", "nichts passiert", "das Gerät geht nicht an", "die Seite lädt nicht"), dann gilt diese Voraussetzung als automatisch erfüllt – frage in diesem Fall NICHT nach einer Fehlermeldung!
+   - ANTI-REDUNDANZ-PFLICHT (KRITISCH): Bevor du nach einer Information fragst, prüfe IMMER zuerst den gesamten bisherigen Chatverlauf! Wenn eine Pflichtinformation (Fehlermeldung, Raumnummer, Problembeschreibung) bereits im Verlauf genannt wurde oder aus dem Kontext eindeutig hervorgeht, darfst du NIEMALS erneut danach fragen. Nutze bereits vorhandene Informationen direkt.
 3. ABSOLUTES VERBOT (SEHR WICHTIG):
    - Der Tag [TICKET_CREATED] ist der technische Auslöser, der das Ticket-Formular SOFORT auf dem Bildschirm des Benutzers öffnet.
    - Wenn deine aktuelle Nachricht eine Frage an den Benutzer enthält oder ein Fragezeichen (?) enthält, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
@@ -202,8 +202,8 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
 4. SOFORTIGE ERSTELLUNG BEI EXPLIZITER ANFRAGE:
    - Wenn der Benutzer explizit ein Support-Ticket wünscht:
      1. Schlage KEINE Lösungen aus der Wissensdatenbank vor und biete KEINE weiteren Ratschläge an!
-     2. Prüfe sofort den bisherigen Verlauf: Welche Pflichtangaben (Fehlermeldung, ggf. Raumnummer bei Hardware) sind bereits bekannt? Frage NUR nach dem, was noch NICHT im Verlauf steht.
-     3. Sobald alle Pflichtangaben vorliegen (ob aus dem Verlauf oder durch neue Antwort des Benutzers), erstelle das Ticket SOFORT durch Ausgabe des Tags [TICKET_CREATED]! Verliere dich nicht in weiteren Beratungsrunden.`;
+     2. Prüfe sofort den bisherigen Verlauf: Welche Pflichtangaben (Fehlermeldung, ggf. Raumnummer bei Hardware) sind bereits bekannt oder aus dem Kontext eindeutig? Frage NUR nach dem, was weder im Verlauf steht noch aus dem Kontext klar ist.
+     3. Sobald alle Pflichtangaben vorliegen, erstelle das Ticket SOFORT durch Ausgabe des Tags [TICKET_CREATED]! Verliere dich nicht in weiteren Beratungsrunden.`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
