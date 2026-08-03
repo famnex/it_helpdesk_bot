@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { marked } from 'marked';
 
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
