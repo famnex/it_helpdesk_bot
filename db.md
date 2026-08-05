@@ -1,325 +1,142 @@
-# Datenbank-Dokumentation (SQLite)
+# Datenbankdokumentation (db.md)
 
-Dieses Dokument beschreibt die Struktur der SQLite-Datenbank (`database.db`) für das Projekt "Schul-Support KI".
-
----
-
-## Tabellenstrukturen
-
-### 1. Tabelle: `users`
-Speichert Benutzerkonten für Agenten, Admins und Kunden, die sich registriert/angemeldet haben.
-
-* **Schema:**
-  ```sql
-  CREATE TABLE users (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('customer', 'agent', 'admin')),
-      name TEXT,
-      avatar_url TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `id`: Eindeutige Benutzer-ID (UUID oder vom IdP bereitgestellt).
-  * `email`: E-Mail-Adresse (Eindeutig).
-  * `role`: Systemrolle. Kann `'customer'`, `'agent'` oder `'admin'` sein.
-  * `name`: Anzeigename / voller Name des Benutzers (optional).
-  * `avatar_url`: Relative URL zum hochgeladenen Profilbild (optional).
-  * `created_at`: Erstelldatum des Benutzers.
+Diese Dokumentation beschreibt das gesamte Schema der SQLite-Datenbank (`database.db`) des IT-Helpdesk-Bots. Sie dient als Vorlage für Datenbank-Updatescripts und Migrationen.
 
 ---
 
-### 2. Tabelle: `tickets`
-Speichert alle IT-Support-Tickets.
+## 1. Tabellenstruktur
 
-* **Schema:**
-  ```sql
-  CREATE TABLE tickets (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('open', 'assigned', 'closed')) DEFAULT 'open',
-      creator_email TEXT NOT NULL,
-      assigned_agent_id TEXT REFERENCES users(id),
-      solution TEXT,
-      chat_id TEXT REFERENCES chats(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `id`: Ticket-Kürzel (z. B. `TK-1234`).
-  * `title`: Betreff / Problembeschreibung.
-  * `status`: Ticket-Status (`open`, `assigned` oder `closed`).
-  * `creator_email`: E-Mail-Adresse des Erstellers (wird bei unangemeldeten Benutzern abgefragt).
-  * `assigned_agent_id`: ID des zuständigen Agenten.
-  * `solution`: Die eingegebene Lösung (wird beim Schließen des Tickets gefordert).
-  * `chat_id`: Referenziert den ursprünglichen Bot-Chat-Verlauf (`chats.id`), der vor der Ticket-Erstellung stattfand.
+### 1.1 `users`
+Speichert Benutzerkonten (Kunden, Support-Agenten, Administratoren).
+
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | TEXT | PRIMARY KEY | Eindeutige Benutzer-ID (z. B. `admin-1`, UUID) |
+| `email` | TEXT | UNIQUE NOT NULL | E-Mail-Adresse des Benutzers |
+| `role` | TEXT | NOT NULL, CHECK(`customer`, `agent`, `admin`) | Benutzerrolle im System |
+| `name` | TEXT | NULL | Anzeigename / Vollständiger Name |
+| `avatar_url` | TEXT | NULL | Pfad oder URL zum Profilbild |
+| `responsibilities` | TEXT | NULL | Zuständigkeiten / Fachbereiche des Agenten |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
 
-### 3. Tabelle: `ticket_messages`
-Speichert den Chatverlauf und interne Notizen innerhalb eines Support-Tickets.
+### 1.2 `tickets`
+Speichert Support-Tickets.
 
-* **Schema:**
-  ```sql
-  CREATE TABLE ticket_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-      sender_email TEXT NOT NULL,
-      sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system')),
-      text TEXT NOT NULL,
-      is_internal BOOLEAN NOT NULL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `ticket_id`: Zugehöriges Ticket.
-  * `sender_email`: E-Mail des Senders.
-  * `sender_role`: Rolle des Senders zum Zeitpunkt der Nachricht. `'system'` wird für automatisierte Systemkommentare (z. B. "Ticket zugewiesen") verwendet.
-  * `text`: Inhalt der Nachricht.
-  * `is_internal`: Wenn `1` (true), handelt es sich um einen internen Vermerk (nur für Agenten/Admins sichtbar).
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | TEXT | PRIMARY KEY | Eindeutige Ticket-ID |
+| `title` | TEXT | NOT NULL | Betreff / Thema des Tickets |
+| `status` | TEXT | NOT NULL, CHECK(`open`, `assigned`, `closed`), DEFAULT `'open'` | Bearbeitungsstatus |
+| `creator_email` | TEXT | NOT NULL | E-Mail des Erstellers |
+| `assigned_agent_id` | TEXT | FOREIGN KEY -> `users(id)` ON DELETE SET NULL | Zugewiesener Agent |
+| `solution` | TEXT | NULL | Erfasste Lösung beim Schließen des Tickets |
+| `chat_id` | TEXT | FOREIGN KEY -> `chats(id)` ON DELETE SET NULL | Zugehöriger Chat-Verlauf (falls vor Ticket-Erstellung) |
+| `solution_forgotten` | BOOLEAN | DEFAULT 0 | Kennzeichnet, ob die Lösung aus der Wissensbasis entfernt wurde |
+| `solution_context` | TEXT | NULL | KI-generierte Zusammenfassung der Lösung |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
+| `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der letzten Änderung |
 
 ---
 
-### 4. Tabelle: `chats`
-Speichert private Chats von Kunden mit dem Bot.
+### 1.3 `ticket_messages`
+Speichert Nachrichten und Notizen innerhalb eines Tickets.
 
-  ```sql
-  CREATE TABLE chats (
-      id TEXT PRIMARY KEY,
-      user_email TEXT,
-      ticket_created BOOLEAN DEFAULT 0,
-      is_agent_on_behalf BOOLEAN DEFAULT 0,
-      user_name TEXT,
-      is_abusive BOOLEAN DEFAULT 0,
-      abusive_flagged_at DATETIME,
-      user_ip TEXT,
-      user_session_id TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `id`: Eindeutige ID des Chat-Verlaufs.
-  * `user_email`: Die E-Mail-Adresse des Benutzers, falls dieser angemeldet ist (ermöglicht das Laden alter Chats).
-  * `ticket_created`: Flag (`0` oder `1`), das angibt, ob für diesen Chatverlauf bereits ein Ticket erstellt wurde, um doppelte Ticket-Erstellungen zu verhindern.
-  * `is_agent_on_behalf`: Flag (`0` oder `1`), das angibt, ob das Ticket im Namen eines Benutzers durch einen Agenten im Backend erfasst wird.
-  * `user_name`: Name des Benutzers (für unregistrierte Benutzer oder Behalf-Tickets).
-  * `is_abusive`: Missbrauch-Erkennungs-Flag.
-  * `abusive_flagged_at`: Zeitstempel der Missbrauch-Erkennung.
-  * `user_ip`: IP-Adresse des Benutzers zum Zeitpunkt des Chats (zur Nachverfolgung von Missbrauch).
-  * `user_session_id`: Persistente Browser-Sitzungs-ID (gespeichert in `localStorage`), um Gast-Chats auch nach einer Abmeldung früheren Anmeldungen desselben Browsers zuordnen zu können.
-  * `created_at`: Erstelldatum des Chats.
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Fortlaufende Nachrichten-ID |
+| `ticket_id` | TEXT | NOT NULL, FOREIGN KEY -> `tickets(id)` ON DELETE CASCADE | Zugehöriges Ticket |
+| `sender_email` | TEXT | NOT NULL | E-Mail des Absenders |
+| `sender_role` | TEXT | NOT NULL, CHECK(`customer`, `agent`, `admin`, `system`) | Rolle des Absenders |
+| `text` | TEXT | NOT NULL | Nachrichteninhalt |
+| `is_internal` | BOOLEAN | NOT NULL DEFAULT 0 | 1 = Interner Vermerk (nur für Mitarbeiter sichtbar) |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
 
-### 5. Tabelle: `chat_messages`
-Speichert die einzelnen Nachrichten innerhalb des Bot-Chats.
+### 1.4 `chats`
+Speichert Chat-Sitzungen mit dem KI-Bot.
 
-* **Schema:**
-  ```sql
-  CREATE TABLE chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-      sender TEXT NOT NULL CHECK(sender IN ('user', 'bot')),
-      text TEXT NOT NULL,
-      image_url TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-
----
-
-### 6. Tabelle: `knowledge`
-Speichert die Wissensdatenbank (Chunks), welche von Admins verwaltet und von der KI zur Beantwortung genutzt wird.
-
-* **Schema:**
-  ```sql
-  CREATE TABLE knowledge (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      fact TEXT NOT NULL,
-      description TEXT,
-      category TEXT DEFAULT 'Sonstiges',
-      source TEXT NOT NULL CHECK(source IN ('manual', 'ticket', 'file', 'url')),
-      is_private BOOLEAN DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `id`: Eindeutige ID des Chunks (wichtig für die Deduplizierung).
-  * `title`: Titel / Thema des Chunks.
-  * `fact`: Kurze, prägnante Zusammenfassung des Fakts / der Problemlösung (wird von der KI im Bot-Chat verwendet).
-  * `description`: Umfassende, detaillierte Beschreibung oder Anleitung (wird dem Benutzer im öffentlichen Hilfeportal im Markdown-Format angezeigt).
-  * `category`: Kategorie des Artikels zur Gruppierung (z.B. WLAN, Hardware, Drucker, Software).
-  * `source`: Woher das Wissen stammt (`manual` = Manuell angelegt, `ticket` = Aus gelöstem Ticket extrahiert, `file` = Aus Datei importiert, `url` = Aus Webseite extrahiert).
-  * `is_private`: Flag (`0` oder `1`), das angibt, ob dieser Chunk nur für die KI und Agenten intern bestimmt ist und NICHT in der öffentlichen Wissensdatenbank aufgeführt werden soll.
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | TEXT | PRIMARY KEY | Eindeutige Chat-ID |
+| `user_email` | TEXT | NULL | E-Mail des Benutzers (falls eingeloggt oder angegeben) |
+| `user_name` | TEXT | NULL | Name des Benutzers |
+| `ticket_created` | BOOLEAN | DEFAULT 0 | 1 = Aus dem Chat wurde bereits ein Ticket generiert |
+| `is_agent_on_behalf` | BOOLEAN | DEFAULT 0 | 1 = Agent hat den Chat im Namen eines Dritte gestartet |
+| `is_abusive` | BOOLEAN | DEFAULT 0 | 1 = Chat wegen Missbrauchs geflaggt |
+| `abusive_flagged_at` | DATETIME | NULL | Zeitpunkt der Missbrauchs-Markierung |
+| `user_ip` | TEXT | NULL | IP-Adresse des Benutzers |
+| `user_session_id` | TEXT | NULL | Sitzungs-ID des Browsers |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
 
-### 7. Tabelle: `knowledge_attachments`
-Speichert Anhänge (Dateien), die von Administratoren an Einträge der Wissensdatenbank angehängt wurden.
+### 1.5 `chat_messages`
+Speichert einzelne Chat-Nachrichten im Bot-Dialog.
 
-* **Schema:**
-  ```sql
-  CREATE TABLE knowledge_attachments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      knowledge_id TEXT NOT NULL REFERENCES knowledge(id) ON DELETE CASCADE,
-      filename TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      file_size INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-* **Feldbeschreibungen:**
-  * `id`: Eindeutige ID des Anhangs (Auto-Increment).
-  * `knowledge_id`: Fremdschlüssel, der auf den zugehörigen Wissenseintrag (`knowledge.id`) verweist.
-  * `filename`: Der ursprüngliche Dateiname (z. B. `wlan_anleitung.pdf`).
-  * `file_path`: Relativer Pfad zur gespeicherten Datei unter `/public/uploads/attachments/`.
-  * `file_size`: Dateigröße in Bytes.
-  * `created_at`: Erstelldatum des Eintrags.
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Nachricht-ID |
+| `chat_id` | TEXT | NOT NULL, FOREIGN KEY -> `chats(id)` ON DELETE CASCADE | Zugehörige Chat-Sitzung |
+| `sender` | TEXT | NOT NULL, CHECK(`user`, `bot`) | Absender der Nachricht |
+| `text` | TEXT | NOT NULL | Inhalt der Nachricht |
+| `image_url` | TEXT | NULL | Pfad/URL zu angehängten Bildern |
+| `is_flagged` | BOOLEAN | DEFAULT 0 | 1 = Nachricht von KI als auffällig markiert |
+| `flagged_at` | DATETIME | NULL | Zeitpunkt der Markierung |
+| `flagged_reason` | TEXT | NULL | Grund für die Markierung |
+| `base_knowledge` | TEXT | NULL | Verwendete Wissensbasis-Quellen |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
 
-### 8. Tabelle: `settings`
-Einstellungs-Tabelle für administrative Konfigurationen (SMTP, IdP, GitHub-Web-Interface).
+### 1.6 `knowledge`
+Speichert Wissen-Einträge / RAG-Chunks.
 
-* **Schema:**
-  ```sql
-  CREATE TABLE settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-  );
-  ```
-* **Beispiel-Einträge (JSON im `value`-Feld):**
-  * `key = 'smtp_config'`:
-    `{"host":"localhost","port":1025,"user":"","pass":"","secure":false,"sender":"support@schule.de"}`
-  * `key = 'idp_config'`:
-    `{"issuer":"https://idp.schule.de","clientId":"helpdesk-app","clientSecret":"xyz","publicKey":"..."}`
-  * `key = 'github_config'`:
-    `{"repoUrl":"https://github.com/org/repo","branch":"main"}`
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | TEXT | PRIMARY KEY | Eindeutige Chunk-ID |
+| `title` | TEXT | NOT NULL | Titel des Wissenseintrags |
+| `fact` | TEXT | NOT NULL | Kernfakt / Kurze Antwort |
+| `description` | TEXT | NULL | Ausführliche Beschreibung / Anleitung |
+| `category` | TEXT | DEFAULT `'Sonstiges'` | Kategorie (z. B. WLAN, Hardware, Drucker) |
+| `source` | TEXT | NOT NULL, CHECK(`manual`, `ticket`, `file`, `url`) | Herkunft des Eintrags |
+| `is_private` | BOOLEAN | DEFAULT 0 | 1 = Internes Wissen (nur für Agenten/Admin) |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
 
-## Datenbank-Updates & Migrationen
+### 1.7 `knowledge_attachments`
+Dateianhänge für Wissen-Einträge.
 
-### Update #1 (15.06.2026): Erweiterung des Check-Constraints für `ticket_messages`
-* **Ziel:** Ermöglichen, dass Nachrichten mit der Rolle `admin` direkt in `ticket_messages` gespeichert werden können (zuvor auf `customer`, `agent`, `system` beschränkt).
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  PRAGMA foreign_keys = OFF;
-  
-  ALTER TABLE ticket_messages RENAME TO ticket_messages_old;
-  
-  CREATE TABLE ticket_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-      sender_email TEXT NOT NULL,
-      sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system')),
-      text TEXT NOT NULL,
-      is_internal BOOLEAN NOT NULL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  
-  INSERT INTO ticket_messages (id, ticket_id, sender_email, sender_role, text, is_internal, created_at)
-  SELECT id, ticket_id, sender_email, sender_role, text, is_internal, created_at FROM ticket_messages_old;
-  
-  DROP TABLE ticket_messages_old;
-  
-  PRAGMA foreign_keys = ON;
-  ```
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Anhang-ID |
+| `knowledge_id` | TEXT | NOT NULL, FOREIGN KEY -> `knowledge(id)` ON DELETE CASCADE | Zugehöriger Wissen-Eintrag |
+| `filename` | TEXT | NOT NULL | Original-Dateiname |
+| `file_path` | TEXT | NOT NULL | Speicherpfad auf dem Server |
+| `file_size` | INTEGER | NOT NULL | Dateigröße in Bytes |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
-### Update #2 (15.06.2026): Hinzufügen der Spalte `image_url` zu `chat_messages`
-* **Ziel:** Speichern von relativen Links zu hochgeladenen Chatbildern (z.B. Screenshots von Fehlermeldungen).
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chat_messages ADD COLUMN image_url TEXT;
-  ```
+---
 
-### Update #3 (15.06.2026): Hinzufügen der Tabelle `knowledge_attachments`
-* **Ziel:** Speichern von Dateianhängen für Wissensdatenbank-Artikel.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  CREATE TABLE IF NOT EXISTS knowledge_attachments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      knowledge_id TEXT NOT NULL REFERENCES knowledge(id) ON DELETE CASCADE,
-      filename TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      file_size INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
+### 1.8 `settings`
+Systemweite Einstellungen als Key-Value Store.
 
-### Update #4 (13.07.2026): Hinzufügen der Spalte `ticket_created` zu `chats`
-* **Ziel:** Verhindern von doppelten Ticket-Erstellungen innerhalb desselben Chatverlaufs.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chats ADD COLUMN ticket_created BOOLEAN DEFAULT 0;
-  ```
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `key` | TEXT | PRIMARY KEY | Konfigurationsschlüssel (`smtp_config`, `idp_config`, `github_config`, `gemini_config`) |
+| `value` | TEXT | NOT NULL | JSON-codierte Einstellungswerte |
 
-### Update #5 (13.07.2026): Hinzufügen der Spalten `is_flagged` und `flagged_at` zu `chat_messages`
-* **Ziel:** Ermöglichen, dass Kunden fehlerhafte Bot-Antworten flaggen/melden können, die im Admin-Portal zur Prüfung gesammelt werden.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chat_messages ADD COLUMN is_flagged BOOLEAN DEFAULT 0;
-  ALTER TABLE chat_messages ADD COLUMN flagged_at DATETIME;
-  ```
+---
 
-### Update #6 (13.07.2026): Hinzufügen der Spalten `user_name`, `is_abusive` und `abusive_flagged_at` zu `chats`
-* **Ziel:** Speichern von Flaggen-Daten bei missbräuchlicher Nutzung des Chats (Beleidigungen/Ärgern) und Hinterlegen von Name und E-Mail des Störers.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chats ADD COLUMN user_name TEXT;
-  ALTER TABLE chats ADD COLUMN is_abusive BOOLEAN DEFAULT 0;
-  ALTER TABLE chats ADD COLUMN abusive_flagged_at DATETIME;
-  ```
+## 2. Historie der Datenbank-Migrationen
 
-### Update #7 (13.07.2026): Hinzufügen der Spalte `flagged_reason` zu `chat_messages`
-* **Ziel:** Speichern einer Freitext-Begründung des Nutzers, warum er eine Bot-Antwort geflaggt/gemeldet hat.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chat_messages ADD COLUMN flagged_reason TEXT;
-  ```
-
-### Update #8 (14.07.2026): Hinzufügen der Spalte `responsibilities` zu `users`
-* **Ziel:** Speichern der Zuständigkeiten (in Prosa) von Administratoren und Support-Agenten zur automatischen Zuweisung neuer Tickets.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE users ADD COLUMN responsibilities TEXT;
-  ```
-
-### Update #9 (23.07.2026): Hinzufügen der Spalte `is_private` zu `knowledge`
-* **Ziel:** Speichern eines Flags, um Wissenschunks als intern/privat zu kennzeichnen (nicht sichtbar in der öffentlichen Wissensdatenbank).
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE knowledge ADD COLUMN is_private BOOLEAN DEFAULT 0;
-  ```
-
-### Update #10 (23.07.2026): Hinzufügen der Spalten `user_ip` und `user_session_id` zu `chats`
-* **Ziel:** Erfassen von IP-Adresse und persistenten Sitzungs-IDs (auch nach Abmeldung), um missbräuchliche Nutzung von Gast-Chats zurückzuverfolgen.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chats ADD COLUMN user_ip TEXT;
-  ALTER TABLE chats ADD COLUMN user_session_id TEXT;
-  ```
-
-### Update #11 (23.07.2026): Hinzufügen der Spalte `solution_forgotten` zu `tickets`
-* **Ziel:** Markieren von gelösten Tickets, deren hinterlegte Lösung aus Datenschutz- oder Aktualitätsgründen "vergessen" (gelöscht und aus der Wissensbasis ausgeschlossen) wurde.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE tickets ADD COLUMN solution_forgotten BOOLEAN DEFAULT 0;
-  ```
-
-### Update #12 (23.07.2026): Hinzufügen der Spalte `solution_context` zu `tickets`
-* **Ziel:** Speichern einer KI-generierten Kurzzusammenfassung des Problem-Kontexts bei der Lösungserfassung, um diese im Adminbereich anzuzeigen.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE tickets ADD COLUMN solution_context TEXT;
-  ```
-
-### Update #13 (23.07.2026): Hinzufügen der Spalte `base_knowledge` zu `chat_messages`
-* **Ziel:** Speichern der IDs und Titel der verwendeten Wissenschunks, auf denen eine Bot-Nachricht basiert, um dies bei der Fehlersuche / geflaggten Nachrichten anzuzeigen.
-* **Migration (ausgeführt in `src/lib/db.js`):**
-  ```sql
-  ALTER TABLE chat_messages ADD COLUMN base_knowledge TEXT;
-  ```
+- **ticket_messages Rolle 'admin' hinzugefügt**: Check-Constraint erweitert für `sender_role IN ('customer', 'agent', 'admin', 'system')`.
+- **Spalten zu `chats` hinzugefügt**: `ticket_created`, `user_name`, `is_abusive`, `abusive_flagged_at`, `is_agent_on_behalf`, `user_ip`, `user_session_id`.
+- **Spalten zu `chat_messages` hinzugefügt**: `is_flagged`, `flagged_at`, `flagged_reason`, `image_url`, `base_knowledge`.
+- **Spalten zu `knowledge` hinzugefügt**: `description`, `category`, `is_private`.
+- **Spalten zu `users` hinzugefügt**: `name`, `avatar_url`, `responsibilities`.
+- **Spalten zu `tickets` hinzugefügt**: `chat_id`, `solution_forgotten`, `solution_context`.
+- **Tabelle `knowledge_attachments` erstellt**: Für Dateianhänge an Wissenseinträgen.

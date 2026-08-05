@@ -263,9 +263,9 @@ export default function AgentTicketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans h-screen overflow-hidden">
-         {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 shadow-lg z-20 relative">
+    <div className="h-screen max-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
+      {/* Header */}
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 shadow-lg z-20 sticky top-0">
         <div className="flex items-center gap-3 w-full md:w-auto">
           <Link href="/agent" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-700 transition-colors flex items-center justify-center shrink-0">
             <i className="fa-solid fa-arrow-left"></i>
@@ -364,10 +364,10 @@ export default function AgentTicketDetailPage() {
       </header>
 
       {/* Main Layout (Split View) */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         
         {/* Chat History */}
-        <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20">
+        <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20 min-h-0">
           
           {/* Success chunks display banner */}
           {closeSuccessChunks && (
@@ -515,7 +515,7 @@ export default function AgentTicketDetailPage() {
 
           {/* Form */}
           {ticket.status !== 'closed' ? (
-            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 sticky bottom-0 z-20">
               <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex flex-col gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 shadow-inner">
                 <div className="flex justify-between items-center px-2 border-b border-slate-900 pb-2">
                   <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer select-none">
@@ -558,7 +558,7 @@ export default function AgentTicketDetailPage() {
               </form>
             </div>
           ) : (
-            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 text-center text-xs text-slate-500 font-bold uppercase tracking-wider sticky bottom-0 z-20">
               <i className="fa-solid fa-lock mr-1.5"></i>
               Das Ticket wurde gelöst und archiviert.
             </div>

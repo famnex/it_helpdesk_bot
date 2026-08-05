@@ -273,7 +273,7 @@ export default function AgentDashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 shadow-lg z-30 relative h-[72px]">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 shadow-lg z-30 sticky top-0 h-[72px]">
         <div className="flex items-center gap-3">
           <div className="bg-violet-600 text-white p-2 rounded-xl shadow-md flex items-center justify-center shrink-0">
             <i className="fa-solid fa-user-shield text-lg md:text-xl"></i>

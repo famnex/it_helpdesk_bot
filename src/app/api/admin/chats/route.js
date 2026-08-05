@@ -46,11 +46,14 @@ export async function GET(request) {
       return NextResponse.json({ chat, messages: messagesWithPrefix });
     }
 
-    // Alle Chats abfragen
+    // Alle Chats abfragen (nur solche, in denen auch eine Konversation stattfand)
     const chats = db.prepare(`
       SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
              is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId, created_at as createdAt
       FROM chats
+      WHERE EXISTS (
+        SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id
+      )
       ORDER BY created_at DESC
     `).all();
 
