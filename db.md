@@ -33,6 +33,7 @@ Speichert Support-Tickets.
 | `assigned_agent_id` | TEXT | FOREIGN KEY -> `users(id)` ON DELETE SET NULL | Zugewiesener Agent |
 | `solution` | TEXT | NULL | Erfasste Lösung beim Schließen des Tickets |
 | `chat_id` | TEXT | FOREIGN KEY -> `chats(id)` ON DELETE SET NULL | Zugehöriger Chat-Verlauf (falls vor Ticket-Erstellung) |
+| `is_authenticated_creator` | BOOLEAN | DEFAULT 0 | 1 = Ticket wurde von einem angemeldeten Benutzer erstellt |
 | `solution_forgotten` | BOOLEAN | DEFAULT 0 | Kennzeichnet, ob die Lösung aus der Wissensbasis entfernt wurde |
 | `solution_context` | TEXT | NULL | KI-generierte Zusammenfassung der Lösung |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
@@ -98,8 +99,8 @@ Speichert Wissen-Einträge / RAG-Chunks.
 | :--- | :--- | :--- | :--- |
 | `id` | TEXT | PRIMARY KEY | Eindeutige Chunk-ID |
 | `title` | TEXT | NOT NULL | Titel des Wissenseintrags |
-| `fact` | TEXT | NOT NULL | Kernfakt / Kurze Antwort |
-| `description` | TEXT | NULL | Ausführliche Beschreibung / Anleitung |
+| `fact` | TEXT | NOT NULL | Abwärtskompatibel gefüllt mit dem Wert von `description` |
+| `description` | TEXT | NULL | Primärer Inhalt / Ausführliche Beschreibung & Anleitung (Markdown) |
 | `category` | TEXT | DEFAULT `'Sonstiges'` | Kategorie (z. B. WLAN, Hardware, Drucker) |
 | `source` | TEXT | NOT NULL, CHECK(`manual`, `ticket`, `file`, `url`) | Herkunft des Eintrags |
 | `is_private` | BOOLEAN | DEFAULT 0 | 1 = Internes Wissen (nur für Agenten/Admin) |

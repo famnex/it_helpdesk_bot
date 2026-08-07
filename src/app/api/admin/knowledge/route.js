@@ -43,19 +43,19 @@ export async function POST(request) {
   }
 
   try {
-    const { title, fact, description, category, isPrivate } = await request.json();
-    if (!title || !fact) {
-      return NextResponse.json({ error: 'Titel und Fakt sind erforderlich.' }, { status: 400 });
+    const { title, description, fact, category, isPrivate } = await request.json();
+    const desc = (description || fact || '').trim();
+    if (!title || !desc) {
+      return NextResponse.json({ error: 'Titel und Beschreibung sind erforderlich.' }, { status: 400 });
     }
 
-    const desc = description || fact;
     const cat = category || 'Sonstiges';
     const priv = isPrivate ? 1 : 0;
 
-    const existingChunks = db.prepare('SELECT id, title, fact FROM knowledge').all();
+    const existingChunks = db.prepare('SELECT id, title, description, fact FROM knowledge').all();
     
     // Duplikatsprüfung via Gemini
-    const duplicateResult = await checkDuplicate({ title, fact }, existingChunks);
+    const duplicateResult = await checkDuplicate({ title, description: desc, fact: desc }, existingChunks);
     
     if (duplicateResult !== 'NEIN') {
       return NextResponse.json({ 
@@ -68,11 +68,11 @@ export async function POST(request) {
 
     const chunkId = `chunk-${Math.floor(100000 + Math.random() * 900000)}`;
     db.prepare('INSERT INTO knowledge (id, title, fact, description, category, source, is_private) VALUES (?, ?, ?, ?, ?, \'manual\', ?)')
-      .run(chunkId, title, fact, desc, cat, priv);
+      .run(chunkId, title, desc, desc, cat, priv);
 
     return NextResponse.json({ 
       success: true, 
-      chunk: { id: chunkId, title, fact, description: desc, category: cat, source: 'manual', isPrivate: priv === 1 } 
+      chunk: { id: chunkId, title, fact: desc, description: desc, category: cat, source: 'manual', isPrivate: priv === 1 } 
     });
 
   } catch (err) {

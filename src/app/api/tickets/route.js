@@ -22,7 +22,7 @@ export async function GET() {
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
-               t.chat_id as chatId,
+               t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
                t.created_at as createdAt, t.updated_at as updatedAt
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
@@ -34,9 +34,14 @@ export async function GET() {
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
-               t.chat_id as chatId,
+               t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
                t.created_at as createdAt, t.updated_at as updatedAt,
-               cu.name as creatorName
+               cu.name as creatorName,
+               (CASE 
+                  WHEN t.is_authenticated_creator = 1 THEN 1
+                  WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%') THEN 1
+                  ELSE 0 
+                END) as isRegisteredUser
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
         LEFT JOIN users cu ON t.creator_email = cu.email
@@ -178,11 +183,13 @@ export async function POST(request) {
       }
     }
 
+    const isAuthenticatedCreator = (user && user.email === email) ? 1 : 0;
+
     // Ticket anlegen
     db.prepare(`
-      INSERT INTO tickets (id, title, status, creator_email, assigned_agent_id, chat_id) 
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(ticketId, title, status, email, assignedAgentId, chatId);
+      INSERT INTO tickets (id, title, status, creator_email, assigned_agent_id, chat_id, is_authenticated_creator) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(ticketId, title, status, email, assignedAgentId, chatId, isAuthenticatedCreator);
 
     // Chat als ticket_created markieren und System-Event im Chatverlauf speichern, falls nicht bereits vorhanden
     if (chatId) {

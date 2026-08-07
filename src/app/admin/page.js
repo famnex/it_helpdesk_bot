@@ -492,7 +492,7 @@ export default function AdminDashboardPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: chunkTitle, fact: chunkFact, description: chunkDescription, category: chunkCategory, isPrivate: chunkIsPrivate })
+        body: JSON.stringify({ title: chunkTitle, description: chunkDescription, category: chunkCategory, isPrivate: chunkIsPrivate })
       });
 
       const data = await res.json();
@@ -751,15 +751,17 @@ export default function AdminDashboardPage() {
   const privateKnowledge = knowledge.filter(k => !!k.isPrivate);
 
   const filteredKnowledge = publicKnowledge.filter(k => {
+    const content = (k.description || k.fact || '').toLowerCase();
     const matchesSearch = k.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
-      k.fact.toLowerCase().includes(knowledgeSearch.toLowerCase());
+      content.includes(knowledgeSearch.toLowerCase());
     const matchesCategory = adminSelectedCategory === 'Alle' || (k.category || 'Sonstiges') === adminSelectedCategory;
     return matchesSearch && matchesCategory;
   });
 
   const filteredPrivateKnowledge = privateKnowledge.filter(k => {
+    const content = (k.description || k.fact || '').toLowerCase();
     const matchesSearch = k.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
-      k.fact.toLowerCase().includes(knowledgeSearch.toLowerCase());
+      content.includes(knowledgeSearch.toLowerCase());
     const matchesCategory = adminSelectedPrivateCategory === 'Alle' || (k.category || 'Sonstiges') === adminSelectedPrivateCategory;
     return matchesSearch && matchesCategory;
   });
@@ -1151,23 +1153,12 @@ export default function AdminDashboardPage() {
                 <form onSubmit={handleSaveChunk} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung</label>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
                       <input 
                         type="text" 
                         value={chunkTitle}
                         onChange={(e) => setChunkTitle(e.target.value)}
                         placeholder="z.B. Drucker-Fehler Papierstau"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Fakt / Konkrete Lösung (Kurz-Info für Bot-Chat)</label>
-                      <textarea 
-                        value={chunkFact}
-                        onChange={(e) => setChunkFact(e.target.value)}
-                        placeholder="z.B. Campus-WiFi Passwort ist Campus2026!."
-                        rows="2"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                         required
                       />
@@ -1197,23 +1188,14 @@ export default function AdminDashboardPage() {
                       </label>
                     </div>
                     <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">Umfassende Beschreibung / Anleitung (Für öffentliche Wissensdatenbank - Markdown möglich)</label>
-                        <button
-                          type="button"
-                          onClick={handleGenerateDescription}
-                          disabled={isGeneratingDesc || !chunkTitle.trim() || !chunkFact.trim()}
-                          className="bg-sky-650/20 hover:bg-sky-600 hover:text-white text-sky-400 text-[9px] font-bold px-2 py-0.5 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          {isGeneratingDesc ? 'Generiere...' : 'KI-Beschreibung generieren'}
-                        </button>
-                      </div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
                       <textarea 
                         value={chunkDescription}
                         onChange={(e) => setChunkDescription(e.target.value)}
-                        placeholder="Ausführliche Schritt-für-Schritt-Anleitung..."
-                        rows="5"
+                        placeholder="Schreibe hier die Lösung oder ausführliche Schritt-für-Schritt-Anleitung..."
+                        rows="6"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                        required
                       />
                     </div>
 
@@ -1344,8 +1326,8 @@ export default function AdminDashboardPage() {
                     <h4 className="text-sm font-bold text-white">{k.title}</h4>
                     
                     <div className="space-y-1">
-                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Kurz-Info (Bot):</div>
-                      <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{k.fact}</p>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
+                      <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans line-clamp-4 whitespace-pre-wrap">{k.description || k.fact}</p>
                     </div>
                   </div>
                 </div>
@@ -1624,8 +1606,8 @@ export default function AdminDashboardPage() {
                       <h4 className="text-sm font-bold text-white">{k.title}</h4>
                       
                       <div className="space-y-1">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Kurz-Info (Bot):</div>
-                        <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{k.fact}</p>
+                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
+                        <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans line-clamp-4 whitespace-pre-wrap">{k.description || k.fact}</p>
                       </div>
                     </div>
                   </div>

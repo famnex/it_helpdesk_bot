@@ -27,6 +27,7 @@ db.exec(`
       assigned_agent_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       solution TEXT,
       chat_id TEXT REFERENCES chats(id) ON DELETE SET NULL,
+      is_authenticated_creator BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -248,12 +249,22 @@ try {
     console.log("Migration: Spalte 'solution_context' zur Tabelle 'tickets' hinzugefügt.");
   }
 
+  const hasIsAuthCreator = tableInfoTickets.some(col => col.name === 'is_authenticated_creator');
+  if (!hasIsAuthCreator) {
+    db.exec("ALTER TABLE tickets ADD COLUMN is_authenticated_creator BOOLEAN DEFAULT 0");
+    console.log("Migration: Spalte 'is_authenticated_creator' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
   const tableInfoChatMessages = db.prepare("PRAGMA table_info(chat_messages)").all();
   const hasImageUrl = tableInfoChatMessages.some(col => col.name === 'image_url');
   if (!hasImageUrl) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN image_url TEXT");
     console.log("Migration: Spalte 'image_url' zur Tabelle 'chat_messages' hinzugefügt.");
   }
+
+  // Migration: Falls bei bestehendem Wissen die Spalte description leer ist, mit fact befüllen
+  db.exec("UPDATE knowledge SET description = fact WHERE description IS NULL OR description = ''");
+  db.exec("UPDATE knowledge SET fact = description WHERE fact IS NULL OR fact = ''");
 
   const hasBaseKnowledge = tableInfoChatMessages.some(col => col.name === 'base_knowledge');
   if (!hasBaseKnowledge) {

@@ -117,7 +117,7 @@ Regeln für die Abfrage:
   // 1. Wissensdatenbank auslesen
   let knowledgeString = "";
   try {
-    const chunks = db.prepare('SELECT id, title, fact FROM knowledge').all();
+    const chunks = db.prepare('SELECT id, title, description, fact FROM knowledge').all();
     if (chunks.length > 0) {
       knowledgeString = "\n\nDEINE WISSENSDATENBANK (WICHTIG: Nutze diese Lösungen zwingend, wenn das Problem dazu passt!):\n";
       chunks.forEach(c => {
@@ -137,7 +137,8 @@ Regeln für die Abfrage:
           attachmentInfo += "]";
         }
 
-        knowledgeString += `- WENN PROBLEM: "${c.title}" DANN LÖSUNG: "${c.fact}"${attachmentInfo}\n`;
+        const solutionContent = c.description || c.fact || '';
+        knowledgeString += `- WENN PROBLEM: "${c.title}" DANN LÖSUNG/ANLEITUNG: "${solutionContent}"${attachmentInfo}\n`;
       });
     } else {
       knowledgeString = "\n\nDeine Wissensdatenbank ist aktuell leer.";
@@ -424,15 +425,17 @@ export async function checkDuplicate(newChunk, existingChunks) {
   // Vorhandenes Wissen für den Prompt aufbereiten
   let existingList = "";
   existingChunks.forEach(c => {
-    existingList += `- ID: "${c.id}" | TITEL: "${c.title}" | FAKT: "${c.fact}"\n`;
+    const descContent = c.description || c.fact || '';
+    existingList += `- ID: "${c.id}" | TITEL: "${c.title}" | INHALT: "${descContent}"\n`;
   });
 
+  const newDesc = newChunk.description || newChunk.fact || '';
   const prompt = `Wir haben eine bestehende IT-Wissensdatenbank mit folgenden Einträgen:
 ${existingList}
 
 Hier ist ein neuer Wissenschunk, der hinzugefügt werden soll:
 TITEL: "${newChunk.title}"
-FAKT: "${newChunk.fact}"
+INHALT: "${newDesc}"
 
 Prüfe, ob dieser neue Wissenschunk inhaltlich bereits durch einen oder mehrere vorhandene Chunks abgedeckt ist.
 Wenn ja (das Wissen ist bereits vorhanden), antworte ausschließlich mit der ID des vorhandenen Chunks (z.B. "smartboard-chunk-1").
@@ -455,28 +458,29 @@ export async function processAndSaveChunks(chunks, source) {
   const savedChunks = [];
   try {
     // Bestehendes Wissen laden
-    const existingChunks = db.prepare('SELECT id, title, fact FROM knowledge').all();
+    const existingChunks = db.prepare('SELECT id, title, description, fact FROM knowledge').all();
     
     const insertStmt = db.prepare('INSERT INTO knowledge (id, title, fact, description, category, source) VALUES (?, ?, ?, ?, ?, ?)');
     
     for (const chunk of chunks) {
-      if (!chunk.title || !chunk.fact) continue;
-      
       const description = chunk.description || chunk.fact;
+      if (!chunk.title || !description) continue;
+      
       const category = chunk.category || 'Sonstiges';
+      const fact = description; // Fakt = Beschreibung
       
       // Duplikatsprüfung mit Gemini
-      const duplicateResult = await checkDuplicate(chunk, existingChunks);
+      const duplicateResult = await checkDuplicate({ title: chunk.title, description, fact }, existingChunks);
       
       if (duplicateResult === 'NEIN') {
         const chunkId = `chunk-${Math.floor(100000 + Math.random() * 900000)}`;
-        insertStmt.run(chunkId, chunk.title, chunk.fact, description, category, source);
-        savedChunks.push({ id: chunkId, title: chunk.title, fact: chunk.fact, description, category, isNew: true });
+        insertStmt.run(chunkId, chunk.title, fact, description, category, source);
+        savedChunks.push({ id: chunkId, title: chunk.title, fact, description, category, isNew: true });
         // Das neu hinzugefügte Element für nachfolgende Iterationen in die Liste aufnehmen
-        existingChunks.push({ id: chunkId, title: chunk.title, fact: chunk.fact });
+        existingChunks.push({ id: chunkId, title: chunk.title, description, fact });
       } else {
         console.log(`Deduplizierung: Chunk "${chunk.title}" übersprungen. Duplikat von ID: ${duplicateResult}`);
-        savedChunks.push({ id: duplicateResult, title: chunk.title, fact: chunk.fact, description, category, isNew: false });
+        savedChunks.push({ id: duplicateResult, title: chunk.title, fact, description, category, isNew: false });
       }
     }
   } catch (err) {

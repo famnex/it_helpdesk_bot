@@ -443,15 +443,15 @@ export default function AgentDashboardPage() {
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950/50 text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950/50 text-slate-400 text-[11px] font-bold uppercase border-b border-slate-800">
                   <tr>
-                    <th className="px-6 py-4">ID</th>
-                    <th className="px-6 py-4">Betreff</th>
-                    <th className="px-6 py-4">Ersteller</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Zuweisung</th>
-                    <th className="px-6 py-4 text-right">Aktionen</th>
+                    <th className="px-3 sm:px-4 py-3">ID</th>
+                    <th className="px-3 sm:px-4 py-3">Betreff</th>
+                    <th className="px-3 sm:px-4 py-3">Ersteller</th>
+                    <th className="px-3 sm:px-4 py-3">Status</th>
+                    <th className="px-3 sm:px-4 py-3">Zuweisung</th>
+                    <th className="px-3 sm:px-4 py-3 text-right">Aktionen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
@@ -469,59 +469,68 @@ export default function AgentDashboardPage() {
 
                     return (
                       <tr key={tk.id} className="hover:bg-slate-850/40 transition-colors">
-                        <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">{tk.id}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-4 py-2.5 font-mono text-[11px] font-bold text-slate-500">{tk.id}</td>
+                        <td className="px-3 sm:px-4 py-2.5 max-w-[180px] sm:max-w-xs md:max-w-md">
                           <Link 
                             href={`/agent/tickets/${tk.id}`} 
-                            className="font-bold text-white hover:text-violet-400 transition-colors block max-w-xs sm:max-w-sm truncate"
+                            className="font-bold text-white hover:text-violet-400 transition-colors block truncate"
                           >
                             {tk.title}
                           </Link>
-                          <span className="text-[10px] text-slate-500 block mt-1">
-                            Aktualisiert: {new Date(tk.updatedAt || tk.createdAt).toLocaleString('de-DE')}
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            Aktualisiert: {new Date(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs">
-                          <div className="flex flex-col">
+                        <td className="px-3 sm:px-4 py-2.5 text-xs">
+                          <div className="flex flex-col gap-0.5 max-w-[160px] sm:max-w-none">
                             {tk.creatorName && (
-                              <span className="font-bold text-white block mb-0.5">{tk.creatorName}</span>
+                              <span className="font-bold text-white block truncate">{tk.creatorName}</span>
                             )}
-                            <span className="font-medium text-slate-500 font-mono text-[10px]">{tk.creatorEmail}</span>
+                            <span className="font-medium text-slate-400 font-mono text-[10px] truncate">{tk.creatorEmail}</span>
+                            {tk.isRegisteredUser === 1 ? (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-bold text-emerald-400 w-fit">
+                                <i className="fa-solid fa-user-check"></i> Angemeldet
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-bold text-amber-400/80 w-fit">
+                                <i className="fa-solid fa-user-slash"></i> Gast
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-4 py-2.5">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-4 py-2.5">
                           {tk.status !== 'closed' ? (
                             <select 
                               value={tk.assignedAgentId || ''}
                               onChange={(e) => handleQuickAssign(tk.id, e.target.value)}
-                              className="bg-slate-950 border border-slate-800 text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-300"
+                              className="bg-slate-950 border border-slate-800 text-[11px] rounded px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-300 max-w-[130px] sm:max-w-none truncate"
                             >
-                              <option value="">-- Nicht zugewiesen --</option>
+                              <option value="">-- Unzugewiesen --</option>
                               {agents.map(ag => (
                                 <option key={ag.id} value={ag.id}>
-                                  {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]} ({ag.role === 'admin' ? 'Admin' : 'Agent'})
+                                  {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]}
                                 </option>
                               ))}
                             </select>
                           ) : (
-                            <span className="text-xs text-slate-500 italic">Geschlossen</span>
+                            <span className="text-[11px] text-slate-500 italic">Geschlossen</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end items-center gap-2">
+                        <td className="px-3 sm:px-4 py-2.5 text-right">
+                          <div className="flex justify-end items-center gap-1.5">
                             <Link 
                               href={`/agent/tickets/${tk.id}`}
-                              className="bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all"
+                              className="bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/20 font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all shrink-0"
                             >
                               Bearbeiten
                             </Link>
                             {user?.role === 'admin' && (
                               <button
                                 onClick={() => handleDeleteTicket(tk.id)}
-                                className="bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all cursor-pointer"
+                                className="bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/20 font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all cursor-pointer shrink-0"
                               >
                                 Löschen
                               </button>

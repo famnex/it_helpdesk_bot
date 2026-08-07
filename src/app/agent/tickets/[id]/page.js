@@ -264,28 +264,28 @@ export default function AgentTicketDetailPage() {
 
   return (
     <div className="h-screen max-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
-      {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 shadow-lg z-20 sticky top-0">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <Link href="/agent" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-700 transition-colors flex items-center justify-center shrink-0">
+      {/* Compact Header */}
+      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between gap-2.5 shrink-0 shadow-lg z-20 sticky top-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <Link href="/agent" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 sm:p-2 rounded-lg border border-slate-700 transition-colors flex items-center justify-center shrink-0 text-xs" title="Zurück zur Übersicht">
             <i className="fa-solid fa-arrow-left"></i>
           </Link>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               {isEditingTitle ? (
-                <form onSubmit={handleSaveTitle} className="flex items-center gap-2 w-full max-w-lg">
+                <form onSubmit={handleSaveTitle} className="flex items-center gap-1.5 w-full max-w-md">
                   <input 
                     type="text" 
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-violet-500 text-slate-200 flex-1"
+                    className="bg-slate-950 border border-slate-800 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-violet-500 text-slate-200 flex-1"
                     disabled={isSavingTitle}
                     autoFocus
                   />
                   <button 
                     type="submit" 
                     disabled={isSavingTitle || !editedTitle.trim()}
-                    className="bg-emerald-650 hover:bg-emerald-700 text-white p-2 rounded-xl text-xs flex items-center justify-center shrink-0 w-8 h-8 transition-colors disabled:opacity-40"
+                    className="bg-emerald-650 hover:bg-emerald-700 text-white p-1.5 rounded-lg text-xs flex items-center justify-center shrink-0 w-7 h-7 transition-colors disabled:opacity-40"
                     title="Speichern"
                   >
                     <i className="fa-solid fa-check"></i>
@@ -294,70 +294,76 @@ export default function AgentTicketDetailPage() {
                     type="button" 
                     onClick={() => setIsEditingTitle(false)}
                     disabled={isSavingTitle}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 p-2 rounded-xl text-xs flex items-center justify-center shrink-0 w-8 h-8 transition-colors"
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 p-1.5 rounded-lg text-xs flex items-center justify-center shrink-0 w-7 h-7 transition-colors"
                     title="Abbrechen"
                   >
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 </form>
               ) : (
-                <div className="flex items-center gap-2 flex-wrap max-w-full">
-                  <h1 className="text-sm font-bold text-white max-w-[200px] sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
+                <div className="flex items-center gap-1.5 flex-wrap max-w-full">
+                  <span className="font-mono text-slate-400 text-xs font-bold shrink-0">{ticket.id}</span>
+                  <span className="text-slate-600 font-bold">•</span>
+                  <h1 className="text-xs sm:text-sm font-bold text-white max-w-[140px] sm:max-w-xs md:max-w-md lg:max-w-lg truncate">{ticket.title}</h1>
                   <button
                     onClick={() => {
                       setEditedTitle(ticket.title);
                       setIsEditingTitle(true);
                     }}
-                    className="text-slate-500 hover:text-slate-300 p-1 transition-colors"
+                    className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors"
                     title="Thema bearbeiten"
                   >
-                    <i className="fa-solid fa-pen text-[10px]"></i>
+                    <i className="fa-solid fa-pen text-[9px]"></i>
                   </button>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400 mt-0.5">
-              <span>Ticket ID: <span className="font-mono">{ticket.id}</span></span>
-              <div className="flex items-center gap-1.5">
-                <span>Ersteller:</span>
-                <div className="inline-flex flex-col leading-none">
-                  {ticket.creatorName && (
-                    <span className="font-bold text-white text-[10px] mb-0.5">{ticket.creatorName}</span>
-                  )}
-                  <span className="text-slate-400 font-mono text-[9px]">{ticket.creatorEmail}</span>
-                </div>
-              </div>
+            
+            {/* Sub-header meta line with user status */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400 mt-0.5">
+              <span className="truncate max-w-[180px] sm:max-w-xs">
+                Ersteller: <span className="font-semibold text-slate-200">{ticket.creatorName ? `${ticket.creatorName} (${ticket.creatorEmail})` : ticket.creatorEmail}</span>
+              </span>
+
+              {/* Status-Badge: Angemeldeter User vs. Gast */}
+              {ticket.isRegisteredUser === 1 ? (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-full shrink-0">
+                  <i className="fa-solid fa-user-check text-[8px]"></i>
+                  <span>Angemeldeter User</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded-full shrink-0">
+                  <i className="fa-solid fa-user-slash text-[8px]"></i>
+                  <span>Gast / Nicht angemeldet</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Sidebar Trigger / Zuweisung in Header */}
+        {/* Action Controls */}
         {ticket.status !== 'closed' && (
-          <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-end shrink-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs text-slate-400 font-bold hidden sm:inline shrink-0">Zuweisung:</span>
-              <select 
-                value={ticket.assignedAgentId || ''}
-                onChange={(e) => handleAssign(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-violet-500 text-slate-200 max-w-[140px] sm:max-w-none truncate"
-              >
-                <option value="">-- Zuweisen --</option>
-                {agents.map(ag => (
-                  <option key={ag.id} value={ag.id}>
-                    {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]} ({ag.role === 'admin' ? 'Admin' : 'Agent'})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <select 
+              value={ticket.assignedAgentId || ''}
+              onChange={(e) => handleAssign(e.target.value)}
+              className="bg-slate-950 border border-slate-800 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-200 max-w-[110px] sm:max-w-[150px] truncate"
+            >
+              <option value="">-- Zuweisen --</option>
+              {agents.map(ag => (
+                <option key={ag.id} value={ag.id}>
+                  {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]} ({ag.role === 'admin' ? 'Admin' : 'Agent'})
+                </option>
+              ))}
+            </select>
 
             <button 
               onClick={() => setShowCloseModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-lg transition-all shadow-md flex items-center gap-1 shrink-0 cursor-pointer"
             >
-              <i className="fa-solid fa-check"></i>
-              <span className="hidden sm:inline">Ticket schließen</span>
-              <span className="sm:hidden">Schließen</span>
+              <i className="fa-solid fa-check text-[10px]"></i>
+              <span className="hidden sm:inline">Schließen</span>
             </button>
           </div>
         )}
