@@ -55,6 +55,7 @@ export default function AdminDashboardPage() {
   const [chunkCategory, setChunkCategory] = useState('');
   const [chunkIsPrivate, setChunkIsPrivate] = useState(false);
   const [chunkError, setChunkError] = useState('');
+  const [isSavingChunk, setIsSavingChunk] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [adminSelectedCategory, setAdminSelectedCategory] = useState('Alle');
   const [adminSelectedPrivateCategory, setAdminSelectedPrivateCategory] = useState('Alle');
@@ -524,15 +525,18 @@ export default function AdminDashboardPage() {
   // --- Knowledge CRUD ---
   const handleSaveChunk = async (e) => {
     e.preventDefault();
+    if (isSavingChunk) return;
+    setIsSavingChunk(true);
     setChunkError('');
     const url = editingChunk ? `/api/admin/knowledge/${editingChunk.id}` : '/api/admin/knowledge';
     const method = editingChunk ? 'PUT' : 'POST';
+    const category = chunkIsPrivate ? 'Intern' : (chunkCategory || 'Sonstiges');
 
     try {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: chunkTitle, description: chunkDescription, category: chunkCategory, isPrivate: chunkIsPrivate })
+        body: JSON.stringify({ title: chunkTitle, description: chunkDescription, category, isPrivate: chunkIsPrivate })
       });
 
       const data = await res.json();
@@ -551,6 +555,8 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       setChunkError('Verbindungsfehler beim Speichern.');
+    } finally {
+      setIsSavingChunk(false);
     }
   };
 
@@ -1203,27 +1209,33 @@ export default function AdminDashboardPage() {
                         required
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
-                      <input 
-                        type="text" 
-                        value={chunkCategory}
-                        onChange={(e) => setChunkCategory(e.target.value)}
-                        placeholder="z.B. WLAN (Standard: Sonstiges)"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                      />
-                    </div>
+                    {!chunkIsPrivate && (
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
+                        <input 
+                          type="text" 
+                          value={chunkCategory}
+                          onChange={(e) => setChunkCategory(e.target.value)}
+                          placeholder="z.B. WLAN (Standard: Sonstiges)"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className="flex items-center gap-2.5 cursor-pointer py-1 select-none">
                         <input
                           type="checkbox"
                           checked={chunkIsPrivate}
-                          onChange={(e) => setChunkIsPrivate(e.target.checked)}
+                          onChange={(e) => {
+                            const isPriv = e.target.checked;
+                            setChunkIsPrivate(isPriv);
+                            if (isPriv) setChunkCategory('Intern');
+                          }}
                           className="w-4 h-4 rounded border-slate-850 bg-slate-950 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
-                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung.</span>
+                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
                         </div>
                       </label>
                     </div>
@@ -1314,9 +1326,17 @@ export default function AdminDashboardPage() {
                     </button>
                     <button 
                       type="submit"
-                      className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all"
+                      disabled={isSavingChunk}
+                      className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                     >
-                      Speichern
+                      {isSavingChunk ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch animate-spin"></i>
+                          <span>Speichert...</span>
+                        </>
+                      ) : (
+                        <span>Speichern</span>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1444,7 +1464,7 @@ export default function AdminDashboardPage() {
                 <form onSubmit={handleSaveChunk} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung</label>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
                       <input 
                         type="text" 
                         value={chunkTitle}
@@ -1455,58 +1475,31 @@ export default function AdminDashboardPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Fakt / Konkrete Lösung (Kurz-Info für Bot-Chat)</label>
-                      <textarea 
-                        value={chunkFact}
-                        onChange={(e) => setChunkFact(e.target.value)}
-                        placeholder="z.B. IP-Adresse muss manuell auf 10.0.0.15 geändert werden."
-                        rows="2"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
-                      <input 
-                        type="text" 
-                        value={chunkCategory}
-                        onChange={(e) => setChunkCategory(e.target.value)}
-                        placeholder="z.B. Hardware (Standard: Sonstiges)"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                      />
-                    </div>
-                    <div>
                       <label className="flex items-center gap-2.5 cursor-pointer py-1 select-none">
                         <input
                           type="checkbox"
                           checked={chunkIsPrivate}
-                          onChange={(e) => setChunkIsPrivate(e.target.checked)}
+                          onChange={(e) => {
+                            setChunkIsPrivate(e.target.checked);
+                            if (e.target.checked) setChunkCategory('Intern');
+                          }}
                           className="w-4 h-4 rounded border-slate-855 bg-slate-955 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
-                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung.</span>
+                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
                         </div>
                       </label>
                     </div>
                     <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">Umfassende Beschreibung / Anleitung (Markdown möglich)</label>
-                        <button
-                          type="button"
-                          onClick={handleGenerateDescription}
-                          disabled={isGeneratingDesc || !chunkTitle.trim() || !chunkFact.trim()}
-                          className="bg-sky-650/20 hover:bg-sky-600 hover:text-white text-sky-400 text-[9px] font-bold px-2 py-0.5 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          {isGeneratingDesc ? 'Generiere...' : 'KI-Beschreibung generieren'}
-                        </button>
-                      </div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
                       <textarea 
                         value={chunkDescription}
                         onChange={(e) => setChunkDescription(e.target.value)}
                         placeholder="Ausführliche interne Schritt-für-Schritt-Anleitung..."
-                        rows="5"
+                        rows="6"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                        required
                       />
                     </div>
 
@@ -1585,9 +1578,17 @@ export default function AdminDashboardPage() {
                     </button>
                     <button 
                       type="submit"
-                      className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all"
+                      disabled={isSavingChunk}
+                      className="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                     >
-                      Speichern
+                      {isSavingChunk ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch animate-spin"></i>
+                          <span>Speichert...</span>
+                        </>
+                      ) : (
+                        <span>Speichern</span>
+                      )}
                     </button>
                   </div>
                 </form>
