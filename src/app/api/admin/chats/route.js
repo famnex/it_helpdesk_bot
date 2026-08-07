@@ -30,7 +30,7 @@ export async function GET(request) {
       }
 
       const messages = db.prepare(`
-        SELECT id, sender, text, image_url as imageUrl, created_at as createdAt
+        SELECT id, sender, text, image_url as imageUrl, base_knowledge as baseKnowledge, is_flagged as isFlagged, created_at as createdAt
         FROM chat_messages
         WHERE chat_id = ?
         ORDER BY created_at ASC

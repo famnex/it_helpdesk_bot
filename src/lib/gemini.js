@@ -138,7 +138,7 @@ Regeln für die Abfrage:
         }
 
         const solutionContent = c.description || c.fact || '';
-        knowledgeString += `- WENN PROBLEM: "${c.title}" DANN LÖSUNG/ANLEITUNG: "${solutionContent}"${attachmentInfo}\n`;
+        knowledgeString += `- [ID: "${c.id}"] THEMA: "${c.title}" | LÖSUNG/ANLEITUNG: "${solutionContent}"${attachmentInfo}\n`;
       });
     } else {
       knowledgeString = "\n\nDeine Wissensdatenbank ist aktuell leer.";
@@ -154,9 +154,10 @@ WICHTIGSTE ANWEISUNG FÜR DIE WISSENSDATENBANK:
 Wenn du Informationen aus der Wissensdatenbank nutzt, verweise NIEMALS nur faul auf den Namen oder Titel des Artikels (z. B. "Hast du die Schritte aus der Lösung 'Beamer-Signalquelle wechseln...' ausprobiert?"). Das ist strengstens untersagt!
 Stattdessen musst du die konkreten Anweisungen, Lösungswege und Schritte aus dem Inhalt des Artikels immer direkt und verständlich selbst im Chat aufschreiben und erklären!
 
-ERKENNUNG VORHANDENEN WISSENS (SEHR WICHTIG):
-Wenn deine Antwort auf einem oder mehreren Chunks/Einträgen aus der obigen WISSENSDATENBANK basiert, musst du ZWINGEND am allerletzten Ende deiner Nachricht folgendes Tag ausgeben:
-[USED_KNOWLEDGE: ID1, ID2, ...] (wobei ID1, ID2 etc. durch die genauen IDs der verwendeten Wissenseinträge ersetzt werden müssen, z. B. [USED_KNOWLEDGE: wifi-chunk-1]).
+ERKENNUNG VORHANDENEN WISSENS (STRENGSTE PFLICHT):
+Wann immer deine Antwort auf Informationen, Anweisungen oder Schritten aus einem oder mehreren Einträgen der obigen WISSENSDATENBANK basiert, MUSST du ZWINGEND am allerletzten Ende deiner Nachricht folgendes Tag ausgeben:
+[USED_KNOWLEDGE: ID1, ID2, ...]
+wobei ID1, ID2 etc. durch die exakten IDs aus den eckigen Klammern [ID: ...] der WISSENSDATENBANK-Einträge ersetzt werden müssen (z. B. [USED_KNOWLEDGE: wifi-chunk-1] oder [USED_KNOWLEDGE: chunk-123456]).
 Gib dieses Tag NUR aus, wenn du wirklich konkretes Wissen aus der Liste für deine Antwort herangezogen hast.
 
 ERKENNUNG VON MISSBRAUCH / BELEIDIGUNGEN / TROLLING:
@@ -252,10 +253,10 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
   // Verwendetes Wissen extrahieren
   let usedKnowledgeIds = null;
   let cleanedResultText = rawResultText;
-  const match = rawResultText.match(/\[USED_KNOWLEDGE:\s*([^\]]+)\]/);
+  const match = rawResultText.match(/\[USED_KNOWLEDGE:\s*([^\]]+)\]/i);
   if (match) {
     usedKnowledgeIds = match[1].split(',').map(id => id.trim()).filter(Boolean).join(',');
-    cleanedResultText = rawResultText.replace(/\[USED_KNOWLEDGE:\s*[^\]]+\]/, '').trim();
+    cleanedResultText = rawResultText.replace(/\[USED_KNOWLEDGE:\s*[^\]]+\]/gi, '').trim();
   }
 
   return {
@@ -637,23 +638,36 @@ CHATVERLAUF ZUR ANALYSE:
 ${chatText}
 
 AUFTRAG DER ANALYSE:
-Erstelle einen übersichtlichen, strukturierten Bericht in deutscher Sprache mit exakt folgenden Abschnitten (nutze Markdown-Überschriften):
+Gib das Ergebnis ZWINGEND als valides JSON-Objekt aus (nutze keine Markdown \`\`\`json ... \`\`\` Formatierung):
 
-### 1. Bewertung der Wissensnutzung & Wissenslücken
-a) Wurde das zur Verfügung stehende Wissen korrekt, verständlich und vollständig genutzt oder sollte dies angepasst werden?
-b) Gibt es inhaltliche Wissenslücken im System bzgl. des vom Benutzer geschilderten Problems? (Welches Wissen sollte neu in die Wissensdatenbank aufgenommen werden?)
+{
+  "report": "Vollständiger strukturierter Analysebericht als Markdown-Text mit folgenden Abschnitten:\\n### 1. Bewertung der Wissensnutzung & Wissenslücken\\na) ...\\nb) ...\\n\\n### 2. Feedback für Entwickler (Prompts & KI-Programmierung)\\na) ...\\nb) ...",
+  "suggestedKnowledge": {
+    "title": "Kurzer prägnanter Titel für das fehlende Wissen (z.B. Untis Stundenplan Passwort-Reset)",
+    "category": "Passende Kategorie (z.B. Software, WLAN, Hardware, Drucker)",
+    "description": "Ausführliche Schritt-für-Schritt Lösung oder Anleitung im Markdown-Format, die direkt in die Wissensdatenbank übernommen werden kann."
+  }
+}
 
-### 2. Feedback für Entwickler (Prompts & KI-Programmierung)
-a) Welches konkrete Feedback sollte man der KI/den Entwicklern geben, die den System-Prompt für diesen Chatbot festgelegt haben? (Wo hat der Bot die Anweisungen missachtet oder ungeschickt agiert?)
-b) Sollte das Chatprogramm / der Ablauf / die Logik technisch angepasst oder verbessert werden? (z.B. Verhalten bei Nachfragen, Ticket-Triggering, Bildverarbeitung, etc.)
-
-Komm direkt zum Punkt, sei kritisch, konstruktiv und präzise.`;
+Hinweis: Falls kein neues Wissen gefehlt hat, setze "suggestedKnowledge": null.`;
 
   const payload = {
     contents: [{ parts: [{ text: prompt }] }]
   };
 
   const responseText = await callGemini(extractionModel, payload);
-  return responseText.trim();
+  try {
+    const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const data = JSON.parse(cleaned);
+    return {
+      report: data.report || responseText,
+      suggestedKnowledge: data.suggestedKnowledge || null
+    };
+  } catch (err) {
+    return {
+      report: responseText,
+      suggestedKnowledge: null
+    };
+  }
 }
 

@@ -90,3 +90,24 @@
 .markdown-content a:hover {
   color: #7dd3fc;
 }
+
+/* Prevent iOS Safari auto-zoom on input focus */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area support for iOS Safari overlay elements */
+.safe-padding-top {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.safe-padding-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}

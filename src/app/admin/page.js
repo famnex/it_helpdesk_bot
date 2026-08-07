@@ -31,6 +31,7 @@ export default function AdminDashboardPage() {
   const [showMobileChatModal, setShowMobileChatModal] = useState(false);
   const [chatAnalysis, setChatAnalysis] = useState(null);
   const [isAnalyzingChat, setIsAnalyzingChat] = useState(false);
+  const [qualityAnalysisModal, setQualityAnalysisModal] = useState(null); // { chatId, loading, report, suggestedKnowledge }
 
   // Knowledge States
   const [knowledge, setKnowledge] = useState([]);
@@ -297,9 +298,26 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleAddSuggestedKnowledge = (suggestion) => {
+    setChunkTitle(suggestion?.title || '');
+    setChunkCategory(suggestion?.category || 'Sonstiges');
+    setChunkDescription(suggestion?.description || '');
+    setChunkIsPrivate(true);
+    setEditingChunk(null);
+    setIsCreatingChunk(true);
+    setActiveTab('private_knowledge');
+    setQualityAnalysisModal(null);
+    setChatAnalysis(null);
+    setShowMobileChatModal(false);
+    // Sanft nach oben scrollen zum Formular
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAnalyzeChat = async (chatId) => {
     setIsAnalyzingChat(true);
     setChatAnalysis(null);
+    setQualityAnalysisModal({ chatId, loading: true, report: null, suggestedKnowledge: null });
+
     try {
       const res = await fetch('/api/admin/chats', {
         method: 'POST',
@@ -308,14 +326,25 @@ export default function AdminDashboardPage() {
       });
       if (res.ok) {
         const data = await res.json();
+        const reportText = typeof data.analysis === 'object' ? data.analysis.report : data.analysis;
+        const suggested = typeof data.analysis === 'object' ? data.analysis.suggestedKnowledge : null;
+
+        setQualityAnalysisModal({
+          chatId,
+          loading: false,
+          report: reportText,
+          suggestedKnowledge: suggested
+        });
         setChatAnalysis(data.analysis);
       } else {
         const data = await res.json();
         alert(data.error || 'Fehler bei der Analyse des Chats.');
+        setQualityAnalysisModal(null);
       }
     } catch (e) {
       console.error(e);
       alert('Verbindungsfehler bei der Chat-Analyse.');
+      setQualityAnalysisModal(null);
     } finally {
       setIsAnalyzingChat(false);
     }
@@ -2524,8 +2553,8 @@ export default function AdminDashboardPage() {
 
             {/* Mobile Modal Inspector (Nur auf kleinen Bildschirmen < lg) */}
             {showMobileChatModal && (
-              <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md p-4 flex items-center justify-center animate-fade-in">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+              <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-center animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg h-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex flex-col shadow-2xl overflow-hidden relative">
                   
                   {/* Modal Header */}
                   <div className="flex justify-between items-start p-4 border-b border-slate-800 bg-slate-950/40">
@@ -2599,13 +2628,19 @@ export default function AdminDashboardPage() {
                               const isUser = msg.sender === 'user';
                               return (
                                 <div key={msg.id} className="space-y-1">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
                                     <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                       {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                     </span>
                                     <span className="text-slate-600 font-normal">
                                       {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                     </span>
+                                    {msg.baseKnowledge && (
+                                      <span className="bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1">
+                                        <i className="fa-solid fa-brain text-[9px]"></i>
+                                        <span>Wissen: {msg.baseKnowledge}</span>
+                                      </span>
+                                    )}
                                   </div>
                                   
                                   {msg.imageUrl && (
@@ -2628,7 +2663,7 @@ export default function AdminDashboardPage() {
 
                   {/* Modal Footer */}
                   {selectedChatDetails && (
-                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center gap-2">
+                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
                       <div className="flex items-center gap-2">
                         <button 
                           type="button"
@@ -2897,13 +2932,23 @@ export default function AdminDashboardPage() {
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleResolveFlagged(msg.id)}
-                        className="bg-violet-950/20 hover:bg-violet-800 text-violet-400 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
-                      >
-                        <i className="fa-solid fa-circle-check mr-1.5"></i>
-                        Freigeben (Meldung löschen)
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleAnalyzeChat(msg.chatId)}
+                          disabled={isAnalyzingChat}
+                          className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40"
+                        >
+                          <i className="fa-solid fa-wand-magic-sparkles text-sky-400"></i>
+                          <span>Qualitätsanalyse per KI</span>
+                        </button>
+                        <button
+                          onClick={() => handleResolveFlagged(msg.id)}
+                          className="bg-violet-950/20 hover:bg-violet-800 text-violet-400 hover:text-white border border-violet-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                        >
+                          <i className="fa-solid fa-circle-check mr-1.5"></i>
+                          Freigeben (Meldung löschen)
+                        </button>
+                      </div>
                     </div>
 
                     {msg.flaggedReason && (
@@ -3082,6 +3127,81 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </main>
+
+      {/* KI-Qualitätsanalyse Modal Overlay */}
+      {qualityAnalysisModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl h-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex flex-col shadow-2xl overflow-hidden relative">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-950/60">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-wand-magic-sparkles text-sky-400 text-base"></i>
+                <h4 className="text-sm font-bold text-white">KI-Qualitätsanalyse ({qualityAnalysisModal.chatId})</h4>
+              </div>
+              <button 
+                onClick={() => setQualityAnalysisModal(null)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 transition-colors"
+              >
+                <i className="fa-solid fa-xmark text-base"></i>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+              {qualityAnalysisModal.loading ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xs text-sky-300 font-medium">Analysiere Chatverlauf & Wissensnutzung mit Gemini KI...</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div 
+                    className="markdown-content text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-850"
+                    dangerouslySetInnerHTML={{ __html: marked.parse(qualityAnalysisModal.report || 'Keine Ergebnisse.') }}
+                  />
+
+                  {/* Vorgeschlagenes Wissen / Nachtragen Button */}
+                  <div className="bg-emerald-950/20 border border-emerald-500/30 p-4 rounded-xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <i className="fa-solid fa-lightbulb"></i>
+                          <span>Fehlendes Wissen als internes Wissen nachtragen</span>
+                        </h5>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {qualityAnalysisModal.suggestedKnowledge 
+                            ? `KI-Vorschlag: "${qualityAnalysisModal.suggestedKnowledge.title}" (${qualityAnalysisModal.suggestedKnowledge.category})`
+                            : "Trage neues oder fehlendes Wissen direkt als internes Wissen in die Wissensdatenbank nach."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddSuggestedKnowledge(qualityAnalysisModal.suggestedKnowledge)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shrink-0"
+                      >
+                        <i className="fa-solid fa-plus"></i>
+                        <span>Als internes Wissen nachtragen</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex justify-end">
+              <button
+                onClick={() => setQualityAnalysisModal(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-5 py-2 rounded-xl transition-all"
+              >
+                Schließen
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
