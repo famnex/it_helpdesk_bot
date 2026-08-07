@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
 
+const safeParseMarkdown = (content) => {
+  if (!content) return '';
+  if (typeof content === 'string') return marked.parse(content);
+  if (typeof content === 'object') {
+    if (typeof content.report === 'string') return marked.parse(content.report);
+    if (typeof content.text === 'string') return marked.parse(content.text);
+    return marked.parse(JSON.stringify(content, null, 2));
+  }
+  return String(content);
+};
+
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -2502,7 +2513,7 @@ export default function AdminDashboardPage() {
                           </div>
                           <div 
                             className="markdown-content text-xs text-slate-300 leading-relaxed max-h-64 overflow-y-auto pr-1"
-                            dangerouslySetInnerHTML={{ __html: marked.parse(chatAnalysis) }}
+                            dangerouslySetInnerHTML={{ __html: safeParseMarkdown(chatAnalysis) }}
                           />
                         </div>
                       )}
@@ -2614,7 +2625,7 @@ export default function AdminDashboardPage() {
                             </div>
                             <div 
                               className="markdown-content text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto pr-1"
-                              dangerouslySetInnerHTML={{ __html: marked.parse(chatAnalysis) }}
+                              dangerouslySetInnerHTML={{ __html: safeParseMarkdown(chatAnalysis) }}
                             />
                           </div>
                         )}
@@ -3158,7 +3169,7 @@ export default function AdminDashboardPage() {
                 <div className="space-y-5">
                   <div 
                     className="markdown-content text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-850"
-                    dangerouslySetInnerHTML={{ __html: marked.parse(qualityAnalysisModal.report || 'Keine Ergebnisse.') }}
+                    dangerouslySetInnerHTML={{ __html: safeParseMarkdown(qualityAnalysisModal?.report || 'Keine Ergebnisse.') }}
                   />
 
                   {/* Vorgeschlagenes Wissen / Nachtragen Button */}
