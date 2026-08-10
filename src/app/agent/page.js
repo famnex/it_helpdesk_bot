@@ -253,6 +253,7 @@ export default function AgentDashboardPage() {
   };
 
   const filteredTickets = tickets.filter(t => {
+    if (filter === 'unread') return t.hasUnread === 1 && t.status !== 'closed';
     if (filter === 'mine') return (t.status === 'open' || t.status === 'assigned') && t.assignedAgentId === user?.id;
     if (filter === 'unassigned') return (t.status === 'open' || t.status === 'assigned') && !t.assignedAgentId;
     if (filter === 'active') return t.status === 'open' || t.status === 'assigned';
@@ -411,6 +412,13 @@ export default function AgentDashboardPage() {
               Aktiv ({tickets.filter(t => t.status !== 'closed').length})
             </button>
             <button 
+              onClick={() => setFilter('unread')}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all flex items-center gap-1.5 ${filter === 'unread' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
+              <span>Ungelesen</span> ({tickets.filter(t => t.hasUnread === 1 && t.status !== 'closed').length})
+            </button>
+            <button 
               onClick={() => setFilter('mine')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'mine' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
@@ -468,15 +476,36 @@ export default function AgentDashboardPage() {
                     }
 
                     return (
-                      <tr key={tk.id} className="hover:bg-slate-850/40 transition-colors">
-                        <td className="px-3 sm:px-4 py-2.5 font-mono text-[11px] font-bold text-slate-500">{tk.id}</td>
+                      <tr key={tk.id} className={`hover:bg-slate-850/40 transition-colors ${tk.hasUnread === 1 ? 'bg-violet-950/20' : ''}`}>
+                        <td className="px-3 sm:px-4 py-2.5 font-mono text-[11px] font-bold text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            {tk.hasUnread === 1 && (
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse shrink-0" 
+                                title="Ungelesene Nachrichten vorhanden"
+                              />
+                            )}
+                            <span>{tk.id}</span>
+                          </div>
+                        </td>
                         <td className="px-3 sm:px-4 py-2.5 max-w-[180px] sm:max-w-xs md:max-w-md">
-                          <Link 
-                            href={`/agent/tickets/${tk.id}`} 
-                            className="font-bold text-white hover:text-violet-400 transition-colors block truncate"
-                          >
-                            {tk.title}
-                          </Link>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {tk.hasUnread === 1 && (
+                              <span 
+                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md text-[9px] font-bold shrink-0 shadow-sm"
+                                title="Ungelesene Nachrichten in diesem Ticket"
+                              >
+                                <i className="fa-solid fa-envelope text-amber-400 animate-bounce"></i>
+                                <span>Neu</span>
+                              </span>
+                            )}
+                            <Link 
+                              href={`/agent/tickets/${tk.id}`} 
+                              className={`font-bold hover:text-violet-400 transition-colors block truncate ${tk.hasUnread === 1 ? 'text-white font-extrabold' : 'text-slate-200'}`}
+                            >
+                              {tk.title}
+                            </Link>
+                          </div>
                           <span className="text-[10px] text-slate-500 block mt-0.5">
                             Aktualisiert: {new Date(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </span>

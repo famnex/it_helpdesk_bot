@@ -36,6 +36,7 @@ Speichert Support-Tickets.
 | `is_authenticated_creator` | BOOLEAN | DEFAULT 0 | 1 = Ticket wurde von einem angemeldeten Benutzer erstellt |
 | `solution_forgotten` | BOOLEAN | DEFAULT 0 | Kennzeichnet, ob die Lösung aus der Wissensbasis entfernt wurde |
 | `solution_context` | TEXT | NULL | KI-generierte Zusammenfassung der Lösung |
+| `last_agent_read_at` | DATETIME | NULL | Zeitpunkt des letzten Lesens / Öffnens durch einen Agenten/Admin |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der letzten Änderung |
 
@@ -142,5 +143,6 @@ Systemweite Einstellungen als Key-Value Store.
 - **Spalten zu `chat_messages` hinzugefügt**: `is_flagged`, `flagged_at`, `flagged_reason`, `image_url`, `base_knowledge`.
 - **Spalten zu `knowledge` hinzugefügt**: `description`, `category`, `is_private`.
 - **Spalten zu `users` hinzugefügt**: `name`, `avatar_url`, `responsibilities`.
-- **Spalten zu `tickets` hinzugefügt**: `chat_id`, `solution_forgotten`, `solution_context`.
+- **Spalten zu `tickets` hinzugefügt**: `chat_id`, `solution_forgotten`, `solution_context`, `last_agent_read_at`.
+- **Ungelesene Nachrichten Indikator**: Spalte `last_agent_read_at` zur Erkennung ungelesener Kunden-Nachrichten in der Agenten-Ticketliste.
 - **Tabelle `knowledge_attachments` erstellt**: Für Dateianhänge an Wissenseinträgen.

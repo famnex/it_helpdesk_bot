@@ -42,6 +42,15 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Keine Berechtigung für dieses Ticket.' }, { status: 403 });
     }
 
+    // Wenn ein Agent oder Admin das Ticket liest, Lesebestätigung (Zeitstempel) aktualisieren
+    if (user.role === 'agent' || user.role === 'admin') {
+      try {
+        db.prepare('UPDATE tickets SET last_agent_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+      } catch (readErr) {
+        console.error('Fehler beim Aktualisieren von last_agent_read_at:', readErr);
+      }
+    }
+
     // Nachrichten laden (Kunden dürfen keine internen Vermerke sehen)
     let messages;
     if (user.role === 'customer') {
@@ -116,8 +125,12 @@ export async function POST(request, { params }) {
       VALUES (?, ?, ?, ?, ?)
     `).run(id, user.email, user.role, text, isInternal);
 
-    // Zeitstempel des Tickets aktualisieren
-    db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    // Zeitstempel des Tickets und Lesebestätigung für Agenten aktualisieren
+    if (user.role === 'agent' || user.role === 'admin') {
+      db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP, last_agent_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    } else {
+      db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    }
 
     // E-Mail-Benachrichtigungen senden
     if (user.role === 'customer') {

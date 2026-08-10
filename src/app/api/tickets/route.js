@@ -35,13 +35,30 @@ export async function GET() {
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
                t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
+               t.last_agent_read_at as lastAgentReadAt,
                t.created_at as createdAt, t.updated_at as updatedAt,
                cu.name as creatorName,
                (CASE 
                   WHEN t.is_authenticated_creator = 1 THEN 1
                   WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%') THEN 1
                   ELSE 0 
-                END) as isRegisteredUser
+                END) as isRegisteredUser,
+               (CASE
+                  WHEN t.last_agent_read_at IS NULL THEN 1
+                  WHEN EXISTS (
+                    SELECT 1 FROM ticket_messages tm 
+                    WHERE tm.ticket_id = t.id 
+                      AND tm.sender_role = 'customer' 
+                      AND tm.created_at > t.last_agent_read_at
+                  ) THEN 1
+                  WHEN t.chat_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM chat_messages cm 
+                    WHERE cm.chat_id = t.chat_id 
+                      AND cm.sender = 'user' 
+                      AND cm.created_at > t.last_agent_read_at
+                  ) THEN 1
+                  ELSE 0
+                END) as hasUnread
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
         LEFT JOIN users cu ON t.creator_email = cu.email

@@ -262,6 +262,12 @@ try {
     console.log("Migration: Spalte 'is_authenticated_creator' zur Tabelle 'tickets' hinzugefügt.");
   }
 
+  const hasLastAgentReadAt = tableInfoTickets.some(col => col.name === 'last_agent_read_at');
+  if (!hasLastAgentReadAt) {
+    db.exec("ALTER TABLE tickets ADD COLUMN last_agent_read_at DATETIME");
+    console.log("Migration: Spalte 'last_agent_read_at' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
   const tableInfoChatMessages = db.prepare("PRAGMA table_info(chat_messages)").all();
   const hasImageUrl = tableInfoChatMessages.some(col => col.name === 'image_url');
   if (!hasImageUrl) {
