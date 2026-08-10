@@ -79,6 +79,9 @@ export default function CustomerChatPage() {
   const [pendingTicketTitle, setPendingTicketTitle] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [ticketCreationLoading, setTicketCreationLoading] = useState(false);
+  const [isAgentTyping, setIsAgentTyping] = useState(false);
+  const lastChatMsgIdRef = useRef(0);
+  const lastTicketMsgIdRef = useRef(0);
 
   const triggerTicketCreation = (title = '') => {
     setPendingTicketTitle(title || 'Support-Anfrage über Chat-Assistent');
@@ -283,9 +286,64 @@ export default function CustomerChatPage() {
     }
   }, [user]);
  
+  // Live-Sync Polling (1,5 Sekunden Intervall für Support-Agenten Tipp-Indikator & Live-Nachrichten)
+  useEffect(() => {
+    if (!chatId) return;
+
+    const pollLiveSync = async () => {
+      try {
+        const myEmail = user?.email || '';
+        const res = await fetch(`/api/live/sync?roomType=chat&roomId=${chatId}&lastMsgId=${lastChatMsgIdRef.current}&lastTicketMsgId=${lastTicketMsgIdRef.current}&myRole=customer&myEmail=${encodeURIComponent(myEmail)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setIsAgentTyping(!!data.isOtherPartyTyping);
+
+            // Neue Chat-Nachrichten
+            if (data.newMessages && data.newMessages.length > 0) {
+              const maxId = Math.max(...data.newMessages.map(m => m.id));
+              if (maxId > lastChatMsgIdRef.current) {
+                lastChatMsgIdRef.current = maxId;
+              }
+            }
+
+            // Neue Ticket-Nachrichten vom Support/Agent
+            if (data.newTicketMessages && data.newTicketMessages.length > 0) {
+              const maxTicketId = Math.max(...data.newTicketMessages.map(m => m.id));
+              if (maxTicketId > lastTicketMsgIdRef.current) {
+                lastTicketMsgIdRef.current = maxTicketId;
+
+                const formattedTicketMsgs = data.newTicketMessages.map(m => ({
+                  id: `ticket-msg-${m.id}`,
+                  sender: 'agent',
+                  senderName: m.senderName || 'Support-Team',
+                  text: m.text,
+                  createdAt: m.createdAt
+                }));
+
+                setMessages(prev => {
+                  const existingIds = new Set(prev.map(p => p.id));
+                  const toAdd = formattedTicketMsgs.filter(m => !existingIds.has(m.id));
+                  if (toAdd.length === 0) return prev;
+                  return [...prev, ...toAdd];
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Stiller Fallback bei Verbindungsabbrüchen
+      }
+    };
+
+    pollLiveSync();
+    const interval = setInterval(pollLiveSync, 1500);
+    return () => clearInterval(interval);
+  }, [chatId, user]);
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isTyping, showTicketPrompt]);
+  }, [messages, isTyping, isAgentTyping, showTicketPrompt]);
  
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1040,6 +1098,7 @@ export default function CustomerChatPage() {
 
             const isUser = msg.sender === 'user';
             const isSystem = msg.sender === 'system';
+            const isAgent = msg.sender === 'agent';
             
             if (isSystem) {
               return (
@@ -1056,8 +1115,14 @@ export default function CustomerChatPage() {
                 <div 
                   className={`flex gap-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                 >
-                  <div className={`w-9 h-9 rounded-xl ${isUser ? 'bg-slate-700 text-slate-300' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
-                    <i className={`fa-${isUser ? 'regular fa-user' : 'solid fa-robot'} text-sm`}></i>
+                  <div className={`w-9 h-9 rounded-xl ${
+                    isUser 
+                      ? 'bg-slate-700 text-slate-300' 
+                      : isAgent 
+                        ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30'
+                        : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                  } flex items-center justify-center shrink-0 mt-1 shadow-md`}>
+                    <i className={`fa-${isUser ? 'regular fa-user' : isAgent ? 'solid fa-headset' : 'solid fa-robot'} text-sm`}></i>
                   </div>
                   <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}>
                     {isUser ? (
@@ -1075,7 +1140,14 @@ export default function CustomerChatPage() {
                         {msg.text && <span>{msg.text}</span>}
                       </div>
                     ) : (
-                      <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-2">
+                      <div className={`border text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-2 ${
+                        isAgent ? 'bg-slate-900 border-violet-500/30' : 'bg-slate-900 border-slate-800'
+                      }`}>
+                        {isAgent && (
+                          <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider block">
+                            {msg.senderName || 'Support-Team'}
+                          </span>
+                        )}
                         {msg.imageUrl && (
                           <img 
                             src={getCleanImageUrl(msg.imageUrl)} 
@@ -1092,9 +1164,9 @@ export default function CustomerChatPage() {
                     )}
                     <div className="flex items-center gap-2 mt-1 mx-1">
                       <span className="text-[9px] text-slate-500">
-                        {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'} {msg.createdAt ? `- ${parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr` : ''}
+                        {isUser ? (user?.name || 'Du') : isAgent ? (msg.senderName || 'Support-Team') : 'IT-Helpdesk-Bot'} {msg.createdAt ? `- ${parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr` : ''}
                       </span>
-                      {!isUser && msg.id && (
+                      {!isUser && !isAgent && msg.id && (
                         <button
                           type="button"
                           onClick={() => handleFlagMessage(msg.id, index)}
@@ -1163,6 +1235,21 @@ export default function CustomerChatPage() {
                     {s.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Support-Agent Tipp-Indikator ("...") solange der Agent schreibt */}
+          {isAgentTyping && (
+            <div className="flex gap-2.5 max-w-[92%] md:max-w-[75%] mr-auto animate-fade-in my-2">
+              <div className="w-7 h-7 md:w-9 md:h-9 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 flex items-center justify-center shrink-0 mt-0.5 shadow-md text-xs md:text-sm">
+                <i className="fa-solid fa-headset"></i>
+              </div>
+              <div className="bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
+                <span className="font-semibold text-slate-300 mr-1">Support schreibt</span>
+                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
+                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
               </div>
             </div>
           )}

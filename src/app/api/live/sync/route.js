@@ -15,6 +15,7 @@ export async function GET(request) {
   const roomType = searchParams.get('roomType') || 'ticket'; // 'ticket' oder 'chat'
   const roomId = searchParams.get('roomId');
   const lastMsgId = parseInt(searchParams.get('lastMsgId') || '0', 10);
+  const lastTicketMsgId = parseInt(searchParams.get('lastTicketMsgId') || '0', 10);
   const myRole = searchParams.get('myRole') || ''; // 'customer', 'agent', 'admin', 'bot'
   const myEmail = (searchParams.get('myEmail') || '').toLowerCase();
 
@@ -24,6 +25,7 @@ export async function GET(request) {
 
   try {
     let newMessages = [];
+    let newTicketMessages = [];
     const getCleanImageUrl = (url) => {
       if (!url) return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
@@ -66,11 +68,45 @@ export async function GET(request) {
         }
         return m;
       });
+
+      // Zusätzlich prüfen, ob für diese chat_id ein Ticket in der Datenbank verknüpft ist
+      try {
+        const ticket = db.prepare(`SELECT id FROM tickets WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1`).get(roomId);
+        if (ticket) {
+          const ticketRows = db.prepare(`
+            SELECT m.id, m.ticket_id as ticketId, m.sender_email as senderEmail, 
+                   m.sender_role as senderRole, m.text, m.is_internal as isInternal, 
+                   m.created_at as createdAt, u.name as senderName, u.avatar_url as senderAvatarUrl
+            FROM ticket_messages m
+            LEFT JOIN users u ON m.sender_email = u.email
+            WHERE m.ticket_id = ? AND m.id > ? AND m.is_internal = 0
+            ORDER BY m.id ASC
+          `).all(ticket.id, lastTicketMsgId);
+
+          newTicketMessages = ticketRows.map(m => {
+            if (m.senderAvatarUrl && !m.senderAvatarUrl.startsWith('/helpdesk')) {
+              m.senderAvatarUrl = `/helpdesk${m.senderAvatarUrl}`;
+            }
+            return m;
+          });
+        }
+      } catch (errTicket) {
+        console.error('Fehler beim Abrufen verknüpfter Ticket-Nachrichten:', errTicket);
+      }
     }
 
     // Tipp-Status der Gegenseite berechnen (letzte 3,5 Sekunden)
     const now = Date.now();
     let isOtherPartyTyping = false;
+
+    // Raum-ID für verknüpftes Ticket finden (falls vorhanden)
+    let linkedTicketId = null;
+    if (roomType === 'chat') {
+      try {
+        const ticket = db.prepare(`SELECT id FROM tickets WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1`).get(roomId);
+        if (ticket) linkedTicketId = ticket.id;
+      } catch (e) {}
+    }
 
     for (const [key, timestamp] of global._liveTypingStore.entries()) {
       if (now - timestamp > 3500) {
@@ -79,7 +115,10 @@ export async function GET(request) {
       }
 
       const [storeRoomType, storeRoomId, storeRole, storeEmail] = key.split(':');
-      if (storeRoomType === roomType && storeRoomId === roomId) {
+      const isDirectMatch = storeRoomType === roomType && storeRoomId === roomId;
+      const isLinkedTicketMatch = roomType === 'chat' && linkedTicketId && storeRoomType === 'ticket' && storeRoomId === linkedTicketId;
+
+      if (isDirectMatch || isLinkedTicketMatch) {
         // Prüfen, ob der Tipp-Eintrag von einer anderen Person/Rolle stammt
         const isDifferentRole = storeRole !== myRole;
         const isDifferentEmail = myEmail && storeEmail ? storeEmail !== myEmail : true;
@@ -94,6 +133,7 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       newMessages,
+      newTicketMessages,
       isOtherPartyTyping
     });
   } catch (err) {
@@ -120,6 +160,21 @@ export async function POST(request) {
       global._liveTypingStore.set(storeKey, Date.now());
     } else {
       global._liveTypingStore.delete(storeKey);
+    }
+
+    // Falls roomType === 'chat', auch Heartbeat für das verknüpfte Ticket (falls vorhanden) setzen
+    if (roomType === 'chat') {
+      try {
+        const ticket = db.prepare(`SELECT id FROM tickets WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1`).get(roomId);
+        if (ticket) {
+          const ticketStoreKey = `ticket:${ticket.id}:${role}:${cleanEmail}`;
+          if (isTyping) {
+            global._liveTypingStore.set(ticketStoreKey, Date.now());
+          } else {
+            global._liveTypingStore.delete(ticketStoreKey);
+          }
+        }
+      } catch (e) {}
     }
 
     return NextResponse.json({ success: true });

@@ -98,11 +98,18 @@ export default function CustomerTicketsPage() {
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400 hidden sm:inline">
             <i className="fa-regular fa-envelope mr-1.5 text-slate-500"></i>
             {user?.email}
           </span>
+          <a 
+            href="/helpdesk"
+            className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+          >
+            <i className="fa-solid fa-plus text-xs"></i>
+            <span>Neues Ticket</span>
+          </a>
           <button 
             onClick={handleLogout}
             className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
@@ -117,32 +124,42 @@ export default function CustomerTicketsPage() {
       <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-6">
         
         {/* Title and Filter Panel */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
           <div>
             <h2 className="text-lg font-bold text-white">Meine IT-Support-Anfragen</h2>
             <p className="text-xs text-slate-400">Hier siehst du deine laufenden und geschlossenen Tickets</p>
           </div>
           
-          {/* Filters */}
-          <div className="flex bg-slate-950 p-1.5 border border-slate-800 rounded-xl text-xs font-semibold">
-            <button 
-              onClick={() => setFilter('all')}
-              className={`px-4 py-1.5 rounded-lg transition-all ${filter === 'all' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {/* Filters */}
+            <div className="flex bg-slate-950 p-1.5 border border-slate-800 rounded-xl text-xs font-semibold">
+              <button 
+                onClick={() => setFilter('all')}
+                className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'all' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Alle ({tickets.length})
+              </button>
+              <button 
+                onClick={() => setFilter('active')}
+                className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'active' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Aktiv ({tickets.filter(t => t.status !== 'closed').length})
+              </button>
+              <button 
+                onClick={() => setFilter('closed')}
+                className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'closed' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Geschlossen ({tickets.filter(t => t.status === 'closed').length})
+              </button>
+            </div>
+
+            <a 
+              href="/helpdesk"
+              className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
             >
-              Alle ({tickets.length})
-            </button>
-            <button 
-              onClick={() => setFilter('active')}
-              className={`px-4 py-1.5 rounded-lg transition-all ${filter === 'active' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Aktiv ({tickets.filter(t => t.status !== 'closed').length})
-            </button>
-            <button 
-              onClick={() => setFilter('closed')}
-              className={`px-4 py-1.5 rounded-lg transition-all ${filter === 'closed' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Geschlossen ({tickets.filter(t => t.status === 'closed').length})
-            </button>
+              <i className="fa-solid fa-plus text-xs"></i>
+              <span>Neues Ticket erstellen</span>
+            </a>
           </div>
         </div>
 
