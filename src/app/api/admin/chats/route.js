@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { analyzeChatQuality } from '@/lib/gemini';
+import { reconstructIdentityTrace } from '@/lib/identityTrace';
 
 /**
  * GET: Alle gespeicherten Chats für den Administrator auflisten
@@ -17,7 +18,7 @@ export async function GET(request) {
 
   try {
     if (chatId) {
-      // Details eines bestimmten Chats laden (inklusive Nachrichten)
+      // Details eines bestimmten Chats laden (inklusive Nachrichten & Identitäts-Spur)
       const chat = db.prepare(`
         SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
                is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId,
@@ -46,7 +47,10 @@ export async function GET(request) {
         return m;
       });
 
-      return NextResponse.json({ chat, messages: messagesWithPrefix });
+      // Identitäts-Spur rekonstruieren
+      const identityTrace = reconstructIdentityTrace(chatId);
+
+      return NextResponse.json({ chat, messages: messagesWithPrefix, identityTrace });
     }
 
     // Alle Chats abfragen (nur solche, in denen auch eine Konversation stattfand)
@@ -69,7 +73,7 @@ export async function GET(request) {
 }
 
 /**
- * POST: Aktionen für Admin-Chats durchführen (z. B. KI-Analyse des Chats)
+ * POST: Aktionen für Admin-Chats durchführen (z. B. KI-Analyse des Chats, Missbrauch markieren / aufheben)
  */
 export async function POST(request) {
   const user = await getSessionUser();
@@ -79,15 +83,40 @@ export async function POST(request) {
 
   try {
     const { chatId, action } = await request.json();
-    if (!chatId || action !== 'analyze') {
-      return NextResponse.json({ error: 'Ungültige Parameter.' }, { status: 400 });
+    if (!chatId) {
+      return NextResponse.json({ error: 'Ungültige Parameter: chatId fehlt.' }, { status: 400 });
     }
 
-    const analysis = await analyzeChatQuality(chatId);
-    return NextResponse.json({ success: true, analysis });
+    if (action === 'analyze') {
+      const analysis = await analyzeChatQuality(chatId);
+      return NextResponse.json({ success: true, analysis });
+    }
+
+    if (action === 'flag_abusive') {
+      db.prepare(`
+        UPDATE chats
+        SET is_abusive = 1, abusive_flagged_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(chatId);
+
+      const identityTrace = reconstructIdentityTrace(chatId);
+      return NextResponse.json({ success: true, isAbusive: true, identityTrace });
+    }
+
+    if (action === 'unflag_abusive') {
+      db.prepare(`
+        UPDATE chats
+        SET is_abusive = 0, abusive_flagged_at = NULL
+        WHERE id = ?
+      `).run(chatId);
+
+      return NextResponse.json({ success: true, isAbusive: false });
+    }
+
+    return NextResponse.json({ error: 'Ungültige Aktion.' }, { status: 400 });
   } catch (err) {
-    console.error('Fehler bei der Chat-Analyse:', err);
-    return NextResponse.json({ error: err.message || 'Serverfehler bei der Analyse.' }, { status: 500 });
+    console.error('Fehler bei der Chat-Aktion:', err);
+    return NextResponse.json({ error: err.message || 'Serverfehler bei der Chat-Aktion.' }, { status: 500 });
   }
 }
 

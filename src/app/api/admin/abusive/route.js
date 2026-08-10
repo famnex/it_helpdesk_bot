@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { reconstructIdentityTrace } from '@/lib/identityTrace';
 
 export async function GET() {
   const user = await getSessionUser();
@@ -17,14 +18,14 @@ export async function GET() {
       ORDER BY abusive_flagged_at DESC
     `).all();
 
-    // Für jeden Chat den kompletten Verlauf laden
+    // Für jeden Chat den kompletten Verlauf und die erweiterte Identitäts-Spur laden
     const enrichedChats = abusiveChats.map(chat => {
       const messages = db.prepare(`
         SELECT id, sender, text, image_url as imageUrl, created_at as createdAt
         FROM chat_messages
         WHERE chat_id = ?
         ORDER BY id ASC
-        LIMIT 20
+        LIMIT 30
       `).all(chat.id);
 
       const messagesWithPrefix = messages.map(m => {
@@ -36,20 +37,12 @@ export async function GET() {
         return m;
       });
 
-      // Rekonstruieren früherer Anmeldungen/Identitäten über die Session ID
-      let linkedIdentities = [];
-      if (chat.userSessionId) {
-        linkedIdentities = db.prepare(`
-          SELECT DISTINCT user_email as email, user_name as name
-          FROM chats
-          WHERE user_session_id = ? AND user_email IS NOT NULL AND user_email != ''
-        `).all(chat.userSessionId);
-      }
+      const identityTrace = reconstructIdentityTrace(chat.id);
 
       return {
         ...chat,
         messages: messagesWithPrefix,
-        linkedIdentities
+        identityTrace
       };
     });
 
@@ -72,7 +65,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Chat-ID fehlt.' }, { status: 400 });
     }
 
-    if (action === 'resolve') {
+    if (action === 'resolve' || action === 'unflag') {
       db.prepare(`
         UPDATE chats 
         SET is_abusive = 0, abusive_flagged_at = NULL 
@@ -81,9 +74,19 @@ export async function POST(request) {
       return NextResponse.json({ success: true });
     }
 
+    if (action === 'flag') {
+      db.prepare(`
+        UPDATE chats 
+        SET is_abusive = 1, abusive_flagged_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `).run(chatId);
+      const identityTrace = reconstructIdentityTrace(chatId);
+      return NextResponse.json({ success: true, identityTrace });
+    }
+
     return NextResponse.json({ error: 'Ungültige Aktion.' }, { status: 400 });
   } catch (err) {
-    console.error('Fehler beim Auflösen des missbräuchlichen Chats:', err);
+    console.error('Fehler beim Ändern des Missbrauchs-Status:', err);
     return NextResponse.json({ error: 'Serverfehler.' }, { status: 500 });
   }
 }

@@ -146,3 +146,4 @@ Systemweite Einstellungen als Key-Value Store.
 - **Spalten zu `tickets` hinzugefügt**: `chat_id`, `solution_forgotten`, `solution_context`, `last_agent_read_at`.
 - **Ungelesene Nachrichten Indikator**: Spalte `last_agent_read_at` zur Erkennung ungelesener Kunden-Nachrichten in der Agenten-Ticketliste.
 - **Tabelle `knowledge_attachments` erstellt**: Für Dateianhänge an Wissenseinträgen.
+- **Nachträgliche Chat-Missbrauchsklassifizierung & Identitäts-Spur**: Manuelle Einstufung von Chats als missbräuchlich im Adminbereich inklusive mehrstufiger Rekonstruktion digitaler Identitätsspuren (`src/lib/identityTrace.js`) über `user_session_id`, `user_ip`, `users`-Tabelle und `tickets`.
