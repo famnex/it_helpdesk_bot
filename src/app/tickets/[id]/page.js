@@ -5,6 +5,14 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
 
+const getCleanImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  let clean = url.replace(/^\/helpdesk/, '');
+  if (!clean.startsWith('/')) clean = '/' + clean;
+  return `/helpdesk${clean}`;
+};
+
 export default function CustomerTicketDetailPage() {
   const { id } = useParams();
   const [ticket, setTicket] = useState(null);
@@ -288,9 +296,10 @@ export default function CustomerTicketDetailPage() {
                       />
                       {msg.imageUrl && (
                         <img 
-                          src={msg.imageUrl.startsWith('/') && !msg.imageUrl.startsWith('/helpdesk') ? `/helpdesk${msg.imageUrl}` : msg.imageUrl}
+                          src={getCleanImageUrl(msg.imageUrl)}
                           alt="Foto" 
-                          className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block" 
+                          onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                          className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
                         />
                       )}
                     </div>

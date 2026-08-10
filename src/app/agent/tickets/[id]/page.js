@@ -5,6 +5,14 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
 
+const getCleanImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  let clean = url.replace(/^\/helpdesk/, '');
+  if (!clean.startsWith('/')) clean = '/' + clean;
+  return `/helpdesk${clean}`;
+};
+
 export default function AgentTicketDetailPage() {
   const { id } = useParams();
   const [ticket, setTicket] = useState(null);
@@ -496,10 +504,10 @@ export default function AgentTicketDetailPage() {
                         {msg.imageUrl && (
                           <div className="mb-2 max-w-xs overflow-hidden rounded-lg border border-slate-800 shadow-sm bg-slate-950">
                             <img 
-                              src={msg.imageUrl} 
+                              src={getCleanImageUrl(msg.imageUrl)} 
                               alt="Angehängtes Bild" 
                               className="max-h-48 w-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => window.open(msg.imageUrl, '_blank')}
+                              onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
                             />
                           </div>
                         )}

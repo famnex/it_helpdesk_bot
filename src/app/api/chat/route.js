@@ -25,8 +25,10 @@ export async function GET(request) {
       `).all(chatId);
       
       const messagesWithPrefix = messages.map(m => {
-        if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
-          m.imageUrl = `/helpdesk${m.imageUrl}`;
+        if (m.imageUrl) {
+          let clean = m.imageUrl.replace(/^\/helpdesk/, '');
+          if (!clean.startsWith('/')) clean = '/' + clean;
+          m.imageUrl = `/helpdesk${clean}`;
         }
         return m;
       });

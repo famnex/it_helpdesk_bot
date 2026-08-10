@@ -220,7 +220,9 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
     // Bildteil hinzufügen, falls vorhanden
     if (msg.imageUrl) {
       try {
-        const filePath = path.join(process.cwd(), 'public', msg.imageUrl);
+        let relPath = msg.imageUrl.replace(/^\/helpdesk/, '');
+        if (!relPath.startsWith('/')) relPath = '/' + relPath;
+        const filePath = path.join(process.cwd(), 'public', relPath);
         if (fs.existsSync(filePath)) {
           const fileBuffer = fs.readFileSync(filePath);
           const base64Data = fileBuffer.toString('base64');
@@ -231,6 +233,8 @@ REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
               data: base64Data
             }
           });
+        } else {
+          console.warn('Gemini Bild-Datei nicht auf Server-Festplatte gefunden:', filePath);
         }
       } catch (err) {
         console.error('Fehler beim Konvertieren des Chatbildes für Gemini:', err);

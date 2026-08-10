@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
+
+const getCleanImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  let clean = url.replace(/^\/helpdesk/, '');
+  if (!clean.startsWith('/')) clean = '/' + clean;
+  return `/helpdesk${clean}`;
+};
  
 export default function CustomerChatPage() {
   const [chatId, setChatId] = useState('');
@@ -1002,9 +1010,10 @@ export default function CustomerChatPage() {
                       >
                         {msg.imageUrl && (
                           <img 
-                            src={msg.imageUrl} 
+                            src={getCleanImageUrl(msg.imageUrl)} 
                             alt="Hochgeladenes Bild" 
-                            className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm" 
+                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                            className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm cursor-pointer" 
                           />
                         )}
                         {msg.text && <span>{msg.text}</span>}
@@ -1013,9 +1022,10 @@ export default function CustomerChatPage() {
                       <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-2">
                         {msg.imageUrl && (
                           <img 
-                            src={msg.imageUrl} 
+                            src={getCleanImageUrl(msg.imageUrl)} 
                             alt="Bild" 
-                            className="max-w-xs max-h-48 rounded-xl object-contain border border-slate-800 shadow-sm" 
+                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                            className="max-w-xs max-h-48 rounded-xl object-contain border border-slate-800 shadow-sm cursor-pointer" 
                           />
                         )}
                         <div 

@@ -30,8 +30,10 @@ export async function GET() {
       `).all(msg.chatId, msg.id);
 
       const contextWithPrefix = context.map(m => {
-        if (m.imageUrl && !m.imageUrl.startsWith('/helpdesk')) {
-          m.imageUrl = `/helpdesk${m.imageUrl.startsWith('/') ? '' : '/'}${m.imageUrl}`;
+        if (m.imageUrl) {
+          let clean = m.imageUrl.replace(/^\/helpdesk/, '');
+          if (!clean.startsWith('/')) clean = '/' + clean;
+          m.imageUrl = `/helpdesk${clean}`;
         }
         return m;
       });

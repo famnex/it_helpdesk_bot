@@ -16,6 +16,14 @@ const safeParseMarkdown = (content) => {
   return String(content);
 };
 
+const getCleanImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  let clean = url.replace(/^\/helpdesk/, '');
+  if (!clean.startsWith('/')) clean = '/' + clean;
+  return `/helpdesk${clean}`;
+};
+
 const CATEGORY_COLORS = [
   { stroke: '#8b5cf6', badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20', text: 'text-violet-400' },
   { stroke: '#38bdf8', badge: 'bg-sky-500/10 text-sky-400 border-sky-500/20', text: 'text-sky-400' },
@@ -2736,7 +2744,12 @@ export default function AdminDashboardPage() {
                                 
                                 {msg.imageUrl && (
                                   <div className="max-w-[200px] mb-1">
-                                    <img src={msg.imageUrl} alt="Anhang" className="rounded-xl border border-slate-800 max-h-32 object-cover" />
+                                    <img 
+                                      src={getCleanImageUrl(msg.imageUrl)} 
+                                      alt="Anhang" 
+                                      onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                                      className="rounded-xl border border-slate-800 max-h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                                    />
                                   </div>
                                 )}
 
@@ -2854,7 +2867,12 @@ export default function AdminDashboardPage() {
                                   
                                   {msg.imageUrl && (
                                     <div className="max-w-[200px] mb-1">
-                                      <img src={msg.imageUrl} alt="Anhang" className="rounded-xl border border-slate-800 max-h-32 object-cover" />
+                                      <img 
+                                        src={getCleanImageUrl(msg.imageUrl)} 
+                                        alt="Anhang" 
+                                        onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                                        className="rounded-xl border border-slate-800 max-h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                                      />
                                     </div>
                                   )}
 
