@@ -389,7 +389,7 @@ export function isSetupRequired() {
 
 // 5-Minuten Cronjob für Bot-Chat-Kategorisierung beim Server-Start initiieren
 try {
-  import('./categorizer').then(m => m.startCategorizerCron?.()).catch(() => {});
+  import('./categorizer.js').then(m => m.startCategorizerCron?.()).catch(() => {});
 } catch (e) {}
 
 export default db;

@@ -1,4 +1,4 @@
-import db from './db';
+import db from './db.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -411,6 +411,63 @@ ${chatText}`;
   } catch (err) {
     console.error('Fehler bei categorizeChatCategory:', err);
     return 'Sonstiges';
+  }
+}
+
+/**
+ * Kategorisiert ein Bündel (Batch) von mehreren Bot-Konversationen in EINEM EINZIGEN KI-Aufruf.
+ * @param {Array<{id: string, messages: Array<{sender: string, text: string}>}>} chatsBatch
+ * @param {Array<string>} existingCategories
+ * @returns {Promise<Record<string, string>>} Mapping von chatId -> category
+ */
+export async function categorizeChatBatch(chatsBatch, existingCategories = []) {
+  if (!chatsBatch || chatsBatch.length === 0) return {};
+  const { extractionModel } = getModelNames();
+
+  const categoriesList = existingCategories.length > 0
+    ? existingCategories.join(', ')
+    : 'WLAN, Moodle, Schulportal, WebUntis, Hardware, Drucker, E-Mail, Benutzerkonto, Sonstiges';
+
+  let batchPromptText = `Hier sind mehrere unabhängige Support-Chats. Ordne jeden Chat genau EINER Thema-Kategorie zu.
+Bevorzuge nach Möglichkeit bestehende Kategorien aus folgender Liste:
+[${categoriesList}]
+
+Falls für einen Chat keine dieser Kategorien passt, erstelle eine neue kurze Kategorie (1-2 Wörter), wie z.B. "Drucker", "WLAN", "Moodle", "Hardware", "Software", "Netzwerk", "E-Mail", "Passwort".
+
+Antworte AUSSCHLIESSLICH im folgenden gültigen JSON-Format (keine Erklärungen, kein Markdown-Codeblock):
+{
+  "CHAT_ID_1": "KategorieName",
+  "CHAT_ID_2": "KategorieName"
+}
+
+Hier sind die Chats:\n`;
+
+  chatsBatch.forEach(chat => {
+    batchPromptText += `\n--- CHAT ID: "${chat.id}" ---\n`;
+    if (!chat.messages || chat.messages.length === 0) {
+      batchPromptText += `(Keine Nachrichten)\n`;
+    } else {
+      chat.messages.slice(-8).forEach(m => {
+        batchPromptText += `${m.sender === 'user' ? 'Benutzer' : 'Bot'}: ${m.text}\n`;
+      });
+    }
+  });
+
+  const payload = {
+    contents: [{ parts: [{ text: batchPromptText }] }],
+    generationConfig: { responseMimeType: "application/json" }
+  };
+
+  try {
+    const rawResponse = await callGemini(extractionModel, payload);
+    const cleanJson = rawResponse.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+    const mapping = JSON.parse(cleanJson);
+    return mapping;
+  } catch (err) {
+    console.error('Fehler bei Batch-Kategorisierung mit Gemini:', err);
+    const fallbackMapping = {};
+    chatsBatch.forEach(c => { fallbackMapping[c.id] = 'Sonstiges'; });
+    return fallbackMapping;
   }
 }
 

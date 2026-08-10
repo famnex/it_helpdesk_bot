@@ -1,12 +1,12 @@
-import db from './db';
-import { categorizeChatCategory } from './gemini';
+import db from './db.js';
+import { categorizeChatCategory, categorizeChatBatch } from './gemini.js';
 
 let cronInterval = null;
 
 /**
- * Einzelnen Chat kategorisieren und in DB speichern.
+ * Einzelnen Chat kategorisieren (für isolierte Einzelaufrufe).
  */
-export async function categorizeSingleChat(chatId) {
+export async function categorizeOneChat(chatId) {
   try {
     const chatMessages = db.prepare(`
       SELECT sender, text FROM chat_messages 
@@ -14,7 +14,6 @@ export async function categorizeSingleChat(chatId) {
       ORDER BY created_at ASC
     `).all(chatId);
 
-    // Alle vorhandenen Kategorien aus der Wissensbasis laden
     const knowledgeCategories = db.prepare(`
       SELECT DISTINCT category FROM knowledge 
       WHERE category IS NOT NULL AND category != ''
@@ -30,7 +29,7 @@ export async function categorizeSingleChat(chatId) {
 
     return category;
   } catch (err) {
-    console.error(`Fehler beim Kategorisieren von Chat ${chatId}:`, err);
+    console.error(`Fehler beim Einzel-Kategorisieren von Chat ${chatId}:`, err);
     db.prepare(`
       UPDATE chats 
       SET category = 'Sonstiges', categorized_at = CURRENT_TIMESTAMP 
@@ -41,22 +40,86 @@ export async function categorizeSingleChat(chatId) {
 }
 
 /**
- * Durchläuft unkategorisierte Chats und kategorisiert diese per KI.
+ * Durchläuft unkategorisierte Chats und kategorisiert diese ULTRA-SCHNELL & PARALLEL IN GROSSEN BATCHES.
+ * Verarbeitet z. B. 30 Chats pro KI-Aufruf, mit bis zu 3 parallelen Worker-Requests.
  */
-export async function categorizeUncategorizedChats(limit = 20) {
+export async function categorizeUncategorizedChats(totalLimit = 300, batchSize = 30, concurrency = 3) {
+  const startTime = Date.now();
   try {
     const uncategorizedChats = db.prepare(`
       SELECT id FROM chats 
       WHERE category IS NULL OR category = '' 
       ORDER BY created_at ASC 
       LIMIT ?
-    `).all(limit);
+    `).all(totalLimit);
+
+    if (uncategorizedChats.length === 0) {
+      const remainingRow = db.prepare(`
+        SELECT COUNT(*) as count FROM chats 
+        WHERE category IS NULL OR category = ''
+      `).get();
+      return { processedCount: 0, remainingCount: remainingRow?.count || 0, durationMs: 0 };
+    }
+
+    // Vorhandene Wissens-Kategorien laden
+    const knowledgeCategories = db.prepare(`
+      SELECT DISTINCT category FROM knowledge 
+      WHERE category IS NOT NULL AND category != ''
+    `).all().map(r => r.category);
+
+    // Alle Batches vorbereiten
+    const batches = [];
+    for (let i = 0; i < uncategorizedChats.length; i += batchSize) {
+      const chunk = uncategorizedChats.slice(i, i + batchSize);
+      const chatsPayload = chunk.map(chat => {
+        const messages = db.prepare(`
+          SELECT sender, text FROM chat_messages 
+          WHERE chat_id = ? 
+          ORDER BY created_at ASC
+        `).all(chat.id);
+        return { id: chat.id, messages };
+      });
+      batches.push({ chunk, chatsPayload });
+    }
 
     let processedCount = 0;
-    for (const chat of uncategorizedChats) {
-      await categorizeSingleChat(chat.id);
-      processedCount++;
+
+    // Concurrency Helper (verarbeitet batches in parallelen Worker-Gruppen)
+    for (let i = 0; i < batches.length; i += concurrency) {
+      const currentConcurrencyGroup = batches.slice(i, i + concurrency);
+      
+      const results = await Promise.all(
+        currentConcurrencyGroup.map(batch => 
+          categorizeChatBatch(batch.chatsPayload, knowledgeCategories)
+            .then(mapping => ({ batch, mapping }))
+            .catch(err => {
+              console.error('Fehler bei Parallel-Batch:', err);
+              const fallback = {};
+              batch.chunk.forEach(c => { fallback[c.id] = 'Sonstiges'; });
+              return { batch, mapping: fallback };
+            })
+        )
+      );
+
+      // In einer einzigen schnellen DB-Transaktion alle Ergebnisse der parallelen Gruppe speichern
+      const updateStmt = db.prepare(`
+        UPDATE chats 
+        SET category = ?, categorized_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `);
+
+      db.transaction(() => {
+        results.forEach(({ batch, mapping }) => {
+          batch.chunk.forEach(chat => {
+            const cat = mapping[chat.id] || 'Sonstiges';
+            updateStmt.run(cat, chat.id);
+            processedCount++;
+          });
+        });
+      })();
     }
+
+    const durationMs = Date.now() - startTime;
 
     const remainingRow = db.prepare(`
       SELECT COUNT(*) as count FROM chats 
@@ -65,11 +128,12 @@ export async function categorizeUncategorizedChats(limit = 20) {
 
     return {
       processedCount,
-      remainingCount: remainingRow?.count || 0
+      remainingCount: remainingRow?.count || 0,
+      durationMs
     };
   } catch (err) {
     console.error('Fehler bei categorizeUncategorizedChats:', err);
-    return { processedCount: 0, remainingCount: 0 };
+    return { processedCount: 0, remainingCount: 0, durationMs: Date.now() - startTime };
   }
 }
 
@@ -79,16 +143,16 @@ export async function categorizeUncategorizedChats(limit = 20) {
 export function startCategorizerCron() {
   if (cronInterval) return;
   
-  console.log('[Cron] Starte 5-Minuten-Kategorisierungs-Cronjob für Bot-Chats...');
+  console.log('[Cron] Starte Highspeed-5-Minuten-Kategorisierungs-Cronjob für Bot-Chats...');
   
-  // Erstmaliger Durchlauf nach 10 Sekunden
+  // Erstmaliger Durchlauf nach 5 Sekunden
   setTimeout(() => {
-    categorizeUncategorizedChats(10);
-  }, 10000);
+    categorizeUncategorizedChats(60, 30, 2);
+  }, 5000);
 
   // Alle 5 Minuten ausführen (5 * 60 * 1000 ms)
   cronInterval = setInterval(() => {
     console.log('[Cron] Führe automatische 5-Minuten-Chat-Kategorisierung aus...');
-    categorizeUncategorizedChats(15);
+    categorizeUncategorizedChats(60, 30, 2);
   }, 5 * 60 * 1000);
 }

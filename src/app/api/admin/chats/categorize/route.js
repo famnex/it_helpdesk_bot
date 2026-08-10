@@ -3,7 +3,7 @@ import { getSessionUser } from '@/lib/auth';
 import { categorizeUncategorizedChats } from '@/lib/categorizer';
 
 /**
- * POST: Bisherige unkategorisierte Chats per KI einkategorisieren.
+ * POST: Bisherige unkategorisierte Chats in Highspeed-Parallel-Batches einkategorisieren.
  */
 export async function POST() {
   const user = await getSessionUser();
@@ -12,11 +12,12 @@ export async function POST() {
   }
 
   try {
-    const result = await categorizeUncategorizedChats(100);
+    const result = await categorizeUncategorizedChats(300, 30, 3);
     return NextResponse.json({
       success: true,
       processedCount: result.processedCount,
-      remainingCount: result.remainingCount
+      remainingCount: result.remainingCount,
+      durationMs: result.durationMs
     });
   } catch (err) {
     console.error('Fehler bei manueller Chat-Kategorisierung:', err);

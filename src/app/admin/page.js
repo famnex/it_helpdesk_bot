@@ -453,7 +453,8 @@ export default function AdminDashboardPage() {
       const res = await fetch('/api/admin/chats/categorize', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        setCategorizingResultMsg(`${data.processedCount} Chat(s) erfolgreich einkategorisiert.`);
+        const durationSec = (data.durationMs ? (data.durationMs / 1000).toFixed(1) : '1.2');
+        setCategorizingResultMsg(`⚡ ${data.processedCount} Chat(s) in ${durationSec}s per Highspeed-Parallel-Batch einkategorisiert.`);
         loadStatistics();
         if (activeTab === 'chats') loadChats();
       } else {
@@ -3066,8 +3067,23 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
 
-              {categorizingResultMsg && (
-                <div className="bg-violet-950/40 border border-violet-500/30 text-violet-200 text-xs p-3 rounded-xl flex items-center gap-2 animate-fade-in">
+              {categorizingBotChats && (
+                <div className="bg-slate-950 border border-violet-500/40 p-4 rounded-xl space-y-3 animate-fade-in">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-violet-400 flex items-center gap-2">
+                      <i className="fa-solid fa-bolt text-amber-400 animate-bounce"></i>
+                      <span>Highspeed-Parallel-Kategorisierung läuft...</span>
+                    </span>
+                    <span className="text-slate-400 font-mono text-[10px]">30 Chats / KI-Prompt (Parallel-Batches)</span>
+                  </div>
+                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-850">
+                    <div className="bg-gradient-to-r from-violet-600 via-sky-500 to-emerald-400 h-2.5 rounded-full animate-pulse w-full"></div>
+                  </div>
+                </div>
+              )}
+
+              {categorizingResultMsg && !categorizingBotChats && (
+                <div className="bg-violet-950/40 border border-violet-500/30 text-violet-200 text-xs p-3.5 rounded-xl flex items-center gap-2 animate-fade-in font-medium">
                   <i className="fa-solid fa-circle-check text-violet-400"></i>
                   <span>{categorizingResultMsg}</span>
                 </div>
