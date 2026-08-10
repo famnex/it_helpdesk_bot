@@ -747,14 +747,14 @@ export default function CustomerChatPage() {
     <div className="h-[100dvh] max-h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 font-sans text-slate-100">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 z-30 relative shadow-lg h-[72px] w-full">
-        <div className="flex items-center gap-3">
-          <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
-            <i className="fa-solid fa-graduation-cap text-xl md:text-2xl"></i>
+      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3.5 flex justify-between items-center shrink-0 z-30 relative shadow-lg h-14 sm:h-[72px] w-full">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="bg-sky-500 text-white p-1.5 sm:p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
+            <i className="fa-solid fa-graduation-cap text-lg sm:text-2xl"></i>
           </div>
           <div>
-            <h1 className="text-sm md:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
-            <p className="text-[9px] md:text-[10px] text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
+            <h1 className="text-xs sm:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
+            <p className="text-[8px] sm:text-[10px] text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
           </div>
         </div>
 
@@ -762,9 +762,9 @@ export default function CustomerChatPage() {
         <button 
           type="button" 
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
+          className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
         >
-          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
+          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-sm`}></i>
         </button>
  
         {/* Desktop Menu - nur auf md: und größer */}
@@ -784,7 +784,7 @@ export default function CustomerChatPage() {
               </Link>
               <Link 
                 href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
-                className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                className="bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-colors shadow flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-ticket"></i>
                 <span>
@@ -796,7 +796,7 @@ export default function CustomerChatPage() {
               <button 
                 type="button"
                 onClick={handleLogout}
-                className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-medium text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                className="bg-red-950/30 hover:bg-red-900/50 border border-red-500/30 text-red-400 text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <i className="fa-solid fa-right-from-bracket"></i>
                 <span>Abmelden</span>
@@ -848,9 +848,9 @@ export default function CustomerChatPage() {
 
         {/* Mobile Menu Dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden absolute top-[72px] left-0 right-0 bg-slate-900 border-b border-slate-800 p-5 shadow-2xl flex flex-col gap-4 animate-fade-in z-35">
+          <div className="md:hidden absolute top-14 left-0 right-0 bg-slate-900 border-b border-slate-800 p-4 shadow-2xl flex flex-col gap-3 animate-fade-in z-35">
             {user ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2.5">
                 <div className="text-xs text-slate-400 font-medium px-2 py-1 flex items-center gap-2 bg-slate-950/50 rounded-lg">
                   <i className="fa-solid fa-user text-slate-500"></i>
                   <span className="truncate">{user.email}</span>
@@ -859,7 +859,7 @@ export default function CustomerChatPage() {
                 <Link 
                   href="/knowledge"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   <i className="fa-solid fa-book-open text-sky-400"></i>
                   <span>Wissensdatenbank</span>
@@ -868,7 +868,7 @@ export default function CustomerChatPage() {
                 <Link 
                   href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   <i className="fa-solid fa-ticket"></i>
                   <span>
@@ -881,14 +881,14 @@ export default function CustomerChatPage() {
                 <button 
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-                  className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   <i className="fa-solid fa-right-from-bracket"></i>
                   <span>Abmelden</span>
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 {/* Magic Link Form */}
                 <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
@@ -915,7 +915,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/knowledge"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-book-open text-sky-400"></i>
                     <span>Wissen</span>
@@ -924,7 +924,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/login"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                    className="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5"
                   >
                     <i className="fa-solid fa-user-shield text-violet-400"></i>
                     <span>Mitarbeiter</span>
@@ -937,11 +937,11 @@ export default function CustomerChatPage() {
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative pt-[72px] pb-[180px] md:pb-[160px]">
+      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative min-h-0 w-full">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-45 max-w-md w-full px-4 animate-fade-in">
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-45 max-w-md w-full px-4 animate-fade-in">
             {magicSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex justify-between items-center shadow-lg">
                 <span className="flex items-center gap-2">
@@ -964,13 +964,35 @@ export default function CustomerChatPage() {
         )}
  
         {/* Chat History */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-950/20">
+        <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
           <div className="flex justify-center">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-4 py-1 rounded-full shadow-inner">
+            <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
               Verschlüsselte KI-Sitzung
             </span>
           </div>
- 
+
+          {/* System Info Banner bei Neuanfang */}
+          {messages.length <= 1 && (
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 sm:p-5 max-w-2xl mx-auto space-y-2.5 text-xs text-slate-350 shadow-lg animate-fade-in">
+              <div className="flex items-center gap-2 text-sky-400 font-bold text-xs sm:text-sm border-b border-slate-800 pb-2">
+                <i className="fa-solid fa-circle-info"></i>
+                <span>Willkommen beim IT-Support-Assistenten</span>
+              </div>
+              <p className="leading-relaxed text-[11px] sm:text-xs">
+                Ich bin deine KI-Unterstützung für IT-Probleme in der Schule. Beschreibe dein Anliegen (z. B. WLAN, Drucker, Moodle, Beamer) oder hänge direkt ein Foto der Fehlermeldung an.
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1 text-[10px] sm:text-[11px]">
+                <span className="bg-slate-950 border border-slate-850 px-2 py-0.5 rounded-lg text-slate-400">
+                  ⚡ KI-gestützt & gelernt
+                </span>
+                <span className="bg-slate-950 border border-slate-850 px-2 py-0.5 rounded-lg text-slate-400">
+                  📩 Automatisches Ticket bei Bedarf
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Nachrichten-Liste */}
           {messages.map((msg, index) => {
             if (msg.isTicketUI) {
               return (
