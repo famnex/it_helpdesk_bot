@@ -1180,7 +1180,22 @@ export default function CustomerChatPage() {
               </div>
             </div>
           )}
- 
+
+          {/* Bot Tipp-Indikator ("...") solange die KI antwortet */}
+          {isTyping && (
+            <div className="flex gap-2.5 max-w-[92%] md:max-w-[75%] mr-auto animate-fade-in my-2">
+              <div className="w-7 h-7 md:w-9 md:h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5 shadow-md text-xs md:text-sm">
+                <i className="fa-solid fa-robot"></i>
+              </div>
+              <div className="bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
+                <span className="font-semibold text-slate-300 mr-1">IT-Helpdesk-Bot schreibt</span>
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce"></span>
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
  
