@@ -744,10 +744,10 @@ export default function CustomerChatPage() {
   };
  
   return (
-    <div className="h-[100dvh] max-h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 font-sans text-slate-100">
+    <div className="min-h-screen h-[100dvh] w-full flex flex-col bg-slate-950 font-sans text-slate-100 relative overflow-hidden">
       
-      {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3.5 flex justify-between items-center shrink-0 z-30 relative shadow-lg h-14 sm:h-[72px] w-full">
+      {/* Header (Fest am oberen Bildschirmland fixiert) */}
+      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3.5 flex justify-between items-center z-30 fixed top-0 left-0 right-0 shadow-lg h-14 sm:h-[72px] w-full">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="bg-sky-500 text-white p-1.5 sm:p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
             <i className="fa-solid fa-graduation-cap text-lg sm:text-2xl"></i>
@@ -937,7 +937,7 @@ export default function CustomerChatPage() {
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative min-h-0 w-full">
+      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative w-full pt-14 sm:pt-[72px] pb-[100px] sm:pb-[140px]">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
@@ -1184,21 +1184,21 @@ export default function CustomerChatPage() {
           <div ref={messagesEndRef} />
         </div>
  
-        {/* Input Area */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 z-20 shadow-lg flex flex-col gap-3 w-full">
+        {/* Input Area (Fest am unteren Bildschirmrand fixiert) */}
+        <div className="p-2 sm:p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-20 shadow-lg flex flex-col gap-1.5 sm:gap-3 w-full">
           
           {/* Chatbot Deactivation Toggle */}
-          <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/60 pb-3">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-2 border-b border-slate-800/60 pb-1.5 sm:pb-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={isChatbotDisabled}
                 onChange={(e) => handleChatbotToggle(e.target.checked)}
-                className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-900"
+                className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500"
               />
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[11px] sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
+                <span className="text-[9px] sm:text-[10px] text-slate-500 hidden sm:inline">
                   Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
                 </span>
               </div>
@@ -1208,7 +1208,7 @@ export default function CustomerChatPage() {
                 type="button"
                 onClick={submitDirectTicket}
                 disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim())}
-                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <i className="fa-solid fa-paper-plane"></i>
                 <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
@@ -1216,37 +1216,37 @@ export default function CustomerChatPage() {
             )}
           </div>
 
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-1.5 sm:p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
             
             {/* Foto-Vorschau */}
             {photoPreview && (
-              <div className="flex items-center gap-3 p-2 border-b border-slate-900 pb-2 mb-2 animate-fade-in">
-                <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-800 shadow">
+              <div className="flex items-center gap-2.5 p-1.5 border-b border-slate-900 pb-1.5 mb-1.5 animate-fade-in">
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
                   <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" />
                   <button 
                     type="button" 
                     onClick={handleDiscardPhoto}
-                    className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] transition-colors cursor-pointer"
+                    className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] transition-colors cursor-pointer"
                   >
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ausgewähltes Foto</p>
-                  <p className="text-xs text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Foto gewählt</p>
+                  <p className="text-[11px] text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
                 </div>
               </div>
             )}
 
-            <div className="flex items-end gap-3">
+            <div className="flex items-end gap-2 sm:gap-3">
               {/* Foto anhängen Button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="p-3 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center shadow-md cursor-pointer"
+                className="p-2 sm:p-3 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shadow-md cursor-pointer"
                 title="Foto anhängen"
               >
-                <i className="fa-solid fa-paperclip text-sm"></i>
+                <i className="fa-solid fa-paperclip text-xs sm:text-sm"></i>
               </button>
               
               <input 
@@ -1266,16 +1266,16 @@ export default function CustomerChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder={isChatbotDisabled ? "Beschreibe hier dein IT-Problem oder lade ein Foto hoch..." : "Beschreibe dein IT-Problem oder lade ein Foto hoch..."}
+                placeholder={isChatbotDisabled ? "Problem beschreiben oder Foto hochladen..." : "Problem beschreiben oder Foto hochladen..."}
                 rows="1"
-                className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-1 text-sm text-slate-200 placeholder-slate-600 outline-none"
+                className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-28 min-h-[36px] sm:min-h-[40px] py-1.5 px-1 text-xs sm:text-sm text-slate-200 placeholder-slate-600 outline-none"
               />
               <button 
                 type="submit"
                 disabled={(!inputValue.trim() && !selectedPhoto) || isTyping}
-                className="p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md cursor-pointer"
+                className="p-2 sm:p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md cursor-pointer"
               >
-                <i className="fa-solid fa-paper-plane text-sm"></i>
+                <i className="fa-solid fa-paper-plane text-xs sm:text-sm"></i>
               </button>
             </div>
           </form>
