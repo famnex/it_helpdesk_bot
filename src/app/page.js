@@ -1145,7 +1145,7 @@ export default function CustomerChatPage() {
             <div className="space-y-2 pt-2 animate-fade-in max-w-2xl mx-auto">
               <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Häufige Themen:</p>
               <div className="flex flex-wrap gap-2">
-                {SUGGESTIONS.map((s, idx) => (
+                {suggestions.map((s, idx) => (
                   <button
                     key={idx}
                     type="button"
