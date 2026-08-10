@@ -89,9 +89,9 @@ export default function CustomerTicketsPage() {
       {/* Top Navigation */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
-          <Link href="/" className="bg-sky-500 text-white p-2 rounded-xl shadow-md flex items-center justify-center">
+          <a href="/helpdesk" className="bg-sky-500 text-white p-2 rounded-xl shadow-md flex items-center justify-center">
             <i className="fa-solid fa-graduation-cap text-xl"></i>
-          </Link>
+          </a>
           <div>
             <h1 className="text-base font-bold text-white">Mein Ticket-Portal</h1>
             <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Kunden-Bereich</p>
@@ -151,12 +151,12 @@ export default function CustomerTicketsPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
             <div className="text-slate-600 text-4xl"><i className="fa-regular fa-folder-open"></i></div>
             <p className="text-sm text-slate-400">Keine Support-Tickets in dieser Kategorie gefunden.</p>
-            <Link 
-              href="/"
+            <a 
+              href="/helpdesk"
               className="inline-block bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md mt-2"
             >
               Zum Chat & neues Ticket erstellen
-            </Link>
+            </a>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">

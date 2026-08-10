@@ -37,22 +37,22 @@ export default function PublicKnowledgePage() {
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
-          <Link href="/" className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
+          <a href="/helpdesk" className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
             <i className="fa-solid fa-graduation-cap text-xl"></i>
-          </Link>
+          </a>
           <div>
             <h1 className="text-base font-bold text-white">Campus IT-Wissensdatenbank</h1>
             <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Selbsthilfe-Portal</p>
           </div>
         </div>
         
-        <Link 
-          href="/"
+        <a 
+          href="/helpdesk"
           className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
         >
           <i className="fa-solid fa-comments"></i>
           <span>Zum Chat-Assistenten</span>
-        </Link>
+        </a>
       </header>
 
       {/* Main Container */}
