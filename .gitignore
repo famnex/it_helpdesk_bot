@@ -46,3 +46,8 @@ next-env.d.ts
 
 # Public Uploads
 /public/uploads/
+
+# Test data & export files with keys
+test_system_data.json
+*_data.json
+
