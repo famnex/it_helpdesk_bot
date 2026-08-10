@@ -95,7 +95,36 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ statistics });
+    // 7. Statistiken über Bot-Konversationen und Kategorien berechnen
+    const totalChatsRow = db.prepare('SELECT COUNT(*) as count FROM chats').get();
+    const totalChats = totalChatsRow?.count || 0;
+
+    const uncategorizedChatsRow = db.prepare("SELECT COUNT(*) as count FROM chats WHERE category IS NULL OR category = ''").get();
+    const uncategorizedCount = uncategorizedChatsRow?.count || 0;
+    const categorizedCount = totalChats - uncategorizedCount;
+
+    const categoriesRows = db.prepare(`
+      SELECT category, COUNT(*) as count 
+      FROM chats 
+      WHERE category IS NOT NULL AND category != ''
+      GROUP BY category
+      ORDER BY count DESC
+    `).all();
+
+    const categoryBreakdown = categoriesRows.map(row => ({
+      category: row.category,
+      count: row.count,
+      percentage: totalChats > 0 ? parseFloat(((row.count / totalChats) * 100).toFixed(1)) : 0
+    }));
+
+    const botStatistics = {
+      totalChats,
+      categorizedCount,
+      uncategorizedCount,
+      categoryBreakdown
+    };
+
+    return NextResponse.json({ statistics, botStatistics });
   } catch (err) {
     console.error('Fehler beim Berechnen der Statistiken:', err);
     return NextResponse.json({ error: 'Serverfehler beim Laden der Statistik.' }, { status: 500 });

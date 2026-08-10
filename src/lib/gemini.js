@@ -368,6 +368,53 @@ ${chatText}`;
 }
 
 /**
+ * Kategorisiert eine Bot-Konversation basierend auf den Chatnachrichten.
+ * Orientiert sich an bestehenden Wissens-Kategorien oder liefert eine prägnante neue Kategorie.
+ */
+export async function categorizeChatCategory(chatMessages, existingCategories = []) {
+  const { extractionModel } = getModelNames();
+  
+  const userMessages = (chatMessages || []).filter(m => m.sender === 'user');
+  if (userMessages.length === 0) {
+    return 'Sonstiges';
+  }
+
+  let chatText = "";
+  chatMessages.slice(-10).forEach(m => {
+    chatText += `${m.sender === 'user' ? 'Benutzer' : 'Support-Assistent'}: ${m.text}\n`;
+  });
+
+  const categoriesList = existingCategories.length > 0
+    ? existingCategories.join(', ')
+    : 'WLAN, Moodle, Schulportal, WebUntis, Hardware, Drucker, E-Mail, Benutzerkonto, Sonstiges';
+
+  const prompt = `Analysiere die folgende Bot-Konversation und ordne sie genau EINER Thema-Kategorie zu.
+Bevorzuge eine der folgenden vorhandenen Kategorien:
+[${categoriesList}]
+
+Falls keine davon passt, wähle ein kurzes sachliches Substantiv (1-2 Wörter), wie z. B. "Drucker", "WLAN", "Moodle", "Hardware", "Software", "Netzwerk", "E-Mail", "Passwort".
+
+Antworte AUSSCHLIESSLICH mit dem reinen Kategorienamen (ohne Satzzeichen, ohne Anführungszeichen, ohne Markdown).
+
+Chatverlauf:
+${chatText}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+
+  try {
+    const rawCategory = await callGemini(extractionModel, payload);
+    if (!rawCategory) return 'Sonstiges';
+    const cleanCategory = rawCategory.trim().replace(/^["']|["']$/g, '').replace(/[.#]$/, '');
+    return cleanCategory || 'Sonstiges';
+  } catch (err) {
+    console.error('Fehler bei categorizeChatCategory:', err);
+    return 'Sonstiges';
+  }
+}
+
+/**
  * Ermittelt den am besten passenden Agenten für ein Ticket basierend auf seinen Zuständigkeiten.
  * Gibt die Agenten-ID oder null zurück (wenn keine oder mehrere passen).
  */

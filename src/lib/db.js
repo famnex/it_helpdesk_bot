@@ -191,6 +191,13 @@ try {
     console.log("Migration: Spalte 'user_session_id' zur Tabelle 'chats' hinzugefügt.");
   }
 
+  const hasChatCategory = tableInfoChatsAbuse.some(col => col.name === 'category');
+  if (!hasChatCategory) {
+    db.exec("ALTER TABLE chats ADD COLUMN category TEXT;");
+    db.exec("ALTER TABLE chats ADD COLUMN categorized_at DATETIME;");
+    console.log("Migration: Spalten 'category' und 'categorized_at' zur Tabelle 'chats' hinzugefügt.");
+  }
+
   const tableInfoKnowledge = db.prepare("PRAGMA table_info(knowledge)").all();
   
   const hasDescription = tableInfoKnowledge.some(col => col.name === 'description');
@@ -379,5 +386,10 @@ export function isSetupRequired() {
     return true;
   }
 }
+
+// 5-Minuten Cronjob für Bot-Chat-Kategorisierung beim Server-Start initiieren
+try {
+  import('./categorizer').then(m => m.startCategorizerCron?.()).catch(() => {});
+} catch (e) {}
 
 export default db;

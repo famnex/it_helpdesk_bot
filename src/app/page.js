@@ -317,54 +317,45 @@ export default function CustomerChatPage() {
       imageUrl: currentPreview 
     }]);
 
-    // Wenn der Chatbot deaktiviert ist, nutzen wir den direkten Ablauf
+    // Wenn der Chatbot deaktiviert ist, sammeln wir Nachrichten & Bilder für das Ticket
     if (isChatbotDisabled) {
-      if (directTicketStep === 1) {
-        // Schritt 1 abgeschlossen: Wir haben den Titel
-        setDirectTicketTitle(userText);
-        setDirectTicketStep(2);
-        
+      if (userText.trim()) {
+        setDirectTicketTexts(prev => [...prev, userText]);
+      }
+      if (currentPhoto) {
+        // Foto hochladen (mit skip_bot = true)
         setIsTyping(true);
-        setTimeout(() => {
-          setMessages(prev => [
-            ...prev,
-            {
-              sender: 'bot',
-              text: `Alles klar. Der Betreff deines Tickets lautet: **"${userText}"**.\n\nBeschreibe nun bitte genau dein Problem. Du kannst auch mehrere Nachrichten hintereinander schreiben oder Bilder hochladen. Wenn du fertig bist, klicke unten auf **"Ticket jetzt einsenden"**.`
+        try {
+          const formData = new FormData();
+          formData.append('chatId', chatId);
+          formData.append('photo', currentPhoto);
+          formData.append('skip_bot', 'true');
+          
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            body: formData
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.imageUrl || currentPreview) {
+              setDirectTicketPhotos(prev => [...prev, data.imageUrl || currentPreview]);
             }
-          ]);
-          setIsTyping(false);
-        }, 800);
-      } else if (directTicketStep === 2) {
-        // Schritt 2: Problembeschreibungen sammeln
-        if (userText.trim()) {
-          setDirectTicketTexts(prev => [...prev, userText]);
-        }
-        if (currentPhoto) {
-          // Foto hochladen (mit skip_bot = true)
-          setIsTyping(true);
-          try {
-            const formData = new FormData();
-            formData.append('chatId', chatId);
-            formData.append('photo', currentPhoto);
-            formData.append('skip_bot', 'true');
-            
-            const res = await fetch('/api/chat', {
-              method: 'POST',
-              body: formData
-            });
-            if (res.ok) {
-              const data = await res.json();
-              // Wir merken uns den Pfad des hochgeladenen Bildes zur späteren Zuordnung
-              if (data.imageUrl || currentPreview) {
-                setDirectTicketPhotos(prev => [...prev, data.imageUrl || currentPreview]);
-              }
-            }
-          } catch (err) {
-            console.error('Fehler beim Hochladen des Bildes im Direktmodus:', err);
-          } finally {
-            setIsTyping(false);
           }
+        } catch (err) {
+          console.error('Fehler beim Bild-Upload:', err);
+        } finally {
+          setIsTyping(false);
+        }
+      } else if (userText.trim()) {
+        // Textnachricht an Chat-API spiegeln (mit skip_bot = true)
+        try {
+          await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId, text: userText, skip_bot: true })
+          });
+        } catch (err) {
+          console.error('Fehler beim Nachricht-Spiegeln:', err);
         }
       }
       return;
@@ -504,39 +495,27 @@ export default function CustomerChatPage() {
  
   // Direktes Ticket absenden im Deaktiviert-Modus
   const submitDirectTicket = async () => {
-    if (!directTicketTitle.trim()) return;
+    if (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim()) return;
 
-    let finalDesc = '';
-    if (directTicketTexts.length > 0) {
-      finalDesc = directTicketTexts.join('\n\n');
-    } else {
-      finalDesc = 'Keine Beschreibung angegeben.';
-    }
-
-    if (directTicketPhotos.length > 0) {
-      finalDesc += '\n\n**Angehängte Bilder:**\n' + directTicketPhotos.map(p => `- [Bild anzeigen](${p})`).join('\n');
-    }
-
-    setTicketCreationLoading(true);
-    
-    // Zuerst Chatverlauf in DB spiegeln (mit skip_bot = true)
-    try {
-      for (const txt of directTicketTexts) {
+    if (inputValue.trim()) {
+      const pendingText = inputValue;
+      setInputValue('');
+      setDirectTicketTexts(prev => [...prev, pendingText]);
+      setMessages(prev => [...prev, { sender: 'user', text: pendingText }]);
+      try {
         await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatId, text: txt, skip_bot: true })
+          body: JSON.stringify({ chatId, text: pendingText, skip_bot: true })
         });
-      }
-    } catch (err) {
-      console.error('Fehler beim Vorbereiten des Chats in DB:', err);
+      } catch (e) {}
     }
 
+    setTicketCreationLoading(true);
     const emailToUse = user ? user.email : guestEmail;
 
     if (!emailToUse) {
-      // Wenn nicht eingeloggt, E-Mail abfragen
-      setPendingTicketTitle(directTicketTitle);
+      setPendingTicketTitle('Support-Anfrage');
       setShowEmailPrompt(true);
       setTicketCreationLoading(false);
       return;
@@ -547,15 +526,13 @@ export default function CustomerChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          title: directTicketTitle, 
+          title: 'Support-Anfrage', 
           creator_email: emailToUse, 
-          chat_id: chatId,
-          skip_ai: true
+          chat_id: chatId
         })
       });
       const data = await res.json();
       if (data.success) {
-        // Systemnachricht hinzufügen
         setMessages(prev => [...prev, {
           sender: 'system',
           text: `Dein Support-Ticket ${data.ticketId} wurde erfolgreich erstellt! Ein IT-Administrator wird sich darum kümmern.`,
@@ -563,7 +540,6 @@ export default function CustomerChatPage() {
           ticketId: data.ticketId
         }]);
 
-        // Zustand zurücksetzen
         setDirectTicketStep(0);
         setDirectTicketTitle('');
         setDirectTicketTexts([]);
@@ -582,14 +558,14 @@ export default function CustomerChatPage() {
   const handleChatbotToggle = (checked) => {
     setIsChatbotDisabled(checked);
     if (checked) {
-      setDirectTicketStep(1);
+      setDirectTicketStep(2);
       setDirectTicketTitle('');
       setDirectTicketTexts([]);
       setDirectTicketPhotos([]);
       setMessages([
         {
           sender: 'bot',
-          text: 'Der KI-Assistent wurde deaktiviert. Du kommunizierst nun direkt mit unserem IT-Admin-Team.\n\nBitte nenne mir zuerst einen aussagekräftigen **Betreff / Titel** für deine Support-Anfrage:'
+          text: 'Der KI-Assistent wurde deaktiviert. Du kommunizierst nun direkt mit unserem IT-Admin-Team.\n\nBitte beschreibe hier dein IT-Problem (du kannst auch Fotos/Screenshots hochladen). Wenn du fertig bist, klicke unten auf **"Ticket jetzt einsenden"**.'
         }
       ]);
     } else {
@@ -625,10 +601,9 @@ export default function CustomerChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          title: pendingTicketTitle || directTicketTitle, 
+          title: pendingTicketTitle || 'Support-Anfrage', 
           creator_email: guestEmail, 
-          chat_id: chatId,
-          skip_ai: true
+          chat_id: chatId
         })
       });
       
@@ -1164,12 +1139,12 @@ export default function CustomerChatPage() {
                 </span>
               </div>
             </label>
-            {isChatbotDisabled && directTicketStep === 2 && (
+            {isChatbotDisabled && (
               <button
                 type="button"
                 onClick={submitDirectTicket}
-                disabled={ticketCreationLoading}
-                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim())}
+                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <i className="fa-solid fa-paper-plane"></i>
                 <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
@@ -1227,7 +1202,7 @@ export default function CustomerChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder={isChatbotDisabled ? (directTicketStep === 1 ? "Gib hier den Betreff/Titel deines Problems ein..." : "Beschreibe hier dein Problem ausführlicher...") : "Beschreibe dein IT-Problem oder lade ein Foto hoch..."}
+                placeholder={isChatbotDisabled ? "Beschreibe hier dein IT-Problem oder lade ein Foto hoch..." : "Beschreibe dein IT-Problem oder lade ein Foto hoch..."}
                 rows="1"
                 className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-1 text-sm text-slate-200 placeholder-slate-600 outline-none"
               />

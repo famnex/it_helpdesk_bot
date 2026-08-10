@@ -16,6 +16,171 @@ const safeParseMarkdown = (content) => {
   return String(content);
 };
 
+const CATEGORY_COLORS = [
+  { stroke: '#8b5cf6', badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20', text: 'text-violet-400' },
+  { stroke: '#38bdf8', badge: 'bg-sky-500/10 text-sky-400 border-sky-500/20', text: 'text-sky-400' },
+  { stroke: '#34d399', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', text: 'text-emerald-400' },
+  { stroke: '#fbbf24', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20', text: 'text-amber-400' },
+  { stroke: '#f43f5e', badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20', text: 'text-rose-400' },
+  { stroke: '#e879f9', badge: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20', text: 'text-fuchsia-400' },
+  { stroke: '#2dd4bf', badge: 'bg-teal-500/10 text-teal-300 border-teal-500/20', text: 'text-teal-300' },
+  { stroke: '#94a3b8', badge: 'bg-slate-500/10 text-slate-400 border-slate-500/20', text: 'text-slate-400' }
+];
+
+function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
+  const [activeCategory, setActiveCategory] = useState(null);
+
+  if (!breakdown || breakdown.length === 0) return null;
+
+  const radius = 70;
+  const circumference = 2 * Math.PI * radius;
+  let accumulatedOffset = 0;
+
+  const segments = breakdown.map((item, idx) => {
+    const colorScheme = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+    const segmentLength = (item.percentage / 100) * circumference;
+    const strokeDashoffset = -accumulatedOffset;
+    accumulatedOffset += segmentLength;
+
+    return {
+      ...item,
+      colorScheme,
+      segmentLength,
+      strokeDashoffset
+    };
+  });
+
+  const activeItem = activeCategory ? segments.find(s => s.category === activeCategory) : null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-slate-950/70 border border-slate-850 p-6 rounded-2xl">
+      {/* Donut Graphic */}
+      <div className="lg:col-span-5 flex flex-col items-center justify-center relative py-2">
+        <div className="relative w-52 h-52 flex items-center justify-center">
+          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 180 180">
+            <circle
+              cx="90"
+              cy="90"
+              r={radius}
+              stroke="#1e293b"
+              strokeWidth="18"
+              fill="transparent"
+            />
+            {segments.map((seg) => (
+              <circle
+                key={seg.category}
+                cx="90"
+                cy="90"
+                r={radius}
+                stroke={seg.colorScheme.stroke}
+                strokeWidth={activeCategory === seg.category ? "24" : "18"}
+                strokeDasharray={`${seg.segmentLength} ${circumference}`}
+                strokeDashoffset={seg.strokeDashoffset}
+                strokeLinecap="round"
+                fill="transparent"
+                onMouseEnter={() => setActiveCategory(seg.category)}
+                onMouseLeave={() => setActiveCategory(null)}
+                className="transition-all duration-300 cursor-pointer origin-center"
+                style={{ opacity: activeCategory && activeCategory !== seg.category ? 0.35 : 1 }}
+              />
+            ))}
+          </svg>
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
+            {activeItem ? (
+              <>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate max-w-[120px]">
+                  {activeItem.category}
+                </span>
+                <span className={`text-2xl font-black ${activeItem.colorScheme.text} mt-0.5`}>
+                  {activeItem.count}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 font-mono">
+                  {activeItem.percentage}% aller Chats
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Analysiert
+                </span>
+                <span className="text-3xl font-black text-white mt-0.5">
+                  {totalChats}
+                </span>
+                <span className="text-[10px] text-violet-400 font-semibold">
+                  {segments.length} {segments.length === 1 ? 'Kategorie' : 'Kategorien'}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-2 text-center">
+          <i className="fa-solid fa-hand-pointer mr-1 text-slate-400"></i>
+          Fahre mit der Maus über ein Segment für Details
+        </p>
+      </div>
+
+      {/* Categories Legend Grid */}
+      <div className="lg:col-span-7 space-y-3">
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <i className="fa-solid fa-chart-pie text-violet-400"></i>
+            <span>Verteilung nach Themen</span>
+          </span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Anteil</span>
+        </div>
+
+        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
+          {segments.map((seg) => {
+            const isHovered = activeCategory === seg.category;
+            return (
+              <div
+                key={seg.category}
+                onMouseEnter={() => setActiveCategory(seg.category)}
+                onMouseLeave={() => setActiveCategory(null)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                  isHovered 
+                    ? 'bg-slate-900 border-violet-500/60 shadow-lg scale-[1.01]' 
+                    : 'bg-slate-950/60 border-slate-850 hover:bg-slate-900/60 hover:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 text-xs mb-1.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span 
+                      className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: seg.colorScheme.stroke }}
+                    />
+                    <span className="font-semibold text-slate-100 truncate">{seg.category}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-xs font-bold text-white">
+                      {seg.count} <span className="text-[10px] text-slate-500 font-normal">Chats</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seg.colorScheme.badge}`}>
+                      {seg.percentage}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-850">
+                  <div
+                    className="h-1.5 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min(100, seg.percentage)}%`,
+                      backgroundColor: seg.colorScheme.stroke
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +195,10 @@ export default function AdminDashboardPage() {
 
   // Statistics States
   const [statistics, setStatistics] = useState([]);
+  const [botStatistics, setBotStatistics] = useState(null);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
+  const [categorizingBotChats, setCategorizingBotChats] = useState(false);
+  const [categorizingResultMsg, setCategorizingResultMsg] = useState('');
 
   // Chats States
   const [chatsList, setChatsList] = useState([]);
@@ -269,11 +437,33 @@ export default function AdminDashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setStatistics(data.statistics || []);
+        if (data.botStatistics) setBotStatistics(data.botStatistics);
       }
     } catch (e) {
       console.error('Fehler beim Laden der Statistik:', e);
     } finally {
       setStatisticsLoading(false);
+    }
+  };
+
+  const handleCategorizeAllChats = async () => {
+    setCategorizingBotChats(true);
+    setCategorizingResultMsg('');
+    try {
+      const res = await fetch('/api/admin/chats/categorize', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setCategorizingResultMsg(`${data.processedCount} Chat(s) erfolgreich einkategorisiert.`);
+        loadStatistics();
+        if (activeTab === 'chats') loadChats();
+      } else {
+        const data = await res.json();
+        setCategorizingResultMsg(data.error || 'Fehler beim Kategorisieren.');
+      }
+    } catch (e) {
+      setCategorizingResultMsg('Verbindungsfehler.');
+    } finally {
+      setCategorizingBotChats(false);
     }
   };
 
@@ -2417,6 +2607,12 @@ export default function AdminDashboardPage() {
                                 Ticket erstellt
                               </span>
                             )}
+                            {c.category && (
+                              <span className="text-[8px] font-bold uppercase tracking-wider bg-violet-500/10 text-violet-300 border border-violet-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <i className="fa-solid fa-tag text-[7px]"></i>
+                                {c.category}
+                              </span>
+                            )}
                             {c.isAbusive === 1 && (
                               <span className="text-[8px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded">
                                 Missbrauch
@@ -2838,6 +3034,99 @@ export default function AdminDashboardPage() {
         {/* Tab 5b: Statistiken */}
         {activeTab === 'statistics' && (
           <div className="space-y-6">
+            {/* Bot-Konversationen & Themen-Kategorien Statistik */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-robot text-violet-400"></i>
+                    <span>Bot-Konversationen & Themen-Kategorien</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Automatische KI-Kategorisierung aller Support-Chats (läuft im Hintergrund zusätzlich alle 5 Minuten als Cronjob).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCategorizeAllChats}
+                  disabled={categorizingBotChats || !botStatistics || botStatistics.uncategorizedCount === 0}
+                  className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                >
+                  {categorizingBotChats ? (
+                    <>
+                      <i className="fa-solid fa-circle-notch animate-spin"></i>
+                      <span>Kategorisiere Chats...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-wand-magic-sparkles"></i>
+                      <span>Alle bisherigen Chats jetzt einkategorisieren</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {categorizingResultMsg && (
+                <div className="bg-violet-950/40 border border-violet-500/30 text-violet-200 text-xs p-3 rounded-xl flex items-center gap-2 animate-fade-in">
+                  <i className="fa-solid fa-circle-check text-violet-400"></i>
+                  <span>{categorizingResultMsg}</span>
+                </div>
+              )}
+
+              {botStatistics ? (
+                <div className="space-y-6">
+                  {/* Top Stats Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                      <div className="p-3 bg-violet-600/10 text-violet-400 border border-violet-500/20 rounded-xl text-lg">
+                        <i className="fa-solid fa-comments"></i>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Gesamt Bot-Chats</div>
+                        <div className="text-xl font-bold text-white mt-0.5">{botStatistics.totalChats}</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                      <div className="p-3 bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-lg">
+                        <i className="fa-solid fa-tags"></i>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kategorisiert</div>
+                        <div className="text-xl font-bold text-emerald-400 mt-0.5">
+                          {botStatistics.categorizedCount} <span className="text-xs text-slate-500 font-normal">({botStatistics.totalChats > 0 ? ((botStatistics.categorizedCount / botStatistics.totalChats) * 100).toFixed(0) : 0}%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                      <div className="p-3 bg-amber-600/10 text-amber-400 border border-amber-500/20 rounded-xl text-lg">
+                        <i className="fa-solid fa-clock"></i>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Unkategorisiert</div>
+                        <div className="text-xl font-bold text-amber-400 mt-0.5">{botStatistics.uncategorizedCount}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Interaktives Donut-Diagramm & Legend-Cards */}
+                  <div>
+                    {botStatistics.categoryBreakdown && botStatistics.categoryBreakdown.length > 0 ? (
+                      <BotCategoryDonutChart 
+                        breakdown={botStatistics.categoryBreakdown} 
+                        totalChats={botStatistics.totalChats} 
+                      />
+                    ) : (
+                      <p className="text-xs text-slate-500 italic bg-slate-950/30 p-4 rounded-xl border border-slate-850">
+                        Noch keine kategorisierten Chats vorhanden. Klicke oben auf "Alle bisherigen Chats jetzt einkategorisieren".
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
               <h3 className="text-sm font-bold text-white mb-1">Mitarbeiter-Statistiken (Tickets pro Agent / Admin)</h3>
               <p className="text-xs text-slate-400">Übersicht der Ticketbearbeitungen. Die Durchschnittswerte basieren auf den erledigten Support-Anfragen der jeweiligen Zeiträume.</p>

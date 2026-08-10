@@ -70,6 +70,8 @@ Speichert Chat-Sitzungen mit dem KI-Bot.
 | `abusive_flagged_at` | DATETIME | NULL | Zeitpunkt der Missbrauchs-Markierung |
 | `user_ip` | TEXT | NULL | IP-Adresse des Benutzers |
 | `user_session_id` | TEXT | NULL | Sitzungs-ID des Browsers |
+| `category` | TEXT | NULL | KI-generierte Kategorie der Bot-Konversation (z. B. WLAN, Moodle) |
+| `categorized_at` | DATETIME | NULL | Zeitpunkt der automatischen oder manuellen Kategorisierung |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
@@ -135,7 +137,8 @@ Systemweite Einstellungen als Key-Value Store.
 ## 2. Historie der Datenbank-Migrationen
 
 - **ticket_messages Rolle 'admin' hinzugefügt**: Check-Constraint erweitert für `sender_role IN ('customer', 'agent', 'admin', 'system')`.
-- **Spalten zu `chats` hinzugefügt**: `ticket_created`, `user_name`, `is_abusive`, `abusive_flagged_at`, `is_agent_on_behalf`, `user_ip`, `user_session_id`.
+- **Spalten zu `chats` hinzugefügt**: `ticket_created`, `user_name`, `is_abusive`, `abusive_flagged_at`, `is_agent_on_behalf`, `user_ip`, `user_session_id`, `category`, `categorized_at`.
+- **Bot-Konversationen Kategorisierung**: Automatische 5-Minuten-Cron-Job-Kategorisierung & manueller Button für KI-Kategorisierung aller bisherigen Chats.
 - **Spalten zu `chat_messages` hinzugefügt**: `is_flagged`, `flagged_at`, `flagged_reason`, `image_url`, `base_knowledge`.
 - **Spalten zu `knowledge` hinzugefügt**: `description`, `category`, `is_private`.
 - **Spalten zu `users` hinzugefügt**: `name`, `avatar_url`, `responsibilities`.

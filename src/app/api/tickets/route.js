@@ -86,11 +86,11 @@ export async function POST(request) {
       }
     }
 
-    let title = data.title || 'Support-Anfrage über Chat-Assistent';
+    let title = data.title || 'Support-Anfrage';
     const chatId = data.chat_id || null;
 
-    // Wenn ein Chat verknüpft ist, generiere den Titel per KI (außer skip_ai ist wahr)
-    if (chatId && !data.skip_ai) {
+    // Wenn ein Chat verknüpft ist, generiere den Titel per KI aus dem Verlauf (auch im Direktmodus)
+    if (chatId) {
       try {
         const chatMessages = db.prepare(`
           SELECT sender, text FROM chat_messages 
@@ -100,13 +100,19 @@ export async function POST(request) {
         
         if (chatMessages.length > 0) {
           const aiTitle = await generateTicketTitle(chatMessages);
-          if (aiTitle) {
-            title = aiTitle;
+          if (aiTitle && aiTitle.trim()) {
+            title = aiTitle.trim();
           }
         }
       } catch (e) {
         console.error('Fehler bei KI-Titelgenerierung:', e);
       }
+    }
+
+    // Fallback: Falls kein KI-Titel erzeugt werden konnte und der Titel zu lang / mehrzeilig ist (z. B. ganze Problembeschreibung)
+    if (title.length > 60 || title.includes('\n')) {
+      const firstLine = title.split('\n')[0].trim();
+      title = firstLine.length > 55 ? firstLine.substring(0, 55).trim() + '...' : firstLine;
     }
 
     // Eindeutige Ticket-ID generieren (TK-XXXX)
