@@ -528,6 +528,7 @@ export default function CustomerChatPage() {
 
   // Ticket direkt erstellen (wenn angemeldet)
   const createTicketDirectly = async (title, email) => {
+    setTicketCreationLoading(true);
     try {
       const res = await fetch('/api/tickets', {
         method: 'POST',
@@ -546,6 +547,10 @@ export default function CustomerChatPage() {
       }
     } catch (err) {
       console.error('Ticket konnte nicht erstellt werden:', err);
+    } finally {
+      setTicketCreationLoading(false);
+      setShowConfirmTicket(false);
+      setShowEmailPrompt(false);
     }
   };
  
@@ -1300,19 +1305,28 @@ export default function CustomerChatPage() {
               <button 
                 type="button" 
                 onClick={() => setShowConfirmTicket(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                disabled={ticketCreationLoading}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 Abbrechen
               </button>
               <button 
                 type="button" 
-                onClick={async () => {
-                  setShowConfirmTicket(false);
-                  await createTicketDirectly(pendingTicketTitle, user.email);
-                }}
-                className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold"
+                disabled={ticketCreationLoading}
+                onClick={() => createTicketDirectly(pendingTicketTitle, user.email)}
+                className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-75 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md"
               >
-                Ja, Ticket erstellen
+                {ticketCreationLoading ? (
+                  <>
+                    <i className="fa-solid fa-circle-notch fa-spin text-sm"></i>
+                    <span>Erstelle Ticket...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check text-xs"></i>
+                    <span>Ja, Ticket erstellen</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1354,10 +1368,17 @@ export default function CustomerChatPage() {
                 </button>
                 <button 
                   type="submit" 
-                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
-                  disabled={ticketCreationLoading}
+                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
+                  disabled={ticketCreationLoading || !guestEmail || !guestEmail.includes('@')}
                 >
-                  {ticketCreationLoading ? 'Erstelle...' : 'Ticket erstellen'}
+                  {ticketCreationLoading ? (
+                    <>
+                      <i className="fa-solid fa-circle-notch fa-spin text-sm"></i>
+                      <span>Erstelle Ticket...</span>
+                    </>
+                  ) : (
+                    <span>Ticket erstellen</span>
+                  )}
                 </button>
               </div>
             </div>
