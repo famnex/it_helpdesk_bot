@@ -971,26 +971,7 @@ export default function CustomerChatPage() {
             </span>
           </div>
 
-          {/* System Info Banner bei Neuanfang */}
-          {messages.length <= 1 && (
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 sm:p-5 max-w-2xl mx-auto space-y-2.5 text-xs text-slate-350 shadow-lg animate-fade-in">
-              <div className="flex items-center gap-2 text-sky-400 font-bold text-xs sm:text-sm border-b border-slate-800 pb-2">
-                <i className="fa-solid fa-circle-info"></i>
-                <span>Willkommen beim IT-Support-Assistenten</span>
-              </div>
-              <p className="leading-relaxed text-[11px] sm:text-xs">
-                Ich bin deine KI-Unterstützung für IT-Probleme in der Schule. Beschreibe dein Anliegen (z. B. WLAN, Drucker, Moodle, Beamer) oder hänge direkt ein Foto der Fehlermeldung an.
-              </p>
-              <div className="flex flex-wrap gap-1.5 pt-1 text-[10px] sm:text-[11px]">
-                <span className="bg-slate-950 border border-slate-850 px-2 py-0.5 rounded-lg text-slate-400">
-                  ⚡ KI-gestützt & gelernt
-                </span>
-                <span className="bg-slate-950 border border-slate-850 px-2 py-0.5 rounded-lg text-slate-400">
-                  📩 Automatisches Ticket bei Bedarf
-                </span>
-              </div>
-            </div>
-          )}
+
 
           {/* Nachrichten-Liste */}
           {messages.map((msg, index) => {
