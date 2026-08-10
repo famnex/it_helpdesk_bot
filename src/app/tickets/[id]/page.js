@@ -9,6 +9,9 @@ const getCleanImageUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   let clean = url.replace(/^\/helpdesk/, '');
+  if (clean.startsWith('/uploads/')) {
+    clean = clean.replace(/^\/uploads\//, '/api/uploads/');
+  }
   if (!clean.startsWith('/')) clean = '/' + clean;
   return `/helpdesk${clean}`;
 };
