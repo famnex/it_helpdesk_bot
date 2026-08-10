@@ -49,7 +49,10 @@ export default function AgentTicketDetailPage() {
   const [isSavingTitle, setIsSavingTitle] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const lastTypedTimeRef = useRef(0);
   const router = useRouter();
+
+  const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
 
   useEffect(() => {
     // Session prüfen
@@ -70,7 +73,59 @@ export default function AgentTicketDetailPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isOtherPartyTyping]);
+
+  // Live Syncing: Nachrichten & Tipp-Status ("...") alle 1.5 Sekunden prüfen
+  useEffect(() => {
+    if (!id || !user) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const lastMsg = messages[messages.length - 1];
+        const lastMsgId = lastMsg?.id && typeof lastMsg.id === 'number' ? lastMsg.id : 0;
+
+        const res = await fetch(`/api/live/sync?roomType=ticket&roomId=${id}&lastMsgId=${lastMsgId}&myRole=${user.role}&myEmail=${encodeURIComponent(user.email || '')}`);
+        if (res.ok) {
+          const data = await res.json();
+          setIsOtherPartyTyping(!!data.isOtherPartyTyping);
+
+          if (data.newMessages && data.newMessages.length > 0) {
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id));
+              if (toAdd.length === 0) return prev;
+              return [...prev, ...toAdd];
+            });
+          }
+        }
+      } catch (e) {
+        // Fehler beim Polling ignorieren
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [id, user, messages]);
+
+  const handleReplyInputChange = (e) => {
+    const val = e.target.value;
+    setReplyText(val);
+
+    const now = Date.now();
+    if (now - lastTypedTimeRef.current > 2000) {
+      lastTypedTimeRef.current = now;
+      fetch('/api/live/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomType: 'ticket',
+          roomId: id,
+          role: user?.role || 'agent',
+          email: user?.email || '',
+          isTyping: true
+        })
+      }).catch(() => {});
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -284,7 +339,7 @@ export default function AgentTicketDetailPage() {
   }
 
   return (
-    <div className="h-screen max-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
       {/* Compact Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between gap-2.5 shrink-0 shadow-lg z-20 sticky top-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -537,6 +592,22 @@ export default function AgentTicketDetailPage() {
                 </div>
               );
             })}
+
+            {/* Tipp-Indikator ("...") */}
+            {isOtherPartyTyping && (
+              <div className="flex items-center gap-2 max-w-full animate-fade-in my-2">
+                <div className="w-8 h-8 rounded-xl bg-sky-600/20 border border-sky-500/30 text-sky-400 flex items-center justify-center font-bold text-xs shrink-0">
+                  <i className="fa-solid fa-user"></i>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 text-slate-400 px-4 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
+                  <span className="font-semibold text-slate-300 mr-1">Kunde tippt</span>
+                  <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                  <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -562,7 +633,7 @@ export default function AgentTicketDetailPage() {
                 <div className="flex items-end gap-3">
                   <textarea 
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
+                    onChange={handleReplyInputChange}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();

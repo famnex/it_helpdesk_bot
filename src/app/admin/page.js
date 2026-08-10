@@ -2761,8 +2761,8 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
 
-                      {/* Identitäts-Spur & digitale Fingerabdrücke Card */}
-                      {(selectedChatDetails.isAbusive === 1 || selectedChatIdentityTrace) && (
+                      {/* Identitäts-Spur & digitale Fingerabdrücke Card (nur bei Missbrauchschats) */}
+                      {selectedChatDetails.isAbusive === 1 && (
                         <div className="mb-5 p-4 bg-red-950/25 border border-red-500/30 rounded-xl text-xs space-y-3 animate-fade-in">
                           <div className="flex justify-between items-center border-b border-red-500/20 pb-2">
                             <div className="flex items-center gap-2">

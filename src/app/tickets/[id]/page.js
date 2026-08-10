@@ -34,6 +34,7 @@ export default function CustomerTicketDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [user, setUser] = useState(null);
+  const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
 
   // Flagging Message States
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -42,6 +43,7 @@ export default function CustomerTicketDetailPage() {
   const [flagReasonText, setFlagReasonText] = useState('');
 
   const messagesEndRef = useRef(null);
+  const lastTypedTimeRef = useRef(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,7 +65,67 @@ export default function CustomerTicketDetailPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isOtherPartyTyping]);
+
+  // Live Syncing: Nachrichten & Tipp-Status ("...") alle 1.5 Sekunden prüfen
+  useEffect(() => {
+    if (!id || !user) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const lastMsg = messages[messages.length - 1];
+        const lastMsgId = lastMsg?.id && typeof lastMsg.id === 'number' ? lastMsg.id : 0;
+
+        const res = await fetch(`/api/live/sync?roomType=ticket&roomId=${id}&lastMsgId=${lastMsgId}&myRole=customer&myEmail=${encodeURIComponent(user.email || '')}`);
+        if (res.ok) {
+          const data = await res.json();
+          setIsOtherPartyTyping(!!data.isOtherPartyTyping);
+
+          if (data.newMessages && data.newMessages.length > 0) {
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id));
+              if (toAdd.length === 0) return prev;
+              const formattedToAdd = toAdd.map(m => ({
+                ...m,
+                senderRole: m.senderRole || 'agent',
+                senderEmail: m.senderEmail,
+                senderName: m.senderName || 'Support-Mitarbeiter',
+                text: m.text,
+                createdAt: m.createdAt
+              }));
+              return [...prev, ...formattedToAdd];
+            });
+          }
+        }
+      } catch (e) {
+        // Fehler beim Polling ignorieren
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [id, user, messages]);
+
+  const handleReplyInputChange = (e) => {
+    const val = e.target.value;
+    setReplyText(val);
+
+    const now = Date.now();
+    if (now - lastTypedTimeRef.current > 2000) {
+      lastTypedTimeRef.current = now;
+      fetch('/api/live/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomType: 'ticket',
+          roomId: id,
+          role: 'customer',
+          email: user?.email || '',
+          isTyping: true
+        })
+      }).catch(() => {});
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -225,10 +287,10 @@ export default function CustomerTicketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans h-screen overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 fixed top-0 left-0 right-0">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg z-20 relative w-full">
         <div className="flex items-center gap-3">
           <Link href="/tickets" className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-700 transition-colors flex items-center justify-center">
             <i className="fa-solid fa-arrow-left"></i>
@@ -244,13 +306,13 @@ export default function CustomerTicketDetailPage() {
       </header>
 
       {/* Ticket Body & Messages Area */}
-      <div className={`flex-1 flex flex-col md:flex-row overflow-hidden relative pt-[73px] ${ticket.status !== 'closed' ? 'pb-[92px]' : ''}`}>
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 w-full">
         
         {/* Chat Verlauf */}
-        <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20">
+        <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20 min-h-0 w-full">
           
           {/* Nachrichtenhistorie */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
             
             {/* Lösungsbox oben anzeigen, falls geschlossen */}
             {ticket.status === 'closed' && ticket.solution && (
@@ -337,16 +399,32 @@ export default function CustomerTicketDetailPage() {
                 </div>
               );
             })}
+
+            {/* Tipp-Indikator ("...") */}
+            {isOtherPartyTyping && (
+              <div className="flex items-center gap-2 max-w-full animate-fade-in my-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 flex items-center justify-center font-bold text-xs shrink-0">
+                  <i className="fa-solid fa-headset"></i>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 text-slate-400 px-4 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
+                  <span className="font-semibold text-slate-300 mr-1">Support schreibt</span>
+                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
           {/* Antworten Form */}
           {ticket.status !== 'closed' ? (
-            <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg">
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 z-10 shadow-lg w-full">
               <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex items-end gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
                 <textarea 
                   value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
+                  onChange={handleReplyInputChange}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

@@ -159,6 +159,13 @@ export async function POST(request) {
       }
     }
 
+    let cleanRelativePath = null;
+    if (relativePath) {
+      let clean = relativePath.replace(/^\/helpdesk/, '');
+      if (!clean.startsWith('/')) clean = '/' + clean;
+      cleanRelativePath = `/helpdesk${clean}`;
+    }
+
     if (shouldInsert) {
       db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
         .run(chatId, 'user', text, relativePath);
@@ -180,7 +187,7 @@ export async function POST(request) {
           console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
         }
       }
-      return NextResponse.json({ success: true, imageUrl: relativePath });
+      return NextResponse.json({ success: true, imageUrl: cleanRelativePath });
     }
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
@@ -320,7 +327,8 @@ export async function POST(request) {
       extractedData,
       isAgentOnBehalf: isAgentOnBehalfMode,
       botMessageId,
-      isAbusive
+      isAbusive,
+      imageUrl: cleanRelativePath
     });
 
   } catch (err) {

@@ -318,6 +318,28 @@ export default function CustomerChatPage() {
     }
   };
 
+  const lastTypedTimeRef = useRef(0);
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInputValue(val);
+
+    const now = Date.now();
+    if (now - lastTypedTimeRef.current > 2000) {
+      lastTypedTimeRef.current = now;
+      fetch('/api/live/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomType: 'chat',
+          roomId: chatId,
+          role: 'customer',
+          email: user?.email || '',
+          isTyping: true
+        })
+      }).catch(() => {});
+    }
+  };
+
   const handleSend = async (e, suggestionText = '') => {
     if (e) e.preventDefault();
     
@@ -359,7 +381,7 @@ export default function CustomerChatPage() {
           if (res.ok) {
             const data = await res.json();
             if (data.imageUrl || currentPreview) {
-              setDirectTicketPhotos(prev => [...prev, data.imageUrl || currentPreview]);
+              setDirectTicketPhotos(prev => [...prev, getCleanImageUrl(data.imageUrl || currentPreview)]);
             }
           }
         } catch (err) {
@@ -406,6 +428,19 @@ export default function CustomerChatPage() {
  
       const data = await res.json();
       
+      // Falls ein Bild hochgeladen wurde, die temporäre blob-URL in den Nachrichten durch die permanente Server-URL ersetzen
+      if (data.imageUrl) {
+        const cleanServerUrl = getCleanImageUrl(data.imageUrl);
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastUserMsgIdx = updated.findLastIndex(m => m.sender === 'user' && m.imageUrl);
+          if (lastUserMsgIdx !== -1) {
+            updated[lastUserMsgIdx] = { ...updated[lastUserMsgIdx], imageUrl: cleanServerUrl };
+          }
+          return updated;
+        });
+      }
+
       // Bot-Nachricht hinzufügen
       setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
       setIsTyping(false);
@@ -709,10 +744,10 @@ export default function CustomerChatPage() {
   };
  
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
+    <div className="h-[100dvh] max-h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 font-sans text-slate-100">
       
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 z-30 fixed top-0 left-0 right-0 shadow-lg h-[72px]">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 z-30 relative shadow-lg h-[72px] w-full">
         <div className="flex items-center gap-3">
           <div className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
             <i className="fa-solid fa-graduation-cap text-xl md:text-2xl"></i>
@@ -1104,13 +1139,13 @@ export default function CustomerChatPage() {
               </div>
             );
           })}
- 
-          {/* Prompt-Vorschläge (nur am Anfang und wenn kein Ticket-Prompt da ist) */}
+
+          {/* Schnell-Vorschläge (falls vorhanden) */}
           {messages.length === 1 && !isTyping && !showTicketPrompt && (
-            <div className="max-w-4xl mx-auto pl-12 pr-6 animate-fade-in space-y-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Häufige Fragen:</p>
+            <div className="space-y-2 pt-2 animate-fade-in max-w-2xl mx-auto">
+              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Häufige Themen:</p>
               <div className="flex flex-wrap gap-2">
-                {suggestions.map((s, idx) => (
+                {SUGGESTIONS.map((s, idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -1123,28 +1158,12 @@ export default function CustomerChatPage() {
               </div>
             </div>
           )}
-
-          {/* Typing Indicator */}
-          {isTyping && (
-            <div className="flex gap-3 max-w-[85%] animate-fade-in">
-              <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-1 shadow-md">
-                <i className="fa-solid fa-robot text-sm"></i>
-              </div>
-              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-md flex items-center">
-                <div className="typing-indicator flex">
-                  <span></span><span></span><span></span>
-                </div>
-              </div>
-            </div>
-          )}
  
           <div ref={messagesEndRef} />
-          {/* Scroll Spacer to allow scrolling past fixed input container */}
-          <div className="h-40" />
         </div>
  
         {/* Input Area */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-10 shadow-lg flex flex-col gap-3">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 z-20 shadow-lg flex flex-col gap-3 w-full">
           
           {/* Chatbot Deactivation Toggle */}
           <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/60 pb-3">
@@ -1218,7 +1237,7 @@ export default function CustomerChatPage() {
 
               <textarea 
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();

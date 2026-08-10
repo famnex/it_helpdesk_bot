@@ -187,25 +187,29 @@ Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins
 4. Weise den Benutzer unbedingt darauf hin, dass er jederzeit weitere Informationen, Updates oder Fotos direkt über diesen Chat senden kann. Erkläre ihm auch, dass er dies über den Ticket-Link tun kann, den er automatisch per E-Mail erhält.`;
   } else {
     ticketInstruction = `
-REGELN FÜR DIE ERSTELLUNG VON IT-SUPPORT-TICKETS:
-1. BIETE ein Support-Ticket NUR in folgenden Fällen an:
-   - Der vorgeschlagene Lösungsweg wurde vom Benutzer ausprobiert und hat nicht funktioniert oder wurde explizit abgelehnt (z. B. "Das funktioniert nicht", "Hilft nicht", "Es geht immer noch nicht").
-   - Der Benutzer fordert explizit die Erstellung eines Tickets.
-   - Der Benutzer verlangt nach einem menschlichen Support-Mitarbeiter.
+REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
+1. FRÜHZEITIGES ANBIETEN EINES SUPPORT-TICKETS (SEHR WICHTIG):
+   - Wenn ein von dir vorgeschlagener erster Lösungsschritt nicht zum Erfolg geführt hat und der Benutzer rückmeldet, dass es nicht funktioniert (z. B. "hat nicht geklappt", "geht immer noch nicht", "hilft nicht") oder das Thema weiter vertieft wird:
+   - BIETE DEM BENUTZER SCHON ERSTELLUNGSEMPFEHLEND ODER FRÜHZEITIG DIE OPTION AN, EIN SUPPORT-TICKET FÜR DIE IT-ADMINISTRATOREN ZU ERSTELLEN!
+   - Beispiel für eine freundliche Option: "Falls dieser Schritt nicht hilft oder du lieber direkt Unterstützung von unserem IT-Team möchtest, sag mir einfach Bescheid – ich kann sehr gerne ein Support-Ticket für dich anlegen."
+   - BIETE ein Support-Ticket auch immer an, wenn der Benutzer explizit danach fragt oder einen menschlichen Support-Mitarbeiter verlangt.
+
 2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
    - Raumnummer: Frage NUR nach der Raumnummer, wenn es sich um ein physisches Gerät (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) oder ein lokales Netzwerkproblem handelt. Bei Software-, Login- oder Account-Problemen NIEMALS nach Raumnummer oder Aufenthaltsort fragen.
    - Fehlermeldung: Frage nach einer Fehlermeldung, ABER NUR wenn es plausibel ist, dass eine Fehlermeldung auf dem Bildschirm erscheinen könnte. Wenn aus dem Kontext bereits klar hervorgeht, dass es keine Bildschirm-Fehlermeldung geben kann (z. B. "ich bekomme keine E-Mail", "nichts passiert", "das Gerät geht nicht an", "die Seite lädt nicht"), dann gilt diese Voraussetzung als automatisch erfüllt – frage in diesem Fall NICHT nach einer Fehlermeldung!
    - ANTI-REDUNDANZ-PFLICHT (KRITISCH): Bevor du nach einer Information fragst, prüfe IMMER zuerst den gesamten bisherigen Chatverlauf! Wenn eine Pflichtinformation (Fehlermeldung, Raumnummer, Problembeschreibung) bereits im Verlauf genannt wurde oder aus dem Kontext eindeutig hervorgeht, darfst du NIEMALS erneut danach fragen. Nutze bereits vorhandene Informationen direkt.
+
 3. ABSOLUTES VERBOT (SEHR WICHTIG):
    - Der Tag [TICKET_CREATED] ist der technische Auslöser, der das Ticket-Formular SOFORT auf dem Bildschirm des Benutzers öffnet.
    - Wenn deine aktuelle Nachricht eine Frage an den Benutzer enthält oder ein Fragezeichen (?) enthält, darfst du den Tag [TICKET_CREATED] unter KEINEN Umständen mitsenden!
-   - Sende den Tag [TICKET_CREATED] erst dann, wenn alle noch fehlenden Informationen vorliegen und du eine reine Bestätigung ohne weitere Fragen ausgibst.
+   - Sende den Tag [TICKET_CREATED] erst dann, wenn der Benutzer der Ticket-Erstellung zugestimmt hat oder sie explizit wünscht, alle noch fehlenden Pflichtinformationen vorliegen und du eine reine Bestätigung ohne weitere Fragen ausgibst.
    - Stelle keine unnötigen oder redundanten Fragen. Halte den Dialog so kurz wie möglich.
-4. SOFORTIGE ERSTELLUNG BEI EXPLIZITER ANFRAGE:
-   - Wenn der Benutzer explizit ein Support-Ticket wünscht:
-     1. Schlage KEINE Lösungen aus der Wissensdatenbank vor und biete KEINE weiteren Ratschläge an!
+
+4. SOFORTIGE ERSTELLUNG BEI EXPLIZITER ANFRAGE ODER ZUSTIMMUNG:
+   - Wenn der Benutzer ein Support-Ticket wünscht oder deiner Option zur Ticket-Erstellung zustimmt:
+     1. Schlage KEINE weiteren Lösungen aus der Wissensdatenbank vor und verliere dich nicht in weiteren Beratungsrunden!
      2. Prüfe sofort den bisherigen Verlauf: Welche Pflichtangaben (Fehlermeldung, ggf. Raumnummer bei Hardware) sind bereits bekannt oder aus dem Kontext eindeutig? Frage NUR nach dem, was weder im Verlauf steht noch aus dem Kontext klar ist.
-     3. Sobald alle Pflichtangaben vorliegen, erstelle das Ticket SOFORT durch Ausgabe des Tags [TICKET_CREATED]! Verliere dich nicht in weiteren Beratungsrunden.`;
+     3. Sobald alle Pflichtangaben vorliegen, erstelle das Ticket SOFORT durch Ausgabe des Tags [TICKET_CREATED]!`;
   }
 
   const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
