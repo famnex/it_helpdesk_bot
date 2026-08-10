@@ -11,6 +11,19 @@ const getCleanImageUrl = (url) => {
   if (!clean.startsWith('/')) clean = '/' + clean;
   return `/helpdesk${clean}`;
 };
+
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
+    str = str + 'Z';
+  }
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
  
 export default function CustomerChatPage() {
   const [chatId, setChatId] = useState('');
@@ -1036,7 +1049,7 @@ export default function CustomerChatPage() {
                     )}
                     <div className="flex items-center gap-2 mt-1 mx-1">
                       <span className="text-[9px] text-slate-500">
-                        {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'}
+                        {isUser ? (user?.name || 'Du') : 'IT-Helpdesk-Bot'} {msg.createdAt ? `- ${parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr` : ''}
                       </span>
                       {!isUser && msg.id && (
                         <button

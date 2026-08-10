@@ -13,6 +13,19 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
+    str = str + 'Z';
+  }
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 export default function AgentTicketDetailPage() {
   const { id } = useParams();
   const [ticket, setTicket] = useState(null);
@@ -517,7 +530,7 @@ export default function AgentTicketDetailPage() {
                         />
                       </div>
                       <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                        {msg.senderRole === 'bot' ? 'IT-Helpdesk-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {msg.senderRole === 'bot' ? 'IT-Helpdesk-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                     </div>
                   </div>

@@ -24,6 +24,19 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
+    str = str + 'Z';
+  }
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 const CATEGORY_COLORS = [
   { stroke: '#8b5cf6', badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20', text: 'text-violet-400' },
   { stroke: '#38bdf8', badge: 'bg-sky-500/10 text-sky-400 border-sky-500/20', text: 'text-sky-400' },
@@ -2657,7 +2670,7 @@ export default function AdminDashboardPage() {
                               ID: {selectedChatDetails.id}
                             </span>
                             <span className="text-[10px] text-slate-500">
-                              Erstellt am: {new Date(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
+                              Erstellt am: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
                             </span>
                           </div>
                           <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -2738,7 +2751,7 @@ export default function AdminDashboardPage() {
                                     {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                   </span>
                                   <span className="text-slate-600 font-normal">
-                                    {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                    {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                   </span>
                                 </div>
                                 
@@ -2817,7 +2830,7 @@ export default function AdminDashboardPage() {
                     ) : selectedChatDetails ? (
                       <div className="space-y-4">
                         <div className="text-[10px] text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1 font-mono">
-                          <div>Erstellt: {new Date(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr</div>
+                          <div>Erstellt: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr</div>
                           {selectedChatDetails.userIp && <div>IP: {selectedChatDetails.userIp}</div>}
                           {selectedChatDetails.userSessionId && <div>Session: {selectedChatDetails.userSessionId}</div>}
                         </div>
@@ -2855,7 +2868,7 @@ export default function AdminDashboardPage() {
                                       {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                     </span>
                                     <span className="text-slate-600 font-normal">
-                                      {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                      {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                     </span>
                                     {msg.baseKnowledge && (
                                       <span className="bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1">
@@ -3259,7 +3272,7 @@ export default function AdminDashboardPage() {
                           {msg.chatId}
                         </span>
                         <span className="text-slate-400">
-                          Gemeldet: <strong className="text-slate-200">{new Date(msg.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                          Gemeldet: <strong className="text-slate-200">{parseUtcDate(msg.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
                         </span>
                         {msg.userEmail && (
                           <span className="text-slate-400">
@@ -3328,7 +3341,7 @@ export default function AdminDashboardPage() {
                                   {isUser ? 'Benutzer' : 'IT-Helpdesk-Bot'}
                                 </span>
                                 <span className="text-slate-600 font-normal">
-                                  {new Date(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                  {parseUtcDate(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                 </span>
                                 {isTarget && (
                                   <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase scale-90">
@@ -3379,7 +3392,7 @@ export default function AdminDashboardPage() {
                             {chat.id}
                           </span>
                           <span className="text-slate-400">
-                            Erkannt: <strong className="text-slate-200">{new Date(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                            Erkannt: <strong className="text-slate-200">{parseUtcDate(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
                           </span>
                           <span className="text-slate-400">
                             Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
@@ -3444,7 +3457,7 @@ export default function AdminDashboardPage() {
                                   {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
                                 </span>
                                 <span className="text-slate-600 font-normal">
-                                  {new Date(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                  {parseUtcDate(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                 </span>
                               </div>
                               <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">

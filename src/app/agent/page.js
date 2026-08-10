@@ -5,6 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
 
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
+    str = str + 'Z';
+  }
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 export default function AgentDashboardPage() {
   const [tickets, setTickets] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -507,7 +520,7 @@ export default function AgentDashboardPage() {
                             </Link>
                           </div>
                           <span className="text-[10px] text-slate-500 block mt-0.5">
-                            Aktualisiert: {new Date(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            Aktualisiert: {parseUtcDate(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 text-xs">

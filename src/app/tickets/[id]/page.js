@@ -13,6 +13,19 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
+    str = str + 'Z';
+  }
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 export default function CustomerTicketDetailPage() {
   const { id } = useParams();
   const [ticket, setTicket] = useState(null);
@@ -305,7 +318,7 @@ export default function CustomerTicketDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-1 mx-1">
                       <span className="text-[9px] text-slate-500">
-                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {new Date(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                       {isBot && msg.id && (
                         <button
