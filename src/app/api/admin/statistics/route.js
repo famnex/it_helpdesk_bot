@@ -27,49 +27,49 @@ export async function GET() {
       const dayRow = db.prepare(`
         SELECT COUNT(*) as count 
         FROM tickets 
-        WHERE assigned_agent_id = ? 
-          AND status = 'closed'
-          AND updated_at >= date('now', '-30 days')
-      `).get(agent.id);
+        WHERE status = 'closed'
+          AND (closed_by_user_id = ? OR LOWER(closed_by_email) = LOWER(?) OR (closed_by_user_id IS NULL AND assigned_agent_id = ?))
+          AND COALESCE(closed_at, updated_at) >= date('now', '-30 days')
+      `).get(agent.id, agent.email, agent.id);
       const ticketsDayAvg = parseFloat(((dayRow?.count || 0) / 30).toFixed(2));
 
       // 2. Pro Woche im Schnitt (Tickets geschlossen in den letzten 12 Wochen geteilt durch 12)
       const weekRow = db.prepare(`
         SELECT COUNT(*) as count 
         FROM tickets 
-        WHERE assigned_agent_id = ? 
-          AND status = 'closed'
-          AND updated_at >= date('now', '-84 days')
-      `).get(agent.id);
+        WHERE status = 'closed'
+          AND (closed_by_user_id = ? OR LOWER(closed_by_email) = LOWER(?) OR (closed_by_user_id IS NULL AND assigned_agent_id = ?))
+          AND COALESCE(closed_at, updated_at) >= date('now', '-84 days')
+      `).get(agent.id, agent.email, agent.id);
       const ticketsWeekAvg = parseFloat(((weekRow?.count || 0) / 12).toFixed(2));
 
       // 3. Pro Monat im Schnitt (Tickets geschlossen im letzten Jahr geteilt durch 12)
       const monthRow = db.prepare(`
         SELECT COUNT(*) as count 
         FROM tickets 
-        WHERE assigned_agent_id = ? 
-          AND status = 'closed'
-          AND updated_at >= date('now', '-365 days')
-      `).get(agent.id);
+        WHERE status = 'closed'
+          AND (closed_by_user_id = ? OR LOWER(closed_by_email) = LOWER(?) OR (closed_by_user_id IS NULL AND assigned_agent_id = ?))
+          AND COALESCE(closed_at, updated_at) >= date('now', '-365 days')
+      `).get(agent.id, agent.email, agent.id);
       const ticketsMonthAvg = parseFloat(((monthRow?.count || 0) / 12).toFixed(2));
 
       // 4. Pro Jahr (Tickets geschlossen im letzten Jahr)
       const yearRow = db.prepare(`
         SELECT COUNT(*) as count 
         FROM tickets 
-        WHERE assigned_agent_id = ? 
-          AND status = 'closed'
-          AND updated_at >= date('now', '-365 days')
-      `).get(agent.id);
+        WHERE status = 'closed'
+          AND (closed_by_user_id = ? OR LOWER(closed_by_email) = LOWER(?) OR (closed_by_user_id IS NULL AND assigned_agent_id = ?))
+          AND COALESCE(closed_at, updated_at) >= date('now', '-365 days')
+      `).get(agent.id, agent.email, agent.id);
       const ticketsYearTotal = yearRow?.count || 0;
 
       // 5. Gesamtzahl geschlossener Tickets aller Zeiten
       const totalClosedRow = db.prepare(`
         SELECT COUNT(*) as count 
         FROM tickets 
-        WHERE assigned_agent_id = ? 
-          AND status = 'closed'
-      `).get(agent.id);
+        WHERE status = 'closed'
+          AND (closed_by_user_id = ? OR LOWER(closed_by_email) = LOWER(?) OR (closed_by_user_id IS NULL AND assigned_agent_id = ?))
+      `).get(agent.id, agent.email, agent.id);
       const totalClosed = totalClosedRow?.count || 0;
 
       // 6. Aktuell zugewiesene offene Tickets

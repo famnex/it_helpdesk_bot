@@ -33,9 +33,22 @@ export async function POST(request, { params }) {
     const sol = isSilent ? 'Ohne Lösung geschlossen' : solution;
     let computedContext = null;
 
-    // Status aktualisieren und Lösung eintragen
-    db.prepare('UPDATE tickets SET status = \'closed\', solution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(sol, id);
+    const closingName = user.name || user.email.split('@')[0];
+    const closingEmail = user.email.toLowerCase();
+    const closingUserId = user.id;
+
+    // Status aktualisieren und Schließungs-Informationen eintragen
+    db.prepare(`
+      UPDATE tickets 
+      SET status = 'closed', 
+          solution = ?, 
+          closed_by_email = ?, 
+          closed_by_name = ?, 
+          closed_by_user_id = ?, 
+          closed_at = CURRENT_TIMESTAMP, 
+          updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `).run(sol, closingEmail, closingName, closingUserId, id);
 
     const closingUserText = user.name ? `${user.name} (${user.email})` : user.email;
 

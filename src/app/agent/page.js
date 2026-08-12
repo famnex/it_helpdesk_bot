@@ -558,7 +558,10 @@ export default function AgentDashboardPage() {
                               ))}
                             </select>
                           ) : (
-                            <span className="text-[11px] text-slate-500 italic">Geschlossen</span>
+                            <span className="text-[11px] text-emerald-400 font-medium truncate flex items-center gap-1">
+                              <i className="fa-solid fa-lock text-[10px] text-emerald-500"></i>
+                              <span>Geschlossen von {tk.closedByName || tk.closedByEmail || 'Support'}</span>
+                            </span>
                           )}
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 text-right">

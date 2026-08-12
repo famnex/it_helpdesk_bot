@@ -562,14 +562,73 @@ export default function AdminDashboardPage() {
     setChunkTitle(suggestion?.title || '');
     setChunkCategory(suggestion?.category || 'Sonstiges');
     setChunkDescription(suggestion?.description || '');
+    setChunkFact(suggestion?.description || suggestion?.title || '');
     setChunkIsPrivate(true);
     setEditingChunk(null);
     setIsCreatingChunk(true);
-    setActiveTab('private_knowledge');
+    setActiveTab('internal_knowledge');
     setQualityAnalysisModal(null);
     setChatAnalysis(null);
     setShowMobileChatModal(false);
     // Sanft nach oben scrollen zum Formular
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenChunkInEditorById = async (chunkId) => {
+    if (!chunkId) return;
+    const cleanId = String(chunkId).trim();
+
+    // 1. In geladener Knowledge-Liste suchen
+    let found = knowledge.find(k => String(k.id) === cleanId || String(k.id) === `chunk-${cleanId}` || cleanId.includes(String(k.id)));
+    if (!found) {
+      try {
+        const res = await fetch(`/api/admin/knowledge/${encodeURIComponent(cleanId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          found = data.chunk;
+        }
+      } catch (e) {}
+    }
+
+    if (found) {
+      const isPrivate = found.isPrivate || found.is_private === 1 || found.category === 'Intern';
+      setActiveTab(isPrivate ? 'internal_knowledge' : 'knowledge');
+      setEditingChunk(found);
+      setChunkTitle(found.title || '');
+      setChunkFact(found.fact || found.description || '');
+      setChunkDescription(found.description || found.fact || '');
+      setChunkCategory(found.category || 'Sonstiges');
+      setChunkIsPrivate(!!isPrivate);
+      setIsCreatingChunk(false);
+      setShowMobileChatModal(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Falls neu / nicht vorhanden: Neues Erstellformular öffnen
+      setActiveTab('knowledge');
+      setEditingChunk(null);
+      setIsCreatingChunk(true);
+      setChunkTitle(cleanId);
+      setChunkFact('');
+      setChunkDescription('');
+      setChunkCategory('Sonstiges');
+      setChunkIsPrivate(false);
+      setShowMobileChatModal(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleCreateChunkFromSuggestion = (suggestion) => {
+    if (!suggestion) return;
+    const isPrivate = suggestion.isPrivate || suggestion.category === 'Intern';
+    setActiveTab(isPrivate ? 'internal_knowledge' : 'knowledge');
+    setEditingChunk(null);
+    setIsCreatingChunk(true);
+    setChunkTitle(suggestion.title || '');
+    setChunkFact(suggestion.description || suggestion.fact || '');
+    setChunkDescription(suggestion.description || suggestion.fact || '');
+    setChunkCategory(suggestion.category || 'Sonstiges');
+    setChunkIsPrivate(!!isPrivate);
+    setShowMobileChatModal(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -2764,89 +2823,97 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
 
-                      {/* Identitäts-Spur & digitale Fingerabdrücke Card (nur bei Missbrauchschats) */}
-                      {selectedChatDetails.isAbusive === 1 && (
-                        <div className="mb-5 p-4 bg-red-950/25 border border-red-500/30 rounded-xl text-xs space-y-3 animate-fade-in">
-                          <div className="flex justify-between items-center border-b border-red-500/20 pb-2">
+                      {/* Identitäts-Spur & digitale Fingerabdrücke Card (für ALLE Chats & Gäste verfügbar) */}
+                      {selectedChatIdentityTrace && (
+                        <div className={`mb-5 p-4 rounded-xl text-xs space-y-3 animate-fade-in border ${
+                          selectedChatDetails.isAbusive === 1 
+                            ? 'bg-red-950/25 border-red-500/30' 
+                            : 'bg-sky-950/25 border-sky-500/30'
+                        }`}>
+                          <div className={`flex justify-between items-center pb-2 border-b ${
+                            selectedChatDetails.isAbusive === 1 ? 'border-red-500/20' : 'border-sky-500/20'
+                          }`}>
                             <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                              <strong className="font-bold text-red-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                                <i className="fa-solid fa-user-secret"></i>
-                                <span>Identitäts-Spur rekonstruiert</span>
+                              <span className={`w-2 h-2 rounded-full animate-pulse ${
+                                selectedChatDetails.isAbusive === 1 ? 'bg-red-500' : 'bg-sky-400'
+                              }`}></span>
+                              <strong className={`font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5 ${
+                                selectedChatDetails.isAbusive === 1 ? 'text-red-400' : 'text-sky-300'
+                              }`}>
+                                <i className={`fa-solid ${selectedChatDetails.isAbusive === 1 ? 'fa-user-secret' : 'fa-network-wired'}`}></i>
+                                <span>Identitäts-Spur & Systemdaten rekonstruiert</span>
                               </strong>
                             </div>
                             {selectedChatIdentityTrace?.confidenceScore && (
                               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                selectedChatIdentityTrace.confidenceScore === 'high' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
-                                selectedChatIdentityTrace.confidenceScore === 'medium' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                                'bg-slate-800 text-slate-400 border-slate-700'
+                                selectedChatDetails.isAbusive === 1
+                                  ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
                               }`}>
                                 Treffersicherheit: {selectedChatIdentityTrace.confidenceScore.toUpperCase()}
                               </span>
                             )}
                           </div>
 
-                          {selectedChatIdentityTrace ? (
-                            <div className="space-y-3 text-[11px]">
-                              <p className="text-slate-300 font-medium leading-relaxed">
-                                {selectedChatIdentityTrace.summary}
-                              </p>
+                          <div className="space-y-3 text-[11px]">
+                            <p className="text-slate-300 font-medium leading-relaxed">
+                              {selectedChatIdentityTrace.summary}
+                            </p>
 
-                              {/* Verknüpfte Identitäten & Konten */}
-                              {selectedChatIdentityTrace.linkedIdentities && selectedChatIdentityTrace.linkedIdentities.length > 0 && (
-                                <div className="space-y-1.5">
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten / E-Mails:</span>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {selectedChatIdentityTrace.linkedIdentities.map((identity, idx) => (
-                                      <div key={idx} className="bg-slate-950/80 border border-red-500/20 p-2.5 rounded-lg flex flex-col gap-1">
-                                        <div className="flex items-center justify-between">
-                                          <strong className="text-white text-xs font-semibold">{identity.name}</strong>
-                                          <span className="text-[9px] bg-red-900/40 text-red-300 px-1.5 py-0.5 rounded font-mono">
-                                            {identity.role}
-                                          </span>
-                                        </div>
-                                        <span className="text-slate-400 font-mono text-[10px] truncate">{identity.email}</span>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {identity.matchSources?.map((source, sIdx) => (
-                                            <span key={sIdx} className="text-[8px] bg-slate-900 border border-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
-                                              {source}
-                                            </span>
-                                          ))}
-                                        </div>
+                            {/* Verknüpfte Identitäten & Konten */}
+                            {selectedChatIdentityTrace.linkedIdentities && selectedChatIdentityTrace.linkedIdentities.length > 0 && (
+                              <div className="space-y-1.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten / E-Mails:</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {selectedChatIdentityTrace.linkedIdentities.map((identity, idx) => (
+                                    <div key={idx} className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-lg flex flex-col gap-1">
+                                      <div className="flex items-center justify-between">
+                                        <strong className="text-white text-xs font-semibold">{identity.name}</strong>
+                                        <span className="text-[9px] bg-violet-900/40 text-violet-300 px-1.5 py-0.5 rounded font-mono">
+                                          {identity.role}
+                                        </span>
                                       </div>
-                                    ))}
-                                  </div>
+                                      <span className="text-slate-400 font-mono text-[10px] truncate">{identity.email}</span>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {identity.matchSources?.map((source, sIdx) => (
+                                          <span key={sIdx} className="text-[8px] bg-slate-900 border border-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                                            {source}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
-
-                              {/* Verknüpfte Tickets */}
-                              {selectedChatIdentityTrace.linkedTickets && selectedChatIdentityTrace.linkedTickets.length > 0 && (
-                                <div className="space-y-1">
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Zugehörige Support-Tickets:</span>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {selectedChatIdentityTrace.linkedTickets.map((ticket) => (
-                                      <span key={ticket.id} className="text-[10px] bg-slate-950 border border-slate-800 text-slate-300 px-2 py-1 rounded font-mono flex items-center gap-1.5">
-                                        <i className="fa-solid fa-ticket text-violet-400 text-[9px]"></i>
-                                        <span>#{ticket.id}: {ticket.title}</span>
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* IP & Session Info */}
-                              <div className="flex flex-wrap gap-3 pt-2 border-t border-red-500/20 text-[10px] text-slate-400 font-mono">
-                                {selectedChatIdentityTrace.primaryDetails?.userIp && (
-                                  <div>IP-Adresse: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userIp}</strong></div>
-                                )}
-                                {selectedChatIdentityTrace.primaryDetails?.userSessionId && (
-                                  <div>Session-ID: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userSessionId.substring(0, 16)}...</strong></div>
-                                )}
                               </div>
+                            )}
+
+                            {/* Verknüpfte Tickets */}
+                            {selectedChatIdentityTrace.linkedTickets && selectedChatIdentityTrace.linkedTickets.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Zugehörige Support-Tickets:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedChatIdentityTrace.linkedTickets.map((ticket) => (
+                                    <span key={ticket.id} className="text-[10px] bg-slate-950 border border-slate-800 text-slate-300 px-2 py-1 rounded font-mono flex items-center gap-1.5">
+                                      <i className="fa-solid fa-ticket text-violet-400 text-[9px]"></i>
+                                      <span>#{ticket.id}: {ticket.title}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* IP & Session Info */}
+                            <div className={`flex flex-wrap gap-3 pt-2 border-t text-[10px] text-slate-400 font-mono ${
+                              selectedChatDetails.isAbusive === 1 ? 'border-red-500/20' : 'border-sky-500/20'
+                            }`}>
+                              {selectedChatIdentityTrace.primaryDetails?.userIp && (
+                                <div>IP-Adresse: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userIp}</strong></div>
+                              )}
+                              {selectedChatIdentityTrace.primaryDetails?.userSessionId && (
+                                <div>Session-ID: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userSessionId}</strong></div>
+                              )}
                             </div>
-                          ) : (
-                            <p className="text-xs text-slate-400 italic">Identitäts-Spur wird ermittelt...</p>
-                          )}
+                          </div>
                         </div>
                       )}
 
@@ -3006,11 +3073,30 @@ export default function AdminDashboardPage() {
                                       {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                     </span>
                                     {msg.baseKnowledge && (
-                                      <span className="bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1">
-                                        <i className="fa-solid fa-brain text-[9px]"></i>
-                                        <span>Wissen: {msg.baseKnowledge}</span>
-                                      </span>
-                                    )}
+                                       <div className="flex flex-wrap items-center gap-1.5 mt-1 w-full">
+                                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                                           <i className="fa-solid fa-brain text-violet-400"></i>
+                                           <span>Herangezogene Wissens-Chunks:</span>
+                                         </span>
+                                         {msg.baseKnowledge.split(',').map((chunkId, cIdx) => {
+                                           const cleanId = chunkId.trim();
+                                           if (!cleanId) return null;
+                                           const found = knowledge.find(k => String(k.id) === cleanId || String(k.id) === `chunk-${cleanId}`);
+                                           return (
+                                             <button
+                                               key={cIdx}
+                                               type="button"
+                                               onClick={() => handleOpenChunkInEditorById(cleanId)}
+                                               className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                               title="Klicken, um diesen Wissenschunk in der Wissensdatenbank zu bearbeiten"
+                                             >
+                                               <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                                               <span>{found ? found.title : cleanId}</span>
+                                             </button>
+                                           );
+                                         })}
+                                       </div>
+                                     )}
                                   </div>
                                   
                                   {msg.imageUrl && (

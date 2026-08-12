@@ -284,6 +284,70 @@ try {
     db.exec("ALTER TABLE chat_messages ADD COLUMN base_knowledge TEXT");
     console.log("Migration: Spalte 'base_knowledge' zur Tabelle 'chat_messages' hinzugefügt.");
   }
+
+  const hasClosedByEmail = tableInfoTickets.some(col => col.name === 'closed_by_email');
+  if (!hasClosedByEmail) {
+    db.exec("ALTER TABLE tickets ADD COLUMN closed_by_email TEXT");
+    console.log("Migration: Spalte 'closed_by_email' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
+  const hasClosedByName = tableInfoTickets.some(col => col.name === 'closed_by_name');
+  if (!hasClosedByName) {
+    db.exec("ALTER TABLE tickets ADD COLUMN closed_by_name TEXT");
+    console.log("Migration: Spalte 'closed_by_name' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
+  const hasClosedByUserId = tableInfoTickets.some(col => col.name === 'closed_by_user_id');
+  if (!hasClosedByUserId) {
+    db.exec("ALTER TABLE tickets ADD COLUMN closed_by_user_id TEXT");
+    console.log("Migration: Spalte 'closed_by_user_id' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
+  const hasClosedAt = tableInfoTickets.some(col => col.name === 'closed_at');
+  if (!hasClosedAt) {
+    db.exec("ALTER TABLE tickets ADD COLUMN closed_at DATETIME");
+    console.log("Migration: Spalte 'closed_at' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
+  // Backfill für bestehende geschlossene Tickets
+  try {
+    const unclosedTickets = db.prepare(`
+      SELECT id FROM tickets WHERE status = 'closed' AND (closed_by_email IS NULL OR closed_by_email = '')
+    `).all();
+
+    for (const tk of unclosedTickets) {
+      const msg = db.prepare(`
+        SELECT sender_email, text FROM ticket_messages 
+        WHERE ticket_id = ? AND (text LIKE '%geschlossen%' OR sender_role = 'system')
+        ORDER BY id DESC LIMIT 1
+      `).get(tk.id);
+
+      if (msg) {
+        let closerEmail = null;
+        let closerName = null;
+
+        const match = msg.text.match(/Ticket wurde von ([^(]+)\s*\(([^)]+)\)\s*geschlossen/);
+        if (match) {
+          closerName = match[1].trim();
+          closerEmail = match[2].trim().toLowerCase();
+        } else if (msg.sender_email && msg.sender_email !== 'system') {
+          closerEmail = msg.sender_email.toLowerCase();
+          closerName = msg.sender_email.split('@')[0];
+        }
+
+        if (closerEmail) {
+          const userObj = db.prepare(`SELECT id, name FROM users WHERE LOWER(email) = ?`).get(closerEmail);
+          db.prepare(`
+            UPDATE tickets 
+            SET closed_by_email = ?, closed_by_name = ?, closed_by_user_id = ?, closed_at = COALESCE(closed_at, updated_at)
+            WHERE id = ?
+          `).run(closerEmail, userObj?.name || closerName || closerEmail, userObj?.id || null, tk.id);
+        }
+      }
+    }
+  } catch (errBackfill) {
+    console.error('Fehler bei Backfill geschlossener Tickets:', errBackfill);
+  }
 } catch (e) {
   if (e.message && e.message.includes('duplicate column name')) {
     // Ignorieren, da ein anderer Next.js Build-Worker die Spalte bereits hinzugefügt hat

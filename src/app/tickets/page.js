@@ -210,7 +210,12 @@ export default function CustomerTicketsPage() {
                       Erstellt: {new Date(tk.createdAt).toLocaleDateString('de-DE')}
                     </span>
                     
-                    {tk.assignedAgentEmail ? (
+                    {tk.status === 'closed' ? (
+                      <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                        <i className="fa-solid fa-lock text-[9px] text-emerald-500"></i>
+                        <span>Geschlossen von {tk.closedByName || tk.closedByEmail?.split('@')[0] || 'Support'}</span>
+                      </span>
+                    ) : tk.assignedAgentEmail ? (
                       <span className="flex items-center gap-1">
                         <i className="fa-solid fa-user-tie"></i>
                         Agent: {tk.assignedAgentEmail.split('@')[0]}

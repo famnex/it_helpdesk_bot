@@ -37,6 +37,10 @@ Speichert Support-Tickets.
 | `solution_forgotten` | BOOLEAN | DEFAULT 0 | Kennzeichnet, ob die Lösung aus der Wissensbasis entfernt wurde |
 | `solution_context` | TEXT | NULL | KI-generierte Zusammenfassung der Lösung |
 | `last_agent_read_at` | DATETIME | NULL | Zeitpunkt des letzten Lesens / Öffnens durch einen Agenten/Admin |
+| `closed_by_email` | TEXT | NULL | E-Mail-Adresse des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
+| `closed_by_name` | TEXT | NULL | Name des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
+| `closed_by_user_id` | TEXT | NULL | User-ID des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
+| `closed_at` | DATETIME | NULL | Zeitpunkt, an dem das Ticket geschlossen wurde |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der letzten Änderung |
 

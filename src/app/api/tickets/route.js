@@ -22,6 +22,8 @@ export async function GET() {
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
+               t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
+               t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
                t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
                t.created_at as createdAt, t.updated_at as updatedAt
         FROM tickets t
@@ -34,6 +36,8 @@ export async function GET() {
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
+               t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
+               t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
                t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
                t.last_agent_read_at as lastAgentReadAt,
                t.created_at as createdAt, t.updated_at as updatedAt,
