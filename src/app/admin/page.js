@@ -558,6 +558,15 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const getKnownChatEmail = (chat, identityTrace) => {
+    if (chat?.userEmail && chat.userEmail.trim()) return chat.userEmail.trim();
+    if (identityTrace?.linkedIdentities && identityTrace.linkedIdentities.length > 0) {
+      const found = identityTrace.linkedIdentities.find(i => i.email && i.email.trim());
+      if (found) return found.email.trim();
+    }
+    return null;
+  };
+
   const [isConvertingTicket, setIsConvertingTicket] = useState(false);
 
   const handleConvertChatToTicket = async (chat) => {
@@ -571,19 +580,16 @@ export default function AdminDashboardPage() {
     }
 
     // 1. Ersteller ermitteln (E-Mail der Person, die den Chat geführt hat)
-    let creatorEmail = chat.userEmail;
-    let creatorName = chat.userName || 'Gast';
-
-    if (!creatorEmail && selectedChatIdentityTrace?.linkedIdentities?.length > 0) {
-      const primaryIdentity = selectedChatIdentityTrace.linkedIdentities[0];
-      if (primaryIdentity.email) {
-        creatorEmail = primaryIdentity.email;
-        if (primaryIdentity.name) creatorName = primaryIdentity.name;
-      }
+    const creatorEmail = getKnownChatEmail(chat, selectedChatIdentityTrace);
+    if (!creatorEmail) {
+      alert('Eine Umwandlung in ein Support-Ticket ist nur möglich, wenn mindestens eine E-Mail-Adresse bekannt ist.');
+      return;
     }
 
-    if (!creatorEmail) {
-      creatorEmail = 'gast@schule.de';
+    let creatorName = chat.userName || 'Gast';
+    if (selectedChatIdentityTrace?.linkedIdentities?.length > 0) {
+      const primaryIdentity = selectedChatIdentityTrace.linkedIdentities.find(i => i.email === creatorEmail);
+      if (primaryIdentity?.name) creatorName = primaryIdentity.name;
     }
 
     // Vorgeschlagenen Titel ableiten
@@ -2879,21 +2885,23 @@ export default function AdminDashboardPage() {
 
                           {/* Funktions-Buttons sauber aufgereiht mit Hover-Tooltips */}
                           <div className="flex items-center gap-2 shrink-0">
-                            {/* In Ticket umwandeln / Ticket öffnen */}
-                            <button 
-                              type="button"
-                              onClick={() => handleConvertChatToTicket(selectedChatDetails)}
-                              disabled={isConvertingTicket}
-                              className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
-                                selectedChatDetails.ticketCreated === 1
-                                  ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
-                                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
-                              }`}
-                              title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
-                            >
-                              <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
-                              <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
-                            </button>
+                            {/* In Ticket umwandeln (nur wenn E-Mail bekannt ist) / Ticket öffnen */}
+                            {(selectedChatDetails.ticketCreated === 1 || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
+                              <button 
+                                type="button"
+                                onClick={() => handleConvertChatToTicket(selectedChatDetails)}
+                                disabled={isConvertingTicket}
+                                className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
+                                  selectedChatDetails.ticketCreated === 1
+                                    ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
+                                    : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
+                                }`}
+                                title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
+                              >
+                                <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
+                                <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
+                              </button>
+                            )}
 
                             {/* KI-Analyse */}
                             <button 
@@ -3270,24 +3278,26 @@ export default function AdminDashboardPage() {
                   {selectedChatDetails && (
                     <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
                       <div className="flex items-center gap-2 w-full">
-                        {/* Ticket erstellen / öffnen mit Text */}
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setShowMobileChatModal(false);
-                            handleConvertChatToTicket(selectedChatDetails);
-                          }}
-                          disabled={isConvertingTicket}
-                          className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm flex-1 justify-center ${
-                            selectedChatDetails.ticketCreated === 1
-                              ? 'bg-violet-950/60 text-violet-300 border-violet-500/40'
-                              : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
-                          }`}
-                          title={selectedChatDetails.ticketCreated === 1 ? "Support-Ticket öffnen" : "In Ticket umwandeln"}
-                        >
-                          <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
-                          <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'Ticket erstellen'}</span>
-                        </button>
+                        {/* Ticket erstellen (nur wenn E-Mail bekannt ist) / öffnen mit Text */}
+                        {(selectedChatDetails.ticketCreated === 1 || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setShowMobileChatModal(false);
+                              handleConvertChatToTicket(selectedChatDetails);
+                            }}
+                            disabled={isConvertingTicket}
+                            className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm flex-1 justify-center ${
+                              selectedChatDetails.ticketCreated === 1
+                                ? 'bg-violet-950/60 text-violet-300 border-violet-500/40'
+                                : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                            }`}
+                            title={selectedChatDetails.ticketCreated === 1 ? "Support-Ticket öffnen" : "In Ticket umwandeln"}
+                          >
+                            <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
+                            <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'Ticket erstellen'}</span>
+                          </button>
+                        )}
 
                         {/* Analysieren mit Text */}
                         <button 
