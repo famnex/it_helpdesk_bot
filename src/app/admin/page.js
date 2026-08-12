@@ -2813,180 +2813,166 @@ export default function AdminDashboardPage() {
                 ) : selectedChatDetails ? (
                   <div className="space-y-4 flex-1 flex flex-col justify-between">
                     <div>
-                      {/* Header */}
-                      <div className="flex justify-between items-start border-b border-slate-800 pb-3 mb-4 gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
+                      {/* Verschmolzener Kopfinformations- & Identitätsspur-Block */}
+                      <div className={`p-4 rounded-2xl border transition-all mb-4 space-y-3.5 ${
+                        selectedChatDetails.isAbusive === 1
+                          ? 'bg-red-950/25 border-red-500/40 shadow-lg shadow-red-950/20'
+                          : 'bg-slate-950/80 border-slate-800 shadow-md'
+                      }`}>
+                        {/* Oberste Zeile: Meta-Tags & Nebeneinander aufgereihte Kompakt-Buttons */}
+                        <div className="flex flex-wrap justify-between items-center gap-3 border-b border-slate-800/80 pb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 border border-violet-500/20 px-2.5 py-1 rounded-lg shadow-sm">
                               ID: {selectedChatDetails.id}
                             </span>
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-[11px] text-slate-400 font-mono">
                               Erstellt am: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
                             </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                            <i className="fa-solid fa-user text-slate-500 text-xs"></i>
-                            <span>{selectedChatDetails.userName || 'Gast'}</span>
-                            {selectedChatDetails.userEmail && <span className="text-xs text-slate-400 font-mono">({selectedChatDetails.userEmail})</span>}
-                          </h4>
-                          
-                          <div className="text-[10px] text-slate-500 mt-2 space-y-1 font-mono">
-                            {selectedChatDetails.userIp && <div>IP-Adresse: <span className="text-slate-350">{selectedChatDetails.userIp}</span></div>}
-                            {selectedChatDetails.userSessionId && <div>Browser Session-ID: <span className="text-slate-350">{selectedChatDetails.userSessionId}</span></div>}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <button 
-                            type="button"
-                            onClick={() => handleToggleAbusiveChat(selectedChatDetails.id, selectedChatDetails.isAbusive === 1)}
-                            className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border ${
-                              selectedChatDetails.isAbusive === 1 
-                                ? 'bg-red-500/20 text-red-300 border-red-500/40 hover:bg-slate-800 hover:text-slate-200' 
-                                : 'bg-red-950/30 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white'
-                            }`}
-                          >
-                            <i className={`fa-solid ${selectedChatDetails.isAbusive === 1 ? 'fa-shield-halved text-red-400' : 'fa-triangle-exclamation'}`}></i>
-                            <span>{selectedChatDetails.isAbusive === 1 ? 'Missbrauch aufheben' : 'Als missbräuchlich markieren'}</span>
-                          </button>
-
-                          <button 
-                            type="button"
-                            onClick={() => handleConvertChatToTicket(selectedChatDetails)}
-                            disabled={isConvertingTicket}
-                            className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
-                              selectedChatDetails.ticketCreated === 1
-                                ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
-                                : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
-                            }`}
-                            title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
-                          >
-                            <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket' : 'fa-plus-circle'}`}></i>
-                            <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
-                          </button>
-
-                          <button 
-                            type="button"
-                            onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
-                            disabled={isAnalyzingChat}
-                            className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40"
-                          >
-                            {isAnalyzingChat ? (
-                              <>
-                                <i className="fa-solid fa-circle-notch animate-spin"></i>
-                                <span>Analysiere...</span>
-                              </>
-                            ) : (
-                              <>
-                                <i className="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>Analysieren</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button 
-                            onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                            className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3 py-2 rounded-xl transition-all"
-                          >
-                            <i className="fa-solid fa-trash-can mr-1.5"></i>
-                            <span>Löschen</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Identitäts-Spur & digitale Fingerabdrücke Card (für ALLE Chats & Gäste verfügbar) */}
-                      {selectedChatIdentityTrace && (
-                        <div className={`mb-5 p-4 rounded-xl text-xs space-y-3 animate-fade-in border ${
-                          selectedChatDetails.isAbusive === 1 
-                            ? 'bg-red-950/25 border-red-500/30' 
-                            : 'bg-sky-950/25 border-sky-500/30'
-                        }`}>
-                          <div className={`flex justify-between items-center pb-2 border-b ${
-                            selectedChatDetails.isAbusive === 1 ? 'border-red-500/20' : 'border-sky-500/20'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full animate-pulse ${
-                                selectedChatDetails.isAbusive === 1 ? 'bg-red-500' : 'bg-sky-400'
-                              }`}></span>
-                              <strong className={`font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5 ${
-                                selectedChatDetails.isAbusive === 1 ? 'text-red-400' : 'text-sky-300'
-                              }`}>
-                                <i className={`fa-solid ${selectedChatDetails.isAbusive === 1 ? 'fa-user-secret' : 'fa-network-wired'}`}></i>
-                                <span>Identitäts-Spur & Systemdaten rekonstruiert</span>
-                              </strong>
-                            </div>
                             {selectedChatIdentityTrace?.confidenceScore && (
                               <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                                 selectedChatDetails.isAbusive === 1
                                   ? 'bg-red-500/20 text-red-300 border-red-500/40'
                                   : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
                               }`}>
-                                Treffersicherheit: {selectedChatIdentityTrace.confidenceScore.toUpperCase()}
+                                Treffer: {selectedChatIdentityTrace.confidenceScore.toUpperCase()}
+                              </span>
+                            )}
+                            {selectedChatDetails.isAbusive === 1 && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 px-2 py-0.5 rounded flex items-center gap-1">
+                                <i className="fa-solid fa-user-secret"></i>
+                                <span>Missbrauch</span>
                               </span>
                             )}
                           </div>
 
-                          <div className="space-y-3 text-[11px]">
-                            <p className="text-slate-300 font-medium leading-relaxed">
-                              {selectedChatIdentityTrace.summary}
-                            </p>
+                          {/* Funktions-Buttons sauber aufgereiht mit Hover-Tooltips */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* In Ticket umwandeln / Ticket öffnen */}
+                            <button 
+                              type="button"
+                              onClick={() => handleConvertChatToTicket(selectedChatDetails)}
+                              disabled={isConvertingTicket}
+                              className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
+                                selectedChatDetails.ticketCreated === 1
+                                  ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
+                                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
+                              }`}
+                              title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
+                            >
+                              <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
+                              <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
+                            </button>
 
-                            {/* Verknüpfte Identitäten & Konten */}
-                            {selectedChatIdentityTrace.linkedIdentities && selectedChatIdentityTrace.linkedIdentities.length > 0 && (
-                              <div className="space-y-1.5">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten / E-Mails:</span>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {selectedChatIdentityTrace.linkedIdentities.map((identity, idx) => (
-                                    <div key={idx} className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-lg flex flex-col gap-1">
-                                      <div className="flex items-center justify-between">
-                                        <strong className="text-white text-xs font-semibold">{identity.name}</strong>
-                                        <span className="text-[9px] bg-violet-900/40 text-violet-300 px-1.5 py-0.5 rounded font-mono">
-                                          {identity.role}
-                                        </span>
-                                      </div>
-                                      <span className="text-slate-400 font-mono text-[10px] truncate">{identity.email}</span>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {identity.matchSources?.map((source, sIdx) => (
-                                          <span key={sIdx} className="text-[8px] bg-slate-900 border border-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
-                                            {source}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                            {/* KI-Analyse */}
+                            <button 
+                              type="button"
+                              onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
+                              disabled={isAnalyzingChat}
+                              className="p-2 rounded-xl bg-sky-950/50 hover:bg-sky-600 border border-sky-500/30 text-sky-400 hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0 disabled:opacity-40"
+                              title="KI-Qualitätsanalyse & Wissensnutzung analysieren"
+                            >
+                              <i className={`fa-solid ${isAnalyzingChat ? 'fa-circle-notch animate-spin' : 'fa-wand-magic-sparkles'} text-sm`}></i>
+                            </button>
 
-                            {/* Verknüpfte Tickets */}
-                            {selectedChatIdentityTrace.linkedTickets && selectedChatIdentityTrace.linkedTickets.length > 0 && (
-                              <div className="space-y-1">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Zugehörige Support-Tickets:</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {selectedChatIdentityTrace.linkedTickets.map((ticket) => (
-                                    <span key={ticket.id} className="text-[10px] bg-slate-950 border border-slate-800 text-slate-300 px-2 py-1 rounded font-mono flex items-center gap-1.5">
-                                      <i className="fa-solid fa-ticket text-violet-400 text-[9px]"></i>
-                                      <span>#{ticket.id}: {ticket.title}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                            {/* Missbrauch markieren / aufheben */}
+                            <button 
+                              type="button"
+                              onClick={() => handleToggleAbusiveChat(selectedChatDetails.id, selectedChatDetails.isAbusive === 1)}
+                              className={`p-2 rounded-xl transition-all flex items-center justify-center shrink-0 border shadow-sm ${
+                                selectedChatDetails.isAbusive === 1 
+                                  ? 'bg-red-500/20 text-red-300 border-red-500/40 hover:bg-slate-800' 
+                                  : 'bg-red-950/40 text-red-400 border-red-500/30 hover:bg-red-650 hover:text-white'
+                              }`}
+                              title={selectedChatDetails.isAbusive === 1 ? 'Missbrauch-Markierung aufheben' : 'Als missbräuchlich markieren'}
+                            >
+                              <i className={`fa-solid ${selectedChatDetails.isAbusive === 1 ? 'fa-shield-halved text-red-400' : 'fa-triangle-exclamation'} text-sm`}></i>
+                            </button>
 
-                            {/* IP & Session Info */}
-                            <div className={`flex flex-wrap gap-3 pt-2 border-t text-[10px] text-slate-400 font-mono ${
-                              selectedChatDetails.isAbusive === 1 ? 'border-red-500/20' : 'border-sky-500/20'
-                            }`}>
-                              {selectedChatIdentityTrace.primaryDetails?.userIp && (
-                                <div>IP-Adresse: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userIp}</strong></div>
-                              )}
-                              {selectedChatIdentityTrace.primaryDetails?.userSessionId && (
-                                <div>Session-ID: <strong className="text-white">{selectedChatIdentityTrace.primaryDetails.userSessionId}</strong></div>
-                              )}
-                            </div>
+                            {/* Löschen */}
+                            <button 
+                              type="button"
+                              onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                              className="p-2 rounded-xl bg-red-950/30 hover:bg-red-650 border border-red-500/20 text-red-400 hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
+                              title="Diesen Chatverlauf dauerhaft löschen"
+                            >
+                              <i className="fa-solid fa-trash-can text-sm"></i>
+                            </button>
                           </div>
                         </div>
-                      )}
+
+                        {/* Mittlere Zeile: Benutzerdaten & Identitätsspur */}
+                        <div className="space-y-2.5 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                              <i className="fa-solid fa-user text-violet-400 text-xs"></i>
+                              <span>{selectedChatDetails.userName || 'Gast'}</span>
+                              {selectedChatDetails.userEmail && (
+                                <span className="text-xs text-slate-350 font-mono font-medium">({selectedChatDetails.userEmail})</span>
+                              )}
+                            </h4>
+
+                            {selectedChatIdentityTrace?.summary && (
+                              <span className="text-[11px] text-slate-300 font-medium bg-slate-900/90 border border-slate-800 px-2.5 py-1 rounded-lg">
+                                <i className="fa-solid fa-network-wired text-sky-400 mr-1.5 text-[10px]"></i>
+                                {selectedChatIdentityTrace.summary}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Verknüpfte Benutzerkonten / E-Mails */}
+                          {selectedChatIdentityTrace?.linkedIdentities && selectedChatIdentityTrace.linkedIdentities.length > 0 && (
+                            <div className="pt-1 space-y-1">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten:</span>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedChatIdentityTrace.linkedIdentities.map((identity, idx) => (
+                                  <div key={idx} className="bg-slate-900/90 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 shadow-sm">
+                                    <i className="fa-solid fa-user-check text-emerald-400 text-[10px]"></i>
+                                    <strong className="text-white font-semibold">{identity.name}</strong>
+                                    <span className="text-slate-400 font-mono text-[10px]">({identity.email})</span>
+                                    <span className="text-[9px] bg-violet-900/40 text-violet-300 px-1.5 py-0.5 rounded font-mono">
+                                      {identity.role}
+                                    </span>
+                                    <div className="flex gap-1">
+                                      {identity.matchSources?.map((source, sIdx) => (
+                                        <span key={sIdx} className="text-[8px] bg-slate-950 border border-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">
+                                          {source}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Verknüpfte Tickets */}
+                          {selectedChatIdentityTrace?.linkedTickets && selectedChatIdentityTrace.linkedTickets.length > 0 && (
+                            <div className="pt-1 flex flex-wrap items-center gap-2 text-[10px]">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider">Verknüpfte Support-Tickets:</span>
+                              {selectedChatIdentityTrace.linkedTickets.map((ticket) => (
+                                <Link
+                                  key={ticket.id}
+                                  href={`/agent/tickets/${ticket.id}`}
+                                  className="bg-slate-900 hover:bg-slate-800 border border-slate-750 text-violet-300 hover:text-white px-2.5 py-1 rounded-lg font-mono flex items-center gap-1.5 transition-all shadow-sm"
+                                >
+                                  <i className="fa-solid fa-ticket text-violet-400 text-[9px]"></i>
+                                  <span>#{ticket.id}: {ticket.title}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* IP & Session ID */}
+                          <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400 font-mono">
+                            {selectedChatDetails.userIp && (
+                              <div>IP-Adresse: <strong className="text-white">{selectedChatDetails.userIp}</strong></div>
+                            )}
+                            {selectedChatDetails.userSessionId && (
+                              <div>Browser Session-ID: <strong className="text-white">{selectedChatDetails.userSessionId}</strong></div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
                       {/* Analyse-Ergebnis (falls vorhanden) */}
                       {chatAnalysis && (
@@ -3127,10 +3113,40 @@ export default function AdminDashboardPage() {
                       </div>
                     ) : selectedChatDetails ? (
                       <div className="space-y-4">
-                        <div className="text-[10px] text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1 font-mono">
-                          <div>Erstellt: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr</div>
-                          {selectedChatDetails.userIp && <div>IP: {selectedChatDetails.userIp}</div>}
-                          {selectedChatDetails.userSessionId && <div>Session: {selectedChatDetails.userSessionId}</div>}
+                        {/* Verschmolzener Kopfinformations- & Identitätsspur-Block für Mobile */}
+                        <div className={`p-3.5 rounded-xl border text-xs space-y-2.5 ${
+                          selectedChatDetails.isAbusive === 1
+                            ? 'bg-red-950/25 border-red-500/40'
+                            : 'bg-slate-950/80 border-slate-800'
+                        }`}>
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-2">
+                            <span className="text-[10px] font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
+                              ID: {selectedChatDetails.id}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <i className="fa-solid fa-user text-slate-400 text-xs"></i>
+                              <span>{selectedChatDetails.userName || 'Gast'}</span>
+                              {selectedChatDetails.userEmail && <span className="text-[10px] text-slate-400 font-mono">({selectedChatDetails.userEmail})</span>}
+                            </div>
+                            {selectedChatIdentityTrace?.summary && (
+                              <p className="text-[10px] text-slate-300 bg-slate-900 border border-slate-800 p-2 rounded-lg leading-relaxed">
+                                <i className="fa-solid fa-network-wired text-sky-400 mr-1 text-[9px]"></i>
+                                {selectedChatIdentityTrace.summary}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* IP & Session Info */}
+                          <div className="flex flex-wrap gap-3 pt-1 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
+                            {selectedChatDetails.userIp && <div>IP: <strong className="text-white">{selectedChatDetails.userIp}</strong></div>}
+                            {selectedChatDetails.userSessionId && <div>Session: <strong className="text-white">{selectedChatDetails.userSessionId}</strong></div>}
+                          </div>
                         </div>
 
                         {/* Analyse-Ergebnis (falls vorhanden) */}
@@ -3218,10 +3234,11 @@ export default function AdminDashboardPage() {
                     ) : null}
                   </div>
 
-                  {/* Modal Footer */}
+                  {/* Modal Footer (Aufreihen ohne redundanten Schließen-Button) */}
                   {selectedChatDetails && (
-                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                      <div className="flex items-center gap-2 flex-wrap">
+                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                      <div className="flex items-center gap-2 w-full">
+                        {/* Ticket erstellen / öffnen mit Text */}
                         <button 
                           type="button"
                           onClick={() => {
@@ -3229,50 +3246,57 @@ export default function AdminDashboardPage() {
                             handleConvertChatToTicket(selectedChatDetails);
                           }}
                           disabled={isConvertingTicket}
-                          className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1 border shadow-sm ${
+                          className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm flex-1 justify-center ${
                             selectedChatDetails.ticketCreated === 1
                               ? 'bg-violet-950/60 text-violet-300 border-violet-500/40'
-                              : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/40'
+                              : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
                           }`}
+                          title={selectedChatDetails.ticketCreated === 1 ? "Support-Ticket öffnen" : "In Ticket umwandeln"}
                         >
-                          <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket' : 'fa-plus-circle'}`}></i>
+                          <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
                           <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'Ticket erstellen'}</span>
                         </button>
 
+                        {/* Analysieren mit Text */}
                         <button 
                           type="button"
                           onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
                           disabled={isAnalyzingChat}
-                          className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1 disabled:opacity-40"
+                          className="bg-sky-950/50 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40"
+                          title="KI-Qualitätsanalyse durchführen"
                         >
                           {isAnalyzingChat ? (
-                            <>
-                              <i className="fa-solid fa-circle-notch animate-spin"></i>
-                              <span>Analysiere...</span>
-                            </>
+                            <i className="fa-solid fa-circle-notch animate-spin"></i>
                           ) : (
-                            <>
-                              <i className="fa-solid fa-wand-magic-sparkles"></i>
-                              <span>Analysieren</span>
-                            </>
+                            <i className="fa-solid fa-wand-magic-sparkles"></i>
                           )}
+                          <span>Analysieren</span>
                         </button>
 
+                        {/* Missbrauch markieren (nur Symbol) */}
                         <button 
-                          onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3 py-2 rounded-xl transition-all"
+                          type="button"
+                          onClick={() => handleToggleAbusiveChat(selectedChatDetails.id, selectedChatDetails.isAbusive === 1)}
+                          className={`font-bold text-xs p-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 border ${
+                            selectedChatDetails.isAbusive === 1 
+                              ? 'bg-red-500/20 text-red-300 border-red-500/40' 
+                              : 'bg-red-950/40 text-red-400 border-red-500/30'
+                          }`}
+                          title={selectedChatDetails.isAbusive === 1 ? 'Missbrauch-Markierung aufheben' : 'Als missbräuchlich markieren'}
                         >
-                          <i className="fa-solid fa-trash-can mr-1"></i>
-                          <span>Löschen</span>
+                          <i className={`fa-solid ${selectedChatDetails.isAbusive === 1 ? 'fa-shield-halved text-red-400' : 'fa-triangle-exclamation'} text-sm`}></i>
+                        </button>
+
+                        {/* Löschen (nur Symbol) */}
+                        <button 
+                          type="button"
+                          onClick={() => handleDeleteChat(selectedChatDetails.id)}
+                          className="bg-red-950/30 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs p-2.5 rounded-xl transition-all flex items-center justify-center shrink-0"
+                          title="Chat löschen"
+                        >
+                          <i className="fa-solid fa-trash-can text-sm"></i>
                         </button>
                       </div>
-
-                      <button 
-                        onClick={() => setShowMobileChatModal(false)}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-4 py-2 rounded-xl transition-all"
-                      >
-                        Schließen
-                      </button>
                     </div>
                   )}
 
