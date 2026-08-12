@@ -566,7 +566,7 @@ export default function AdminDashboardPage() {
     setChunkIsPrivate(true);
     setEditingChunk(null);
     setIsCreatingChunk(true);
-    setActiveTab('internal_knowledge');
+    setActiveTab('private_knowledge');
     setQualityAnalysisModal(null);
     setChatAnalysis(null);
     setShowMobileChatModal(false);
@@ -592,7 +592,7 @@ export default function AdminDashboardPage() {
 
     if (found) {
       const isPrivate = found.isPrivate || found.is_private === 1 || found.category === 'Intern';
-      setActiveTab(isPrivate ? 'internal_knowledge' : 'knowledge');
+      setActiveTab(isPrivate ? 'private_knowledge' : 'knowledge');
       setEditingChunk(found);
       setChunkTitle(found.title || '');
       setChunkFact(found.fact || found.description || '');
@@ -620,7 +620,7 @@ export default function AdminDashboardPage() {
   const handleCreateChunkFromSuggestion = (suggestion) => {
     if (!suggestion) return;
     const isPrivate = suggestion.isPrivate || suggestion.category === 'Intern';
-    setActiveTab(isPrivate ? 'internal_knowledge' : 'knowledge');
+    setActiveTab(isPrivate ? 'private_knowledge' : 'knowledge');
     setEditingChunk(null);
     setIsCreatingChunk(true);
     setChunkTitle(suggestion.title || '');
@@ -2948,13 +2948,38 @@ export default function AdminDashboardPage() {
                             const isUser = msg.sender === 'user';
                             return (
                               <div key={msg.id} className="space-y-1">
-                                <div className="flex items-center gap-2 text-[10px] font-bold">
+                                <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
                                   <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                     {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                   </span>
                                   <span className="text-slate-600 font-normal">
                                     {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                   </span>
+                                  {msg.baseKnowledge && (
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1 w-full">
+                                      <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                                        <i className="fa-solid fa-brain text-violet-400"></i>
+                                        <span>Herangezogene Wissens-Chunks:</span>
+                                      </span>
+                                      {msg.baseKnowledge.split(',').map((chunkId, cIdx) => {
+                                        const cleanId = chunkId.trim();
+                                        if (!cleanId) return null;
+                                        const found = knowledge.find(k => String(k.id) === cleanId || String(k.id) === `chunk-${cleanId}`);
+                                        return (
+                                          <button
+                                            key={cIdx}
+                                            type="button"
+                                            onClick={() => handleOpenChunkInEditorById(cleanId)}
+                                            className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                            title="Klicken, um diesen Wissenschunk in der Wissensdatenbank zu bearbeiten"
+                                          >
+                                            <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                                            <span>{found ? found.title : cleanId}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 {msg.imageUrl && (
