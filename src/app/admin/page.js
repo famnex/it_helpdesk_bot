@@ -584,6 +584,8 @@ export default function AdminDashboardPage() {
         }
       }
 
+      const currentAgentId = user?.id || 'me';
+
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -592,13 +594,13 @@ export default function AdminDashboardPage() {
           email: chat.userEmail || 'gast@schule.de',
           name: chat.userName || 'Gast',
           title: ticketTitle,
-          assignedAgentId: 'auto'
+          assignedAgentId: currentAgentId
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        alert(`Ticket ${data.ticketId} wurde erfolgreich aus dem Chat erstellt!`);
+        alert(`Ticket ${data.ticketId} wurde erfolgreich aus dem Chat erstellt und dir direkt zugewiesen!`);
         loadChats();
         setSelectedChatDetails(prev => prev ? { ...prev, ticketCreated: 1 } : null);
         router.push(`/agent/tickets/${data.ticketId}`);

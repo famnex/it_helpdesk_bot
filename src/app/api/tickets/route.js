@@ -191,7 +191,12 @@ export async function POST(request) {
     let assignedAgentId = null;
     let matchedAgent = null;
 
-    const requestedAssignee = data.assignedAgentId;
+    let requestedAssignee = data.assignedAgentId || data.assigned_agent_id;
+
+    // Wenn der Ersteller selbst Agent/Admin ist und 'me' oder keine explizite Zuweisung wählt, direkt ihm selbst zuweisen
+    if ((!requestedAssignee || requestedAssignee === 'me') && isAgent) {
+      requestedAssignee = user.id;
+    }
 
     if (requestedAssignee && requestedAssignee !== 'auto' && requestedAssignee !== 'unassigned') {
       const explicitAgent = db.prepare("SELECT id, email, name FROM users WHERE id = ? AND (role = 'agent' OR role = 'admin')").get(requestedAssignee);
@@ -201,7 +206,11 @@ export async function POST(request) {
         matchedAgent = explicitAgent;
       }
     } else if (!requestedAssignee || requestedAssignee === 'auto') {
-      if (matchedAgentId) {
+      if (isAgent) {
+        status = 'assigned';
+        assignedAgentId = user.id;
+        matchedAgent = user;
+      } else if (matchedAgentId) {
         matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
         if (matchedAgent) {
           status = 'assigned';
