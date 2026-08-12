@@ -312,37 +312,62 @@ try {
   // Backfill für bestehende geschlossene Tickets
   try {
     const unclosedTickets = db.prepare(`
-      SELECT id FROM tickets WHERE status = 'closed' AND (closed_by_email IS NULL OR closed_by_email = '')
+      SELECT t.id, t.assigned_agent_id, u.email as agentEmail, u.name as agentName
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_agent_id = u.id
+      WHERE t.status = 'closed' AND (t.closed_by_email IS NULL OR t.closed_by_email = '')
     `).all();
 
     for (const tk of unclosedTickets) {
-      const msg = db.prepare(`
-        SELECT sender_email, text FROM ticket_messages 
-        WHERE ticket_id = ? AND (text LIKE '%geschlossen%' OR sender_role = 'system')
-        ORDER BY id DESC LIMIT 1
-      `).get(tk.id);
+      let closerEmail = tk.agentEmail || null;
+      let closerName = tk.agentName || (tk.agentEmail ? tk.agentEmail.split('@')[0] : null);
+      let closerUserId = tk.assigned_agent_id || null;
 
-      if (msg) {
-        let closerEmail = null;
-        let closerName = null;
+      // Falls kein zugewiesener Agent existiert: Letzte Agenten-Nachricht suchen
+      if (!closerEmail) {
+        const msg = db.prepare(`
+          SELECT tm.sender_email, u.name, u.id as userId
+          FROM ticket_messages tm
+          LEFT JOIN users u ON LOWER(tm.sender_email) = LOWER(u.email)
+          WHERE tm.ticket_id = ? AND tm.sender_role IN ('agent', 'admin')
+          ORDER BY tm.id DESC LIMIT 1
+        `).get(tk.id);
 
-        const match = msg.text.match(/Ticket wurde von ([^(]+)\s*\(([^)]+)\)\s*geschlossen/);
-        if (match) {
-          closerName = match[1].trim();
-          closerEmail = match[2].trim().toLowerCase();
-        } else if (msg.sender_email && msg.sender_email !== 'system') {
+        if (msg && msg.sender_email) {
           closerEmail = msg.sender_email.toLowerCase();
-          closerName = msg.sender_email.split('@')[0];
+          closerName = msg.name || msg.sender_email.split('@')[0];
+          closerUserId = msg.userId || null;
         }
+      }
 
-        if (closerEmail) {
-          const userObj = db.prepare(`SELECT id, name FROM users WHERE LOWER(email) = ?`).get(closerEmail);
-          db.prepare(`
-            UPDATE tickets 
-            SET closed_by_email = ?, closed_by_name = ?, closed_by_user_id = ?, closed_at = COALESCE(closed_at, updated_at)
-            WHERE id = ?
-          `).run(closerEmail, userObj?.name || closerName || closerEmail, userObj?.id || null, tk.id);
+      // Falls immer noch nichts gefunden: Systemkommentar parsen
+      if (!closerEmail) {
+        const sysMsg = db.prepare(`
+          SELECT text FROM ticket_messages 
+          WHERE ticket_id = ? AND (text LIKE '%geschlossen%' OR sender_role = 'system')
+          ORDER BY id DESC LIMIT 1
+        `).get(tk.id);
+
+        if (sysMsg) {
+          const match = sysMsg.text.match(/Ticket wurde von ([^(]+)\s*\(([^)]+)\)\s*geschlossen/);
+          if (match) {
+            closerName = match[1].trim();
+            closerEmail = match[2].trim().toLowerCase();
+            const uObj = db.prepare(`SELECT id, name FROM users WHERE LOWER(email) = ?`).get(closerEmail);
+            if (uObj) {
+              closerUserId = uObj.id;
+              if (uObj.name) closerName = uObj.name;
+            }
+          }
         }
+      }
+
+      if (closerEmail) {
+        db.prepare(`
+          UPDATE tickets 
+          SET closed_by_email = ?, closed_by_name = ?, closed_by_user_id = ?, closed_at = COALESCE(closed_at, updated_at)
+          WHERE id = ?
+        `).run(closerEmail, closerName || closerEmail.split('@')[0], closerUserId, tk.id);
       }
     }
   } catch (errBackfill) {

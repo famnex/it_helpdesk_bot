@@ -560,7 +560,15 @@ export default function AgentDashboardPage() {
                           ) : (
                             <span className="text-[11px] text-emerald-400 font-medium truncate flex items-center gap-1">
                               <i className="fa-solid fa-lock text-[10px] text-emerald-500"></i>
-                              <span>Geschlossen von {tk.closedByName || tk.closedByEmail || 'Support'}</span>
+                              <span>
+                                {tk.closedByName 
+                                  ? `Geschlossen von ${tk.closedByName}` 
+                                  : tk.closedByEmail 
+                                    ? `Geschlossen von ${tk.closedByEmail.split('@')[0]}` 
+                                    : tk.assignedAgentEmail 
+                                      ? `Geschlossen von ${tk.assignedAgentEmail.split('@')[0]}` 
+                                      : 'Geschlossen'}
+                              </span>
                             </span>
                           )}
                         </td>

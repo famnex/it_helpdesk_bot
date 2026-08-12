@@ -213,7 +213,15 @@ export default function CustomerTicketsPage() {
                     {tk.status === 'closed' ? (
                       <span className="flex items-center gap-1 text-emerald-400 font-medium">
                         <i className="fa-solid fa-lock text-[9px] text-emerald-500"></i>
-                        <span>Geschlossen von {tk.closedByName || tk.closedByEmail?.split('@')[0] || 'Support'}</span>
+                        <span>
+                          {tk.closedByName 
+                            ? `Geschlossen von ${tk.closedByName}` 
+                            : tk.closedByEmail 
+                              ? `Geschlossen von ${tk.closedByEmail.split('@')[0]}` 
+                              : tk.assignedAgentEmail 
+                                ? `Geschlossen von ${tk.assignedAgentEmail.split('@')[0]}` 
+                                : 'Geschlossen'}
+                        </span>
                       </span>
                     ) : tk.assignedAgentEmail ? (
                       <span className="flex items-center gap-1">
