@@ -189,17 +189,55 @@ export default function CustomerTicketDetailPage() {
                 });
 
               const combined = [...chatHistory, ...missingPostMessages, ...ticketMessages];
-              combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-              setMessages(combined);
+              
+              const seenMap = new Set();
+              const deduplicated = [];
+              for (const m of combined) {
+                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
+                if (!seenMap.has(key)) {
+                  seenMap.add(key);
+                  deduplicated.push(m);
+                }
+              }
+
+              deduplicated.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              setMessages(deduplicated);
             } else {
-              setMessages(ticketMessages);
+              const seenMap = new Set();
+              const deduplicated = [];
+              for (const m of ticketMessages) {
+                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
+                if (!seenMap.has(key)) {
+                  seenMap.add(key);
+                  deduplicated.push(m);
+                }
+              }
+              setMessages(deduplicated);
             }
           } catch (e) {
             console.error('Fehler beim Laden des Pre-Ticket-Chats:', e);
-            setMessages(ticketMessages);
+            const seenMap = new Set();
+            const deduplicated = [];
+            for (const m of ticketMessages) {
+              const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
+              if (!seenMap.has(key)) {
+                seenMap.add(key);
+                deduplicated.push(m);
+              }
+            }
+            setMessages(deduplicated);
           }
         } else {
-          setMessages(ticketMessages);
+          const seenMap = new Set();
+          const deduplicated = [];
+          for (const m of ticketMessages) {
+            const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
+            if (!seenMap.has(key)) {
+              seenMap.add(key);
+              deduplicated.push(m);
+            }
+          }
+          setMessages(deduplicated);
         }
       } else {
         router.push('/tickets');

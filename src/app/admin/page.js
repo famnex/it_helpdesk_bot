@@ -3986,6 +3986,20 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {/* Loading Overlay für Chat-in-Ticket Übertragung */}
+      {isConvertingTicket && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex flex-col items-center justify-center gap-4 animate-fade-in">
+          <div className="relative flex items-center justify-center">
+            <div className="w-16 h-16 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin"></div>
+            <i className="fa-solid fa-ticket text-violet-400 text-xl absolute"></i>
+          </div>
+          <div className="text-center space-y-1">
+            <h4 className="text-base font-bold text-white">Chat wird in Ticket übertragen...</h4>
+            <p className="text-xs text-slate-400 font-medium">Verlauf, Anhang-Dateien & Zuweisung werden übertragen. Bitte einen Moment Geduld.</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
