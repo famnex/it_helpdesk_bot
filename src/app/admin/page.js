@@ -558,6 +558,62 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const [isConvertingTicket, setIsConvertingTicket] = useState(false);
+
+  const handleConvertChatToTicket = async (chat) => {
+    if (!chat) return;
+    if (chat.ticketCreated === 1) {
+      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.[0]?.id || tickets.find(t => t.chatId === chat.id)?.id;
+      if (linkedTicket) {
+        router.push(`/agent/tickets/${linkedTicket}`);
+        return;
+      }
+    }
+
+    if (!confirm(`Möchtest du aus dem Chat mit "${chat.userName || chat.userEmail || 'Gast'}" ein neues Support-Ticket erstellen?`)) {
+      return;
+    }
+
+    setIsConvertingTicket(true);
+    try {
+      let ticketTitle = chat.category ? `Support-Anfrage: ${chat.category}` : 'Support-Anfrage aus Chat';
+      if (selectedChatMessages && selectedChatMessages.length > 0) {
+        const firstUserMsg = selectedChatMessages.find(m => m.sender === 'user')?.text;
+        if (firstUserMsg) {
+          ticketTitle = firstUserMsg.length > 60 ? `${firstUserMsg.substring(0, 57)}...` : firstUserMsg;
+        }
+      }
+
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: chat.id,
+          email: chat.userEmail || 'gast@schule.de',
+          name: chat.userName || 'Gast',
+          title: ticketTitle,
+          assignedAgentId: 'auto'
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Ticket ${data.ticketId} wurde erfolgreich aus dem Chat erstellt!`);
+        loadChats();
+        setSelectedChatDetails(prev => prev ? { ...prev, ticketCreated: 1 } : null);
+        router.push(`/agent/tickets/${data.ticketId}`);
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Fehler beim Erstellen des Tickets.');
+      }
+    } catch (e) {
+      console.error('Fehler bei Chat-in-Ticket Umwandlung:', e);
+      alert('Verbindungsfehler beim Erstellen des Tickets.');
+    } finally {
+      setIsConvertingTicket(false);
+    }
+  };
+
   const handleAddSuggestedKnowledge = (suggestion) => {
     setChunkTitle(suggestion?.title || '');
     setChunkCategory(suggestion?.category || 'Sonstiges');
@@ -2796,6 +2852,21 @@ export default function AdminDashboardPage() {
 
                           <button 
                             type="button"
+                            onClick={() => handleConvertChatToTicket(selectedChatDetails)}
+                            disabled={isConvertingTicket}
+                            className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
+                              selectedChatDetails.ticketCreated === 1
+                                ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
+                                : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
+                            }`}
+                            title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
+                          >
+                            <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket' : 'fa-plus-circle'}`}></i>
+                            <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
+                          </button>
+
+                          <button 
+                            type="button"
                             onClick={() => handleAnalyzeChat(selectedChatDetails.id)}
                             disabled={isAnalyzingChat}
                             className="bg-sky-950/40 hover:bg-sky-900 border border-sky-500/30 text-sky-400 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40"
@@ -3150,7 +3221,24 @@ export default function AdminDashboardPage() {
                   {/* Modal Footer */}
                   {selectedChatDetails && (
                     <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setShowMobileChatModal(false);
+                            handleConvertChatToTicket(selectedChatDetails);
+                          }}
+                          disabled={isConvertingTicket}
+                          className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1 border shadow-sm ${
+                            selectedChatDetails.ticketCreated === 1
+                              ? 'bg-violet-950/60 text-violet-300 border-violet-500/40'
+                              : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/40'
+                          }`}
+                        >
+                          <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket' : 'fa-plus-circle'}`}></i>
+                          <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'Ticket erstellen'}</span>
+                        </button>
+
                         <button 
                           type="button"
                           onClick={() => handleAnalyzeChat(selectedChatDetails.id)}

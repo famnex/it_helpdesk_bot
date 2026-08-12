@@ -143,6 +143,13 @@ try {
     db.pragma('foreign_keys = ON');
     console.log("Migration: ticket_messages Tabelle erfolgreich aktualisiert.");
   }
+
+  const tableInfoTicketMessages = db.prepare("PRAGMA table_info(ticket_messages)").all();
+  const hasImageUrlTM = tableInfoTicketMessages.some(col => col.name === 'image_url');
+  if (!hasImageUrlTM) {
+    db.exec("ALTER TABLE ticket_messages ADD COLUMN image_url TEXT;");
+    console.log("Migration: Spalte 'image_url' zur Tabelle 'ticket_messages' hinzugefügt.");
+  }
   const tableInfoChats = db.prepare("PRAGMA table_info(chats)").all();
   const hasTicketCreated = tableInfoChats.some(col => col.name === 'ticket_created');
   if (!hasTicketCreated) {

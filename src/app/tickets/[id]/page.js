@@ -373,12 +373,27 @@ export default function CustomerTicketDetailPage() {
                         dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
                       />
                       {msg.imageUrl && (
-                        <img 
-                          src={getCleanImageUrl(msg.imageUrl)}
-                          alt="Foto" 
-                          onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
-                          className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
-                        />
+                        msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
+                          <img 
+                            src={getCleanImageUrl(msg.imageUrl)}
+                            alt="Foto" 
+                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                            className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
+                          />
+                        ) : (
+                          <div className="mt-2">
+                            <a
+                              href={getCleanImageUrl(msg.imageUrl)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
+                            >
+                              <i className="fa-solid fa-paperclip text-slate-400"></i>
+                              <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
+                              <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                            </a>
+                          </div>
+                        )
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1 mx-1">

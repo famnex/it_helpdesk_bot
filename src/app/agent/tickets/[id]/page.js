@@ -41,6 +41,7 @@ export default function AgentTicketDetailPage() {
   // Forms
   const [replyText, setReplyText] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [attachment, setAttachment] = useState(null); // { file, previewUrl, name }
   const [solutionText, setSolutionText] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeSuccessChunks, setCloseSuccessChunks] = useState(null);
@@ -52,10 +53,36 @@ export default function AgentTicketDetailPage() {
   const [isSavingTitle, setIsSavingTitle] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const lastTypedTimeRef = useRef(0);
   const router = useRouter();
 
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImg = file.type.startsWith('image/');
+    let previewUrl = null;
+    if (isImg) {
+      previewUrl = URL.createObjectURL(file);
+    }
+    setAttachment({
+      file,
+      previewUrl,
+      name: file.name,
+      isImage: isImg
+    });
+  };
+
+  const handleRemoveAttachment = () => {
+    if (attachment?.previewUrl) {
+      URL.revokeObjectURL(attachment.previewUrl);
+    }
+    setAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   useEffect(() => {
     // Session prüfen
@@ -224,20 +251,40 @@ export default function AgentTicketDetailPage() {
 
   const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim() || isSending) return;
+    if ((!replyText.trim() && !attachment) || isSending) return;
 
     setIsSending(true);
     try {
+      let uploadedUrl = null;
+      if (attachment?.file) {
+        const formData = new FormData();
+        formData.append('file', attachment.file);
+        const uploadRes = await fetch('/api/tickets/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedUrl = uploadData.url;
+        } else {
+          alert('Fehler beim Hochladen des Dateianhangs.');
+          setIsSending(false);
+          return;
+        }
+      }
+
       const res = await fetch(`/api/tickets/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           text: replyText,
-          is_internal: isInternal
+          is_internal: isInternal,
+          imageUrl: uploadedUrl
         })
       });
       if (res.ok) {
         setReplyText('');
+        handleRemoveAttachment();
         setIsInternal(false);
         await loadData();
       } else {
@@ -573,14 +620,29 @@ export default function AgentTicketDetailPage() {
                         className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                       >
                         {msg.imageUrl && (
-                          <div className="mb-2 max-w-xs overflow-hidden rounded-lg border border-slate-800 shadow-sm bg-slate-950">
-                            <img 
-                              src={getCleanImageUrl(msg.imageUrl)} 
-                              alt="Angehängtes Bild" 
-                              className="max-h-48 w-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
-                            />
-                          </div>
+                          msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
+                            <div className="mb-2 max-w-xs overflow-hidden rounded-lg border border-slate-800 shadow-sm bg-slate-950">
+                              <img 
+                                src={getCleanImageUrl(msg.imageUrl)} 
+                                alt="Angehängtes Bild" 
+                                className="max-h-48 w-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                              />
+                            </div>
+                          ) : (
+                            <div className="mb-2">
+                              <a
+                                href={getCleanImageUrl(msg.imageUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
+                              >
+                                <i className="fa-solid fa-paperclip text-slate-400"></i>
+                                <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
+                                <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                              </a>
+                            </div>
+                          )
                         )}
                         <div 
                           className="markdown-content"
@@ -617,6 +679,15 @@ export default function AgentTicketDetailPage() {
           {/* Form */}
           {ticket.status !== 'closed' ? (
             <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 sticky bottom-0 z-20">
+              {/* Verstecktes Input für Dateiauswahl */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv"
+              />
+
               <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex flex-col gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 shadow-inner">
                 <div className="flex justify-between items-center px-2 border-b border-slate-900 pb-2">
                   <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer select-none">
@@ -631,7 +702,44 @@ export default function AgentTicketDetailPage() {
                       <span>Als internen Vermerk speichern (Kunde sieht das nicht)</span>
                     </span>
                   </label>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-slate-400 hover:text-sky-400 transition-colors flex items-center gap-1.5 font-medium px-2 py-1 rounded-lg hover:bg-slate-900"
+                    title="Datei oder Bild anfügen"
+                  >
+                    <i className="fa-solid fa-paperclip text-sm"></i>
+                    <span>Anhang anfügen</span>
+                  </button>
                 </div>
+
+                {/* Anhang Vorschau */}
+                {attachment && (
+                  <div className="mx-2 p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs animate-fade-in">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      {attachment.isImage && attachment.previewUrl ? (
+                        <img src={attachment.previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-lg border border-slate-800 shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-sky-950/60 border border-sky-500/30 text-sky-400 flex items-center justify-center shrink-0">
+                          <i className="fa-solid fa-file text-sm"></i>
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <span className="font-semibold text-slate-200 block truncate">{attachment.name}</span>
+                        <span className="text-[10px] text-slate-400">Angehängte Datei bereit zum Senden</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveAttachment}
+                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800 ml-2 shrink-0"
+                      title="Anhang entfernen"
+                    >
+                      <i className="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                  </div>
+                )}
                 
                 <div className="flex items-end gap-3">
                   <textarea 
@@ -650,7 +758,7 @@ export default function AgentTicketDetailPage() {
                   />
                   <button 
                     type="submit"
-                    disabled={!replyText.trim() || isSending}
+                    disabled={(!replyText.trim() && !attachment) || isSending}
                     className={`p-3 transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md text-white ${isInternal ? 'bg-violet-600 hover:bg-violet-700' : 'bg-sky-600 hover:bg-sky-700'}`}
                   >
                     <i className="fa-solid fa-paper-plane text-sm"></i>

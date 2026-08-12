@@ -58,7 +58,7 @@ export async function GET(request, { params }) {
     if (user.role === 'customer') {
       messages = db.prepare(`
         SELECT m.id, m.sender_email as senderEmail, m.sender_role as senderRole, 
-               m.text, m.created_at as createdAt,
+               m.text, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
         LEFT JOIN users u ON m.sender_email = u.email
@@ -68,7 +68,7 @@ export async function GET(request, { params }) {
     } else {
       messages = db.prepare(`
         SELECT m.id, m.sender_email as senderEmail, m.sender_role as senderRole, 
-               m.text, m.is_internal as isInternal, m.created_at as createdAt,
+               m.text, m.is_internal as isInternal, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
         LEFT JOIN users u ON m.sender_email = u.email
@@ -103,9 +103,11 @@ export async function POST(request, { params }) {
   }
 
   try {
-    const { text, is_internal } = await request.json();
-    if (!text) {
-      return NextResponse.json({ error: 'Nachrichtentext fehlt.' }, { status: 400 });
+    const { text, is_internal, imageUrl, image_url } = await request.json();
+    const finalImageUrl = imageUrl || image_url || null;
+
+    if (!text && !finalImageUrl) {
+      return NextResponse.json({ error: 'Nachrichtentext oder Dateianhang fehlt.' }, { status: 400 });
     }
 
     // Ticket laden
@@ -123,9 +125,9 @@ export async function POST(request, { params }) {
 
     // Nachricht einfügen
     db.prepare(`
-      INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, is_internal)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, user.email, user.role, text, isInternal);
+      INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, is_internal, image_url)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, user.email, user.role, text || '', isInternal, finalImageUrl);
 
     // Zeitstempel des Tickets und Lesebestätigung für Agenten aktualisieren
     if (user.role === 'agent' || user.role === 'admin') {
