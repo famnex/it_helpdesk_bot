@@ -54,7 +54,7 @@ Speichert Nachrichten und Notizen innerhalb eines Tickets.
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Fortlaufende Nachrichten-ID |
 | `ticket_id` | TEXT | NOT NULL, FOREIGN KEY -> `tickets(id)` ON DELETE CASCADE | Zugehöriges Ticket |
 | `sender_email` | TEXT | NOT NULL | E-Mail des Absenders |
-| `sender_role` | TEXT | NOT NULL, CHECK(`customer`, `agent`, `admin`, `system`) | Rolle des Absenders |
+| `sender_role` | TEXT | NOT NULL, CHECK(`customer`, `agent`, `admin`, `system`, `bot`) | Rolle des Absenders |
 | `text` | TEXT | NOT NULL | Nachrichteninhalt |
 | `is_internal` | BOOLEAN | NOT NULL DEFAULT 0 | 1 = Interner Vermerk (nur für Mitarbeiter sichtbar) |
 | `image_url` | TEXT | NULL | Pfad oder URL zu angehängten Bildern oder Dateien (`/uploads/tickets/...`) |

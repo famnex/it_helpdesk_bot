@@ -36,9 +36,10 @@ db.exec(`
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
       sender_email TEXT NOT NULL,
-      sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system')),
+      sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system', 'bot')),
       text TEXT NOT NULL,
       is_internal BOOLEAN NOT NULL DEFAULT 0,
+      image_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -69,9 +70,9 @@ db.exec(`
       title TEXT NOT NULL,
       fact TEXT NOT NULL,
       description TEXT,
-      category TEXT DEFAULT 'Sonstiges',
+      category TEXT NOT NULL,
+      is_private BOOLEAN NOT NULL DEFAULT 0,
       source TEXT NOT NULL CHECK(source IN ('manual', 'ticket', 'file', 'url')),
-      is_private BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -104,10 +105,10 @@ try {
     );
   `);
 
-  // Migration: ticket_messages Tabelle aktualisieren, falls der Check-Constraint noch kein 'admin' enthält
+  // Migration: ticket_messages Tabelle aktualisieren, falls der Check-Constraint noch kein 'bot' enthält
   const ticketMessagesSql = db.prepare("SELECT sql FROM sqlite_master WHERE name='ticket_messages'").get()?.sql || '';
-  if (ticketMessagesSql && !ticketMessagesSql.includes("'admin'")) {
-    console.log("Migration: Aktualisiere ticket_messages Tabelle, um 'admin' als Rolle zu erlauben...");
+  if (ticketMessagesSql && !ticketMessagesSql.includes("'bot'")) {
+    console.log("Migration: Aktualisiere ticket_messages Tabelle, um 'bot' als Rolle zu erlauben...");
     
     // Foreign Keys temporär deaktivieren
     db.pragma('foreign_keys = OFF');
@@ -122,18 +123,28 @@ try {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
             sender_email TEXT NOT NULL,
-            sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system')),
+            sender_role TEXT NOT NULL CHECK(sender_role IN ('customer', 'agent', 'admin', 'system', 'bot')),
             text TEXT NOT NULL,
             is_internal BOOLEAN NOT NULL DEFAULT 0,
+            image_url TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
       
       // 3. Daten kopieren
-      db.exec(`
-        INSERT INTO ticket_messages (id, ticket_id, sender_email, sender_role, text, is_internal, created_at)
-        SELECT id, ticket_id, sender_email, sender_role, text, is_internal, created_at FROM ticket_messages_old;
-      `);
+      const oldCols = db.prepare("PRAGMA table_info(ticket_messages_old)").all();
+      const hasImg = oldCols.some(c => c.name === 'image_url');
+      if (hasImg) {
+        db.exec(`
+          INSERT INTO ticket_messages (id, ticket_id, sender_email, sender_role, text, is_internal, image_url, created_at)
+          SELECT id, ticket_id, sender_email, sender_role, text, is_internal, image_url, created_at FROM ticket_messages_old;
+        `);
+      } else {
+        db.exec(`
+          INSERT INTO ticket_messages (id, ticket_id, sender_email, sender_role, text, is_internal, created_at)
+          SELECT id, ticket_id, sender_email, sender_role, text, is_internal, created_at FROM ticket_messages_old;
+        `);
+      }
       
       // 4. Alte Tabelle löschen
       db.exec("DROP TABLE ticket_messages_old;");
@@ -141,7 +152,7 @@ try {
     
     // Foreign Keys wieder aktivieren
     db.pragma('foreign_keys = ON');
-    console.log("Migration: ticket_messages Tabelle erfolgreich aktualisiert.");
+    console.log("Migration: ticket_messages Tabelle erfolgreich aktualisiert (mit 'bot' und 'image_url').");
   }
 
   const tableInfoTicketMessages = db.prepare("PRAGMA table_info(ticket_messages)").all();

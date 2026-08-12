@@ -563,46 +563,76 @@ export default function AdminDashboardPage() {
   const handleConvertChatToTicket = async (chat) => {
     if (!chat) return;
     if (chat.ticketCreated === 1) {
-      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.[0]?.id || tickets.find(t => t.chatId === chat.id)?.id;
+      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.[0]?.id;
       if (linkedTicket) {
         router.push(`/agent/tickets/${linkedTicket}`);
         return;
       }
     }
 
-    if (!confirm(`Möchtest du aus dem Chat mit "${chat.userName || chat.userEmail || 'Gast'}" ein neues Support-Ticket erstellen?`)) {
+    // 1. Ersteller ermitteln (E-Mail der Person, die den Chat geführt hat)
+    let creatorEmail = chat.userEmail;
+    let creatorName = chat.userName || 'Gast';
+
+    if (!creatorEmail && selectedChatIdentityTrace?.linkedIdentities?.length > 0) {
+      const primaryIdentity = selectedChatIdentityTrace.linkedIdentities[0];
+      if (primaryIdentity.email) {
+        creatorEmail = primaryIdentity.email;
+        if (primaryIdentity.name) creatorName = primaryIdentity.name;
+      }
+    }
+
+    if (!creatorEmail) {
+      creatorEmail = 'gast@schule.de';
+    }
+
+    // Vorgeschlagenen Titel ableiten
+    let suggestedTitle = chat.category ? `Support-Anfrage: ${chat.category}` : '';
+    if (!suggestedTitle && selectedChatMessages && selectedChatMessages.length > 0) {
+      const firstUserMsg = selectedChatMessages.find(m => m.sender === 'user')?.text;
+      if (firstUserMsg) {
+        suggestedTitle = firstUserMsg.length > 60 ? `${firstUserMsg.substring(0, 57)}...` : firstUserMsg;
+      }
+    }
+
+    // 4. Titel per Popup durch Admin festlegen
+    const promptInput = prompt(
+      `Support-Ticket aus Chat (${creatorName} <${creatorEmail}>) erstellen.\n\nBitte gib den Titel für das Ticket ein:`,
+      suggestedTitle
+    );
+
+    // Abbrechen geklickt
+    if (promptInput === null) {
       return;
     }
 
+    // Keine Eingabe / Nur Leerzeichen = "Unbekannter Titel"
+    const finalTitle = promptInput.trim() === '' ? 'Unbekannter Titel' : promptInput.trim();
+
     setIsConvertingTicket(true);
     try {
-      let ticketTitle = chat.category ? `Support-Anfrage: ${chat.category}` : 'Support-Anfrage aus Chat';
-      if (selectedChatMessages && selectedChatMessages.length > 0) {
-        const firstUserMsg = selectedChatMessages.find(m => m.sender === 'user')?.text;
-        if (firstUserMsg) {
-          ticketTitle = firstUserMsg.length > 60 ? `${firstUserMsg.substring(0, 57)}...` : firstUserMsg;
-        }
-      }
-
       const currentAgentId = user?.id || 'me';
 
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          chat_id: chat.id,
           chatId: chat.id,
-          email: chat.userEmail || 'gast@schule.de',
-          name: chat.userName || 'Gast',
-          title: ticketTitle,
+          creator_email: creatorEmail,
+          email: creatorEmail,
+          creator_name: creatorName,
+          name: creatorName,
+          title: finalTitle,
           assignedAgentId: currentAgentId
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        alert(`Ticket ${data.ticketId} wurde erfolgreich aus dem Chat erstellt und dir direkt zugewiesen!`);
         loadChats();
         setSelectedChatDetails(prev => prev ? { ...prev, ticketCreated: 1 } : null);
+        // 3. Nach Klick direkt zum Ticket leiten (/agent/tickets/TK-XXXX)
         router.push(`/agent/tickets/${data.ticketId}`);
       } else {
         const errData = await res.json();

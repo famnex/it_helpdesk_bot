@@ -227,7 +227,7 @@ export async function POST(request) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(ticketId, title, status, email, assignedAgentId, chatId, isAuthenticatedCreator);
 
-    // Chat als ticket_created markieren und System-Event im Chatverlauf speichern, falls nicht bereits vorhanden
+    // Chat als ticket_created markieren, System-Event und Chat-Verlauf im Ticket speichern
     if (chatId) {
       db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
       
@@ -236,6 +236,29 @@ export async function POST(request) {
       if (!exists) {
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)')
           .run(chatId, eventText);
+      }
+
+      // Chat-Verlauf vollständig in die Ticket-Nachrichten importieren
+      try {
+        const rawChatMsgs = db.prepare(`
+          SELECT sender, text, image_url, created_at 
+          FROM chat_messages 
+          WHERE chat_id = ? AND text NOT LIKE '[SYSTEM_EVENT:%'
+          ORDER BY created_at ASC
+        `).all(chatId);
+
+        const insertTmStmt = db.prepare(`
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url, created_at)
+          VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+        `);
+
+        for (const cMsg of rawChatMsgs) {
+          const sRole = cMsg.sender === 'user' ? 'customer' : 'bot';
+          const sEmail = cMsg.sender === 'user' ? email : 'IT-Support-Bot';
+          insertTmStmt.run(ticketId, sEmail, sRole, cMsg.text, cMsg.image_url || null, cMsg.created_at || null);
+        }
+      } catch (importErr) {
+        console.error('Fehler beim Importieren des Chat-Verlaufs ins Ticket:', importErr);
       }
     }
 
