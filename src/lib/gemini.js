@@ -799,6 +799,15 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
     { name: 'Drucker & Hardware', keywords: ['drucker', 'drucken', 'papier', 'toner', 'pc', 'laptop', 'ipad', 'smartboard'] }
   ];
 
+  const cleanTopicName = (t, fallback) => {
+    if (!t) return fallback;
+    const str = t.trim();
+    if (!str || ['anfrage', 'unbekannt', 'sonstiges', 'support-anfrage', 'anfrage über chat-assistent'].includes(str.toLowerCase())) {
+      return fallback;
+    }
+    return str;
+  };
+
   // Pre-Pass: Falls neue Anfrage und ein bestehender Chat in dasselbe Themenfeld fallen
   for (const group of topicGroups) {
     const isNewInGroup = group.keywords.some(kw => newQueryLower.includes(kw));
@@ -811,11 +820,12 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
       });
 
       if (matchedCandidate) {
+        const bestTopic = cleanTopicName(matchedCandidate.title, cleanTopicName(matchedCandidate.category, group.name));
         return {
           isDuplicate: true,
           similarityScore: 0.90,
           matchedChatId: matchedCandidate.id,
-          matchedTopic: matchedCandidate.title || matchedCandidate.category || group.name,
+          matchedTopic: bestTopic,
           reason: `Direkte Themengleichheit im Bereich ${group.name}`
         };
       }
@@ -825,7 +835,7 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
   const { geminiModel } = getModelNames();
 
   const chatsOverview = candidateChats.map(c => 
-    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Thema/Kategorie: "${c.title || c.category || 'Unbekannt'}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
+    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Thema/Kategorie: "${cleanTopicName(c.title, c.category || 'Unbekannt')}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
   ).join('\n');
 
   const prompt = `Du bist ein hochentwickelter KI-Analyst für ein IT-Helpdesk-System.
@@ -843,12 +853,12 @@ REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
 - 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
 
 AUFTRAG:
-Bestimme für die am besten passende früheren Konversation den similarityScore und das Thema.
+Bestimme für die am besten passende früheren Konversation den similarityScore und das konkrete Thema (z.B. "Anmeldung & Passwort", "WLAN Verbindung", "Moodle Zugangsdaten"). Vermeide generische Wörter wie "Anfrage".
 Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
 {
   "similarityScore": 0.85,
   "matchedChatId": "die Chat-ID mit dem höchsten Score (oder null falls alle Scores < 0.45)",
-  "matchedTopic": "Kurze prägnante Bezeichnung des Themas (z.B. Login & Passwort-Probleme)",
+  "matchedTopic": "Konkrete verständliche Bezeichnung des Themas (z.B. Login & Passwort-Probleme)",
   "reason": "Kurzer Satz zur Begründung der Wahrscheinlichkeit"
 }`;
 
@@ -862,14 +872,16 @@ Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
     const result = JSON.parse(cleanJson);
 
     const score = typeof result.similarityScore === 'number' ? result.similarityScore : 0;
-    // Schwellenwert: Ab 45% (0.45) Wahrscheinlichkeit gilt es als Themengleichheit und der Bot fragt nach
     const isDuplicate = score >= 0.45 && Boolean(result.matchedChatId);
+    const matchedItem = candidateChats.find(c => c.id === result.matchedChatId);
+    const fallbackTopic = matchedItem ? cleanTopicName(matchedItem.title, matchedItem.category || 'Support-Thema') : 'Support-Thema';
+    const finalTopic = cleanTopicName(result.matchedTopic, fallbackTopic);
 
     return {
       isDuplicate,
       similarityScore: score,
       matchedChatId: isDuplicate ? result.matchedChatId : null,
-      matchedTopic: result.matchedTopic || 'Bestehende Anfrage',
+      matchedTopic: finalTopic,
       reason: result.reason || ''
     };
   } catch (e) {

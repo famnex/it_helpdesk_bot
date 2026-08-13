@@ -420,6 +420,7 @@ export async function POST(request) {
             FROM chats c
             LEFT JOIN tickets t ON t.chat_id = c.id
             WHERE c.id != ? AND c.is_merged = 0 AND (${sqlWhere.join(' OR ')})
+            HAVING snippet IS NOT NULL AND LENGTH(TRIM(snippet)) > 2
             ORDER BY c.created_at DESC LIMIT 10
           `).all(...params);
         }
@@ -428,7 +429,7 @@ export async function POST(request) {
           const candidateData = candidateChats.map(c => ({
             id: c.id,
             ticketId: c.ticketId,
-            title: c.ticketTitle || c.category || 'Anfrage',
+            title: c.ticketTitle || c.category || 'Support-Thema',
             snippet: c.snippet || '',
             createdAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString('de-DE') : 'kürzlich'
           }));
@@ -440,10 +441,8 @@ export async function POST(request) {
 
             const matchedItem = candidateData.find(c => c.id === dupResult.matchedChatId);
             const matchedDate = matchedItem ? matchedItem.createdAt : 'kürzlich';
-            const perc = dupResult.similarityScore ? Math.round(dupResult.similarityScore * 100) : 0;
-            const percText = perc > 0 ? ` (Wahrscheinlichkeit ca. ${perc}%)` : '';
 
-            const botAsk = `Ich habe gesehen, dass du am ${matchedDate} bereits eine Anfrage zum Thema "${dupResult.matchedTopic}" gestartet hast${percText}. Handelt es sich um genau dieses Thema?`;
+            const botAsk = `Ich habe gesehen, dass du am ${matchedDate} bereits eine Anfrage zum Thema "${dupResult.matchedTopic}" gestartet hast. Handelt es sich um genau dieses Thema?`;
 
             db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAsk);
 
