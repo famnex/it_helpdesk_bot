@@ -170,8 +170,8 @@ export default function AgentTicketDetailPage() {
         // Fehler beim Polling ignorieren
       }
 
-      // Stumme Abfrage aller Tickets, um Benachrichtigungen für ANDERE Tickets zu zeigen
-      fetch('/api/tickets')
+      // Stumme Abfrage nur AKTIVER offener Tickets, um Benachrichtigungen für ANDERE Tickets zu zeigen
+      fetch('/api/tickets?status=active')
         .then(r => r.json())
         .then(data => {
           if (data.tickets) {

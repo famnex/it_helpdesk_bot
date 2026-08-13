@@ -377,8 +377,8 @@ export default function AdminDashboardPage() {
           .catch(() => {});
       }
 
-      // 3. Im Hintergrund Tickets prüfen & Toast auslösen
-      fetch('/api/tickets')
+      // 3. Im Hintergrund NUR aktive offene Tickets prüfen & Toast auslösen
+      fetch('/api/tickets?status=active')
         .then(r => r.json())
         .then(data => {
           if (data.tickets) {

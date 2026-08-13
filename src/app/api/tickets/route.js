@@ -9,16 +9,28 @@ import { sendAssignmentNotification, sendUnassignedTicketNotification } from '@/
  * - Kunden sehen nur ihre eigenen Tickets.
  * - Agenten/Admins sehen alle Tickets.
  */
-export async function GET() {
+export async function GET(request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: 'Nicht authentifiziert.' }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const statusFilter = searchParams.get('status') || 'active'; // 'active' (default, status != 'closed'), 'closed', 'all'
+
   try {
     let tickets;
+    const params = [];
+
     if (user.role === 'customer') {
-      // Nur eigene Tickets holen
+      let customerWhere = 'WHERE t.creator_email = ?';
+      params.push(user.email);
+      if (statusFilter === 'active') {
+        customerWhere += " AND t.status != 'closed'";
+      } else if (statusFilter === 'closed') {
+        customerWhere += " AND t.status = 'closed'";
+      }
+
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
@@ -28,11 +40,17 @@ export async function GET() {
                t.created_at as createdAt, t.updated_at as updatedAt
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
-        WHERE t.creator_email = ?
+        ${customerWhere}
         ORDER BY t.created_at DESC
-      `).all(user.email);
+      `).all(...params);
     } else {
-      // Alle Tickets für Agenten und Admins holen
+      let agentWhere = '';
+      if (statusFilter === 'active') {
+        agentWhere = "WHERE t.status != 'closed'";
+      } else if (statusFilter === 'closed') {
+        agentWhere = "WHERE t.status = 'closed'";
+      }
+
       tickets = db.prepare(`
         SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
@@ -66,6 +84,7 @@ export async function GET() {
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
         LEFT JOIN users cu ON t.creator_email = cu.email
+        ${agentWhere}
         ORDER BY t.created_at DESC
       `).all();
     }
@@ -73,7 +92,7 @@ export async function GET() {
     return NextResponse.json({ tickets });
   } catch (err) {
     console.error('Fehler beim Laden der Tickets:', err);
-    return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
+    return NextResponse.json({ error: 'Interner Fehler.' }, { status: 500 });
   }
 }
 

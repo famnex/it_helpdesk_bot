@@ -235,8 +235,8 @@ export default function AgentDashboardPage() {
       fetch(`/api/live/sync?roomType=dashboard&roomId=global&myRole=${user.role || 'agent'}&myEmail=${encodeURIComponent(user.email || '')}`)
         .catch(() => {});
 
-      // 2. Tickets stumm neu laden, um neue Anfragen/Nachrichten live anzuzeigen
-      fetch('/api/tickets')
+      // 2. Nur offene/aktive Tickets stumm neu laden, um neue Anfragen/Nachrichten live anzuzeigen
+      fetch('/api/tickets?status=active')
         .then(r => r.json())
         .then(data => {
           if (data.tickets) {
@@ -279,10 +279,15 @@ export default function AgentDashboardPage() {
     return () => clearInterval(interval);
   }, [user]);
 
+  useEffect(() => {
+    if (user) loadData();
+  }, [filter]);
+
   const loadData = async () => {
     try {
+      const statusParam = filter === 'closed' ? 'closed' : filter === 'all' ? 'all' : 'active';
       const [ticketsRes, agentsRes] = await Promise.all([
-        fetch('/api/tickets'),
+        fetch(`/api/tickets?status=${statusParam}`),
         fetch('/api/agents')
       ]);
 
