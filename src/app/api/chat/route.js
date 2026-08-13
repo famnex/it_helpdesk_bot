@@ -286,7 +286,30 @@ export async function POST(request) {
     const pendingTargetId = chat ? chat.pending_merge_target_id : null;
 
     if (pendingTargetId && (textLower.startsWith('ja') || textLower.includes('ja_zum_chat'))) {
-      const targetTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(pendingTargetId);
+      const targetTicket = db.prepare('SELECT id, status, assigned_agent_id FROM tickets WHERE chat_id = ?').get(pendingTargetId);
+
+      // Falls das zugehörige Ticket geschlossen war, wieder öffnen!
+      let wasTicketReopened = false;
+      if (targetTicket && targetTicket.status === 'closed') {
+        const newStatus = targetTicket.assigned_agent_id ? 'assigned' : 'open';
+        db.prepare(`
+          UPDATE tickets 
+          SET status = ?, 
+              closed_at = NULL, 
+              closed_by_name = NULL, 
+              closed_by_email = NULL, 
+              closed_by_user_id = NULL,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(newStatus, targetTicket.id);
+
+        db.prepare(`
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+          VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_REOPENED] Ticket wurde durch neue Benutzeranfrage automatisch wieder geöffnet.')
+        `).run(targetTicket.id);
+
+        wasTicketReopened = true;
+      }
 
       // Alle Nutzernachrichten aus dem zu verwerfenden Chat laden (außer Bestätigung "Ja")
       const tempUserMsgs = db.prepare(`
@@ -326,8 +349,16 @@ export async function POST(request) {
         }
       });
 
-      const ackBot = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
+      let ackBot = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
+      if (wasTicketReopened) {
+        ackBot += " Da das zugehörige IT-Support-Ticket geschlossen war, habe ich es automatisch für dich wieder geöffnet.";
+      }
+
       db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(pendingTargetId, ackBot);
+      if (targetTicket && wasTicketReopened) {
+        db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'IT-Support-Bot\', \'bot\', ?)')
+          .run(targetTicket.id, ackBot);
+      }
 
       // Redundanten Chat als zusammengeführt markieren und seine temporären Nachrichten löschen/verwerfen
       db.prepare('UPDATE chats SET is_merged = 1, pending_merge_target_id = NULL, pending_merge_info = NULL WHERE id = ?').run(chatId);
