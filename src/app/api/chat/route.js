@@ -150,7 +150,7 @@ export async function POST(request) {
     } else {
       // Immer versuchen, E-Mail, Name, IP und Session-ID des angemeldeten Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
       if (chat.isAgentOnBehalf !== 1) {
-        db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ? WHERE id = ?')
+        db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ?, last_active_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, chatId);
       }
     }

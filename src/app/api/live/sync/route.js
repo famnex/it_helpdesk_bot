@@ -138,14 +138,23 @@ export async function GET(request) {
       db.prepare("UPDATE chats SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
     }
 
+    // Hilfsfunktion zum korrekten Parsen von UTC-Strings aus SQLite (verhindert 2-Stunden-Offset)
+    const parseUtc = (dateStr) => {
+      if (!dateStr) return null;
+      if (typeof dateStr !== 'string') return new Date(dateStr);
+      if (dateStr.endsWith('Z') || dateStr.includes('+')) return new Date(dateStr);
+      return new Date(dateStr.replace(' ', 'T') + 'Z');
+    };
+
     // Berechnung des Online-Status des Gesprächspartners
     let partnerPresence = null;
     const formatPresence = (lastActiveAt, partnerRole = 'Gesprächspartner') => {
-      if (!lastActiveAt) {
+      const dateObj = parseUtc(lastActiveAt);
+      if (!dateObj || isNaN(dateObj.getTime())) {
         return { isOnline: false, statusText: `${partnerRole} offline`, label: 'Offline' };
       }
-      const diffMs = Date.now() - new Date(lastActiveAt).getTime();
-      const diffMins = Math.floor(diffMs / 60000);
+      const diffMs = Date.now() - dateObj.getTime();
+      const diffMins = Math.floor(Math.max(0, diffMs) / 60000);
       const diffHours = Math.floor(diffMins / 60);
       const diffDays = Math.floor(diffHours / 24);
 
@@ -188,6 +197,23 @@ export async function GET(request) {
           const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(chatRow.userEmail);
           if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
         }
+
+        // Fallback: Letzte Aktivität darf nicht älter sein als die letzte Kundennachricht
+        try {
+          const latestUserMsg = db.prepare(`
+            SELECT created_at as createdAt FROM chat_messages 
+            WHERE chat_id = ? AND sender = 'user' 
+            ORDER BY created_at DESC LIMIT 1
+          `).get(roomId);
+          if (latestUserMsg && latestUserMsg.createdAt) {
+            const msgTime = parseUtc(latestUserMsg.createdAt)?.getTime() || 0;
+            const activeTime = parseUtc(custActiveAt)?.getTime() || 0;
+            if (msgTime > activeTime) {
+              custActiveAt = latestUserMsg.createdAt;
+            }
+          }
+        } catch (e) {}
+
         partnerPresence = formatPresence(custActiveAt, 'Kunde');
       }
     } else if (roomType === 'ticket') {
@@ -205,6 +231,22 @@ export async function GET(request) {
           const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(ticketRow.creatorEmail);
           if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
         }
+
+        try {
+          const latestCustMsg = db.prepare(`
+            SELECT created_at as createdAt FROM ticket_messages 
+            WHERE ticket_id = ? AND sender_role = 'customer' 
+            ORDER BY created_at DESC LIMIT 1
+          `).get(roomId);
+          if (latestCustMsg && latestCustMsg.createdAt) {
+            const msgTime = parseUtc(latestCustMsg.createdAt)?.getTime() || 0;
+            const activeTime = parseUtc(custActiveAt)?.getTime() || 0;
+            if (msgTime > activeTime) {
+              custActiveAt = latestCustMsg.createdAt;
+            }
+          }
+        } catch (e) {}
+
         partnerPresence = formatPresence(custActiveAt, 'Kunde');
       }
     }
