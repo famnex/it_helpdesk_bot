@@ -419,8 +419,10 @@ export async function POST(request) {
                    (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
             FROM chats c
             LEFT JOIN tickets t ON t.chat_id = c.id
-            WHERE c.id != ? AND c.is_merged = 0 AND (${sqlWhere.join(' OR ')})
-            HAVING snippet IS NOT NULL AND LENGTH(TRIM(snippet)) > 2
+            WHERE c.id != ? 
+              AND c.is_merged = 0 
+              AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_id = c.id AND sender = 'user' AND LENGTH(TRIM(text)) > 2)
+              AND (${sqlWhere.join(' OR ')})
             ORDER BY c.created_at DESC LIMIT 10
           `).all(...params);
         }
