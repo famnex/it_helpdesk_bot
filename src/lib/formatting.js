@@ -24,59 +24,67 @@ marked.use({
 });
 
 /**
- * Erkennt automatisch URLs (z.B. cloud.mso-hef.de, https://...) und E-Mail-Adressen in Freitext
- * und wandelt sie sauber in Markdown-Links um, ohne bestehende Links oder E-Mail-Bestandteile zu zerpflücken.
+ * Wandelt E-Mails und Web-Domains in Freitext sauber in Markdown-Links um,
+ * ohne bestehende Markdown-Links oder HTML-Tags zu beschädigen.
  */
 export function autoLinkText(text) {
   if (!text) return '';
 
-  const tokens = [];
+  // 1. Zerlege den Text in geschützte Blöcke (bestehende Markdown-Links [text](url) und HTML-Tags)
+  // sowie in ungeschützten Freitext.
+  const regexLinkOrTag = /(\[[^\]]*\]\([^)]*\)|<a\b[^>]*>.*?<\/a>|<[^>]+>)/gi;
+  
+  const parts = [];
+  let lastIndex = 0;
+  let match;
 
-  // Hilfsfunktion zum Schutz bereits vorhandener oder neu erstellter Markdown-Links/HTML-Tags
-  const protect = (str) => {
-    return str.replace(/(\[[^\]]+\]\([^)]+\)|<a\s+[^>]*>.*?<\/a>|<[^>]+>)/gi, (m) => {
-      const placeholder = `___TLINK_${tokens.length}___`;
-      tokens.push(m);
-      return placeholder;
-    });
-  };
-
-  // 1. Bereits vorhandene Markdown-Links und HTML-Tags schützen
-  let workText = protect(text);
-
-  // 2. E-Mail-Adressen verlinken (z. B. j.breitkreutz@mso-hef.de)
-  workText = workText.replace(
-    /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/gi,
-    (match, email) => `[${email}](mailto:${email})`
-  );
-
-  // Neu erstellte E-Mail-Links sofort schützen, damit Unterdomains (z.B. j.breitkreutz oder hef.de) nicht überschrieben werden
-  workText = protect(workText);
-
-  // 3. URLs mit http:// oder https:// verlinken
-  workText = workText.replace(
-    /\b(https?:\/\/[^\s<)]+)/gi,
-    (match, url) => `[${url}](${url})`
-  );
-
-  // Neu erstellte HTTP-Links schützen
-  workText = protect(workText);
-
-  // 4. Standalone Web-Domains verlinken (z.B. cloud.mso-hef.de, www.google.de, mso-hef.de/helpdesk)
-  workText = workText.replace(
-    /(?<!@|\w|\/)\b((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s<)]*)?)\b/gi,
-    (match, domain) => {
-      if (domain.includes('@')) return match;
-      return `[${domain}](https://${domain})`;
+  while ((match = regexLinkOrTag.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ isProtected: false, content: text.slice(lastIndex, match.index) });
     }
-  );
-
-  // 5. Alle geschützten Tokens in umgekehrter Reihenfolge wieder einsetzen
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    workText = workText.replace(`___TLINK_${i}___`, tokens[i]);
+    parts.push({ isProtected: true, content: match[0] });
+    lastIndex = regexLinkOrTag.lastIndex;
   }
 
-  return workText;
+  if (lastIndex < text.length) {
+    parts.push({ isProtected: false, content: text.slice(lastIndex) });
+  }
+
+  // 2. Verarbeite nur die ungeschützten Freitext-Teile
+  const processed = parts.map(part => {
+    if (part.isProtected) return part.content;
+
+    let str = part.content;
+
+    // A) E-Mail-Adressen verlinken
+    str = str.replace(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/gi, (email) => {
+      return `[${email}](mailto:${email})`;
+    });
+
+    // B) URLs mit http:// oder https:// verlinken
+    str = str.replace(/\b(https?:\/\/[^\s<)]+)/gi, (fullUrl) => {
+      const cleanUrl = fullUrl.replace(/[.,;!?]+$/, '');
+      const trailingPunctuation = fullUrl.slice(cleanUrl.length);
+      return `[${cleanUrl}](${cleanUrl})${trailingPunctuation}`;
+    });
+
+    // C) Standalone Web-Domains (z.B. cloud.mso-hef.de/termin/ oder www.google.de)
+    str = str.replace(/(?:^|(?<=\s|[(>]))((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s<)]*)?)/gi, (rawDomain) => {
+      // Ignorieren, wenn es eine E-Mail ist
+      if (rawDomain.includes('@')) return rawDomain;
+
+      // Satzzeichen am Ende der Domain abspalten (z.B. "cloud.mso-hef.de.")
+      const cleanDomain = rawDomain.replace(/[.,;!?]+$/, '');
+      const trailingPunctuation = rawDomain.slice(cleanDomain.length);
+
+      if (!cleanDomain) return rawDomain;
+      return `[${cleanDomain}](https://${cleanDomain})${trailingPunctuation}`;
+    });
+
+    return str;
+  });
+
+  return processed.join('');
 }
 
 /**
