@@ -176,6 +176,19 @@ try {
     console.log("Migration: Spalten 'pending_merge_target_id', 'pending_merge_info' und 'is_merged' zur Tabelle 'chats' hinzugefügt.");
   }
 
+  const hasLastActiveChats = tableInfoChats.some(col => col.name === 'last_active_at');
+  if (!hasLastActiveChats) {
+    db.exec("ALTER TABLE chats ADD COLUMN last_active_at DATETIME;");
+    console.log("Migration: Spalte 'last_active_at' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const tableInfoUsersInit = db.prepare("PRAGMA table_info(users)").all();
+  const hasLastActiveUsers = tableInfoUsersInit.some(col => col.name === 'last_active_at');
+  if (!hasLastActiveUsers) {
+    db.exec("ALTER TABLE users ADD COLUMN last_active_at DATETIME;");
+    console.log("Migration: Spalte 'last_active_at' zur Tabelle 'users' hinzugefügt.");
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS pending_ticket_notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

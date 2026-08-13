@@ -38,6 +38,7 @@ export default function CustomerTicketDetailPage() {
   const [isSending, setIsSending] = useState(false);
   const [user, setUser] = useState(null);
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
+  const [partnerPresence, setPartnerPresence] = useState(null);
 
   // Flagging Message States
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -83,6 +84,7 @@ export default function CustomerTicketDetailPage() {
         if (res.ok) {
           const data = await res.json();
           setIsOtherPartyTyping(!!data.isOtherPartyTyping);
+          if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
 
           if (data.newMessages && data.newMessages.length > 0) {
             setMessages(prev => {
@@ -341,7 +343,21 @@ export default function CustomerTicketDetailPage() {
               <h1 className="text-sm font-bold text-white max-w-xs sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Ticket ID: <span className="font-mono">{ticket.id}</span></p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[10px] text-slate-400">Ticket ID: <span className="font-mono">{ticket.id}</span></p>
+              {partnerPresence && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-[10px] font-medium shadow-inner">
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    partnerPresence.isOnline 
+                      ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
+                      : 'bg-slate-500'
+                  }`}></span>
+                  <span className={partnerPresence.isOnline ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                    {partnerPresence.statusText}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>

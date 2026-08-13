@@ -81,6 +81,7 @@ Speichert Chat-Sitzungen mit dem KI-Bot.
 | `pending_merge_target_id` | TEXT | NULL | ID des Zielchats/Tickets bei Themen-Übereinstimmung |
 | `pending_merge_info` | TEXT | NULL | Übertragener Text/Kontext bei Themen-Zusammenführung |
 | `is_merged` | BOOLEAN | DEFAULT 0 | 1 = Chat wurde wegen Themen-Duplikat in anderen Chat/Ticket zusammengeführt |
+| `last_active_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der letzten Aktivität im Chat (für Online-Status) |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---

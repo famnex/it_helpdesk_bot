@@ -130,11 +130,89 @@ export async function GET(request) {
       }
     }
 
+    // Aktivität für den aktuellen Nutzer/Chat in der DB protokollieren
+    if (myEmail) {
+      db.prepare("UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE LOWER(email) = LOWER(?)").run(myEmail);
+    }
+    if (roomType === 'chat' && roomId) {
+      db.prepare("UPDATE chats SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
+    }
+
+    // Berechnung des Online-Status des Gesprächspartners
+    let partnerPresence = null;
+    const formatPresence = (lastActiveAt, partnerRole = 'Gesprächspartner') => {
+      if (!lastActiveAt) {
+        return { isOnline: false, statusText: `${partnerRole} offline`, label: 'Offline' };
+      }
+      const diffMs = Date.now() - new Date(lastActiveAt).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+
+      if (diffMins < 2) {
+        return { isOnline: true, statusText: `${partnerRole} ist online`, label: 'Online' };
+      } else if (diffMins < 60) {
+        return { isOnline: false, statusText: `${partnerRole} vor ${diffMins} Min. online`, label: `Vor ${diffMins} Min.` };
+      } else if (diffHours < 24) {
+        return { isOnline: false, statusText: `${partnerRole} vor ${diffHours} Std. online`, label: `Vor ${diffHours} Std.` };
+      } else {
+        const dateStr = new Date(lastActiveAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        return { isOnline: false, statusText: `${partnerRole} am ${dateStr} online`, label: `Am ${dateStr}` };
+      }
+    };
+
+    if (roomType === 'chat') {
+      const chatRow = db.prepare('SELECT ticket_created as ticketCreated, user_email as userEmail, last_active_at as lastActiveAt FROM chats WHERE id = ?').get(roomId);
+      if (myRole === 'customer') {
+        if (chatRow && chatRow.ticketCreated === 1) {
+          const agentRow = db.prepare(`
+            SELECT u.name, u.email, u.last_active_at as lastActiveAt 
+            FROM tickets t 
+            JOIN users u ON t.assigned_agent_id = u.id 
+            WHERE t.chat_id = ?
+          `).get(roomId);
+          if (agentRow) {
+            partnerPresence = formatPresence(agentRow.lastActiveAt, `IT-Support (${agentRow.name || 'Agent'})`);
+          } else {
+            partnerPresence = formatPresence(null, 'IT-Support-Team');
+          }
+        } else {
+          // KI-Bot ist 24/7 online
+          partnerPresence = { isOnline: true, statusText: 'KI-Bot online (24/7)', label: 'Online' };
+        }
+      } else {
+        // Admin / Agent sieht den Status des Kunden
+        let custActiveAt = chatRow ? chatRow.lastActiveAt : null;
+        if (chatRow && chatRow.userEmail) {
+          const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(chatRow.userEmail);
+          if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
+        }
+        partnerPresence = formatPresence(custActiveAt, 'Kunde');
+      }
+    } else if (roomType === 'ticket') {
+      const ticketRow = db.prepare('SELECT creator_email as creatorEmail, assigned_agent_id as assignedAgentId, updated_at as updatedAt FROM tickets WHERE id = ?').get(roomId);
+      if (myRole === 'customer') {
+        if (ticketRow && ticketRow.assignedAgentId) {
+          const agentRow = db.prepare('SELECT name, last_active_at as lastActiveAt FROM users WHERE id = ?').get(ticketRow.assignedAgentId);
+          partnerPresence = formatPresence(agentRow ? agentRow.lastActiveAt : null, agentRow ? `IT-Support (${agentRow.name})` : 'IT-Support-Team');
+        } else {
+          partnerPresence = formatPresence(null, 'IT-Support-Team');
+        }
+      } else {
+        let custActiveAt = ticketRow ? ticketRow.updatedAt : null;
+        if (ticketRow && ticketRow.creatorEmail) {
+          const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(ticketRow.creatorEmail);
+          if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
+        }
+        partnerPresence = formatPresence(custActiveAt, 'Kunde');
+      }
+    }
+
     return NextResponse.json({
       success: true,
       newMessages,
       newTicketMessages,
-      isOtherPartyTyping
+      isOtherPartyTyping,
+      partnerPresence
     });
   } catch (err) {
     console.error('Fehler bei /api/live/sync GET:', err);

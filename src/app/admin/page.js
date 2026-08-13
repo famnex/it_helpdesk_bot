@@ -567,6 +567,25 @@ export default function AdminDashboardPage() {
     return null;
   };
 
+  const formatCustomerPresenceText = (lastActiveAt) => {
+    if (!lastActiveAt) return 'Kunde offline';
+    const diffMs = Date.now() - parseUtcDate(lastActiveAt).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 2) return 'Kunde ist online';
+    if (diffMins < 60) return `Kunde vor ${diffMins} Min. online`;
+    if (diffHours < 24) return `Kunde vor ${diffHours} Std. online`;
+    const dateStr = parseUtcDate(lastActiveAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    return `Kunde am ${dateStr} online`;
+  };
+
+  const isCustomerOnline = (lastActiveAt) => {
+    if (!lastActiveAt) return false;
+    const diffMs = Date.now() - parseUtcDate(lastActiveAt).getTime();
+    return Math.floor(diffMs / 60000) < 2;
+  };
+
   const [isConvertingTicket, setIsConvertingTicket] = useState(false);
 
   const handleConvertChatToTicket = async (chat) => {
@@ -2863,6 +2882,17 @@ export default function AdminDashboardPage() {
                             <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 border border-violet-500/20 px-2.5 py-1 rounded-lg shadow-sm">
                               ID: {selectedChatDetails.id}
                             </span>
+                            {/* Online-Status Badge des Kunden */}
+                            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-medium shadow-sm">
+                              <span className={`w-2 h-2 rounded-full ${
+                                isCustomerOnline(selectedChatDetails.lastActiveAt) 
+                                  ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]' 
+                                  : 'bg-slate-500'
+                              }`}></span>
+                              <span className={isCustomerOnline(selectedChatDetails.lastActiveAt) ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                                {formatCustomerPresenceText(selectedChatDetails.lastActiveAt)}
+                              </span>
+                            </div>
                             <span className="text-[11px] text-slate-400 font-mono">
                               Erstellt am: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
                             </span>
@@ -3120,15 +3150,22 @@ export default function AdminDashboardPage() {
                     <div>
                       {selectedChatDetails ? (
                         <>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
-                              ID: {selectedChatDetails.id}
-                            </span>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                              <i className="fa-solid fa-comments text-violet-400"></i>
+                              <span>{selectedChatDetails.userName || 'Gast'}</span>
+                            </h4>
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[9px] font-medium shadow-sm">
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                isCustomerOnline(selectedChatDetails.lastActiveAt) 
+                                  ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
+                                  : 'bg-slate-500'
+                              }`}></span>
+                              <span className={isCustomerOnline(selectedChatDetails.lastActiveAt) ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                                {formatCustomerPresenceText(selectedChatDetails.lastActiveAt)}
+                              </span>
+                            </div>
                           </div>
-                          <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                            <i className="fa-solid fa-user text-slate-500 text-xs"></i>
-                            <span>{selectedChatDetails.userName || 'Gast'}</span>
-                          </h4>
                           {selectedChatDetails.userEmail && <span className="text-[11px] text-slate-400 font-mono block">{selectedChatDetails.userEmail}</span>}
                         </>
                       ) : (

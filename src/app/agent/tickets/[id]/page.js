@@ -58,6 +58,7 @@ export default function AgentTicketDetailPage() {
   const router = useRouter();
 
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
+  const [partnerPresence, setPartnerPresence] = useState(null);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -118,6 +119,7 @@ export default function AgentTicketDetailPage() {
         if (res.ok) {
           const data = await res.json();
           setIsOtherPartyTyping(!!data.isOtherPartyTyping);
+          if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
 
           if (data.newMessages && data.newMessages.length > 0) {
             setMessages(prev => {
@@ -490,6 +492,19 @@ export default function AgentTicketDetailPage() {
               <span className="truncate max-w-[180px] sm:max-w-xs">
                 Ersteller: <span className="font-semibold text-slate-200">{ticket.creatorName ? `${ticket.creatorName} (${ticket.creatorEmail})` : ticket.creatorEmail}</span>
               </span>
+
+              {partnerPresence && (
+                <span className="inline-flex items-center gap-1.5 text-[9px] font-medium px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 shrink-0">
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    partnerPresence.isOnline 
+                      ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
+                      : 'bg-slate-500'
+                  }`}></span>
+                  <span className={partnerPresence.isOnline ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                    {partnerPresence.statusText}
+                  </span>
+                </span>
+              )}
 
               {/* Status-Badge: Angemeldeter User vs. Gast */}
               {ticket.isRegisteredUser === 1 ? (

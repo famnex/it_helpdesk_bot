@@ -83,6 +83,7 @@ export default function CustomerChatPage() {
   const [guestEmail, setGuestEmail] = useState('');
   const [ticketCreationLoading, setTicketCreationLoading] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
+  const [partnerPresence, setPartnerPresence] = useState(null);
   const lastChatMsgIdRef = useRef(0);
   const lastTicketMsgIdRef = useRef(0);
 
@@ -301,6 +302,9 @@ export default function CustomerChatPage() {
           const data = await res.json();
           if (data.success) {
             setIsAgentTyping(!!data.isOtherPartyTyping);
+            if (data.partnerPresence) {
+              setPartnerPresence(data.partnerPresence);
+            }
 
             // Neue Chat-Nachrichten
             if (data.newMessages && data.newMessages.length > 0) {
@@ -819,7 +823,21 @@ export default function CustomerChatPage() {
             <i className="fa-solid fa-graduation-cap text-lg sm:text-2xl"></i>
           </div>
           <div>
-            <h1 className="text-xs sm:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xs sm:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
+              {partnerPresence && (
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-800 text-[10px] sm:text-[11px] font-medium shadow-inner shrink-0">
+                  <span className={`w-2 h-2 rounded-full ${
+                    partnerPresence.isOnline 
+                      ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]' 
+                      : 'bg-slate-500'
+                  }`}></span>
+                  <span className={partnerPresence.isOnline ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                    {partnerPresence.statusText}
+                  </span>
+                </div>
+              )}
+            </div>
             <p className="text-[8px] sm:text-[10px] text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
           </div>
         </div>
