@@ -196,7 +196,7 @@ export default function AgentTicketDetailPage() {
           }
         })
         .catch(() => {});
-    }, 2000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [id, user, messages]);

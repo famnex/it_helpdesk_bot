@@ -107,7 +107,7 @@ export default function CustomerTicketDetailPage() {
       } catch (e) {
         // Fehler beim Polling ignorieren
       }
-    }, 1500);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [id, user, messages]);

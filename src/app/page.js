@@ -345,7 +345,7 @@ export default function CustomerChatPage() {
     };
 
     pollLiveSync();
-    const interval = setInterval(pollLiveSync, 1500);
+    const interval = setInterval(pollLiveSync, 5000);
     return () => clearInterval(interval);
   }, [chatId, user]);
 

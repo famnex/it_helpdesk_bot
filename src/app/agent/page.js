@@ -274,7 +274,7 @@ export default function AgentDashboardPage() {
           }
         })
         .catch(() => {});
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [user]);

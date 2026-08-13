@@ -415,7 +415,7 @@ export default function AdminDashboardPage() {
           }
         })
         .catch(() => {});
-    }, 3500);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [user, selectedChatDetails, selectedChatMessages]);
