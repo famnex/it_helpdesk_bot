@@ -321,6 +321,30 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+
+    const interval = setInterval(() => {
+      // 1. Live-Heartbeat pingen, damit Admin als online geführt wird
+      fetch(`/api/live/sync?roomType=dashboard&roomId=global&myRole=admin&myEmail=${encodeURIComponent(user.email || '')}`)
+        .catch(() => {});
+
+      // 2. Falls der Admin gerade ein Chat-Detail im Inspektor geöffnet hat, dieses stumm aktualisieren
+      if (selectedChatDetails && selectedChatDetails.id) {
+        fetch(`/api/admin/chats?chatId=${selectedChatDetails.id}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.messages && data.messages.length > selectedChatMessages.length) {
+              setSelectedChatMessages(data.messages);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [user, selectedChatDetails, selectedChatMessages]);
+
+  useEffect(() => {
     if (activeTab === 'users') {
       loadUsers();
     } else if (activeTab === 'flagged') {

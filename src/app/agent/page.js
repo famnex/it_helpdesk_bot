@@ -189,6 +189,36 @@ export default function AgentDashboardPage() {
       });
   }, []);
 
+  // Live Heartbeat & Hintergrund-Aktualisierung für Agenten
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      // 1. Heartbeat pingen, damit Agent immer live "Online" ist
+      fetch(`/api/live/sync?roomType=dashboard&roomId=global&myRole=${user.role || 'agent'}&myEmail=${encodeURIComponent(user.email || '')}`)
+        .catch(() => {});
+
+      // 2. Tickets stumm neu laden, um neue Anfragen/Nachrichten live anzuzeigen
+      fetch('/api/tickets')
+        .then(r => r.json())
+        .then(data => {
+          if (data.tickets) {
+            setTickets(prev => {
+              const currentSig = prev.map(t => `${t.id}-${t.status}-${t.updatedAt}`).join('|');
+              const newSig = data.tickets.map(t => `${t.id}-${t.status}-${t.updatedAt}`).join('|');
+              if (currentSig !== newSig) {
+                return data.tickets;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const loadData = async () => {
     try {
       const [ticketsRes, agentsRes] = await Promise.all([
