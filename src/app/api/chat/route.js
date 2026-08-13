@@ -410,6 +410,20 @@ export async function POST(request) {
           ORDER BY c.created_at DESC LIMIT 10
         `).all(chatId, ...emailList, ...sessionList, ...ipList);
 
+        // Fallback: Falls keine spezifische Identität passte (z. B. unregistrierter Gast in neuem Tab),
+        // durchsuche alle unverschmolzenen Chats der letzten 2 Stunden
+        if (candidateChats.length === 0) {
+          candidateChats = db.prepare(`
+            SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
+                   (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
+            FROM chats c
+            LEFT JOIN tickets t ON t.chat_id = c.id
+            WHERE c.id != ? AND c.is_merged = 0 
+              AND c.created_at >= datetime('now', '-2 hours')
+            ORDER BY c.created_at DESC LIMIT 10
+          `).all(chatId);
+        }
+
         if (candidateChats.length > 0) {
           const candidateData = candidateChats.map(c => ({
             id: c.id,

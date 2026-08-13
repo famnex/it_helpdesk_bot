@@ -788,6 +788,40 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
     return { isDuplicate: false, similarityScore: 0 };
   }
 
+  const newQueryLower = (newQuery || '').toLowerCase();
+
+  // Themenbereiche für garantierten Pre-Pass Check
+  const topicGroups = [
+    { name: 'Anmeldung & Passwort', keywords: ['anmelden', 'anmeldung', 'passwort', 'login', 'zugang', 'account', 'benutzerkonto', 'gesperrt', 'einloggen'] },
+    { name: 'WLAN & Netzwerk', keywords: ['wlan', 'wifi', 'netzwerk', 'internet', 'verbindung', 'ip'] },
+    { name: 'Moodle & Schulportal', keywords: ['moodle', 'schulportal', 'sph', 'sph-app', 'kurs'] },
+    { name: 'E-Mail & Office', keywords: ['email', 'e-mail', 'outlook', 'office', 'teams', '365', 'postfach'] },
+    { name: 'Drucker & Hardware', keywords: ['drucker', 'drucken', 'papier', 'toner', 'pc', 'laptop', 'ipad', 'smartboard'] }
+  ];
+
+  // Pre-Pass: Falls neue Anfrage und ein bestehender Chat in dasselbe Themenfeld fallen
+  for (const group of topicGroups) {
+    const isNewInGroup = group.keywords.some(kw => newQueryLower.includes(kw));
+    if (isNewInGroup) {
+      const matchedCandidate = candidateChats.find(c => {
+        const snipLower = (c.snippet || '').toLowerCase();
+        const titleLower = (c.title || '').toLowerCase();
+        const catLower = (c.category || '').toLowerCase();
+        return group.keywords.some(kw => snipLower.includes(kw) || titleLower.includes(kw) || catLower.includes(kw));
+      });
+
+      if (matchedCandidate) {
+        return {
+          isDuplicate: true,
+          similarityScore: 0.90,
+          matchedChatId: matchedCandidate.id,
+          matchedTopic: matchedCandidate.title || matchedCandidate.category || group.name,
+          reason: `Direkte Themengleichheit im Bereich ${group.name}`
+        };
+      }
+    }
+  }
+
   const { geminiModel } = getModelNames();
 
   const chatsOverview = candidateChats.map(c => 
@@ -805,15 +839,15 @@ ${chatsOverview}
 
 REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
 - 0.85 - 1.00: Nahezu identisch oder direkte Konkretisierung (z. B. "Ich kann mich nicht anmelden" vs. "Ich habe Probleme mit meinem Passwort" -> beides betrifft Zugangsdaten/Login; "WLAN geht nicht" vs. "Drucker im WLAN offline").
-- 0.65 - 0.84: Stark verwandter IT-Bereich für denselben Nutzer.
-- 0.00 - 0.64: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
+- 0.50 - 0.84: Stark verwandter IT-Bereich für denselben Nutzer.
+- 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
 
 AUFTRAG:
 Bestimme für die am besten passende früheren Konversation den similarityScore und das Thema.
 Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
 {
   "similarityScore": 0.85,
-  "matchedChatId": "die Chat-ID mit dem höchsten Score (oder null falls alle Scores < 0.60)",
+  "matchedChatId": "die Chat-ID mit dem höchsten Score (oder null falls alle Scores < 0.45)",
   "matchedTopic": "Kurze prägnante Bezeichnung des Themas (z.B. Login & Passwort-Probleme)",
   "reason": "Kurzer Satz zur Begründung der Wahrscheinlichkeit"
 }`;
@@ -828,8 +862,8 @@ Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
     const result = JSON.parse(cleanJson);
 
     const score = typeof result.similarityScore === 'number' ? result.similarityScore : 0;
-    // Schwellenwert: Ab 60% (0.60) Wahrscheinlichkeit gilt es als Themengleichheit und der Bot fragt nach
-    const isDuplicate = score >= 0.60 && Boolean(result.matchedChatId);
+    // Schwellenwert: Ab 45% (0.45) Wahrscheinlichkeit gilt es als Themengleichheit und der Bot fragt nach
+    const isDuplicate = score >= 0.45 && Boolean(result.matchedChatId);
 
     return {
       isDuplicate,
