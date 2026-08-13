@@ -1,12 +1,24 @@
 import { marked } from 'marked';
 
-// Konfiguriere marked so, dass alle Links automatisch in einem neuen Tab (target="_blank") mit schicker Formatierung geöffnet werden
 marked.use({
   renderer: {
-    link({ href, title, text }) {
-      const cleanHref = href || '#';
+    link(arg1, arg2, arg3) {
+      let href = '#';
+      let title = '';
+      let text = '';
+
+      if (typeof arg1 === 'object' && arg1 !== null) {
+        href = arg1.href || '#';
+        title = arg1.title || '';
+        text = arg1.text || href;
+      } else {
+        href = arg1 || '#';
+        title = arg2 || '';
+        text = arg3 || href;
+      }
+
       const cleanTitle = title ? ` title="${title}"` : '';
-      return `<a href="${cleanHref}"${cleanTitle} target="_blank" rel="noopener noreferrer" class="text-sky-400 underline hover:text-sky-300 transition-colors break-all">${text}</a>`;
+      return `<a href="${href}"${cleanTitle} target="_blank" rel="noopener noreferrer" class="text-sky-400 underline hover:text-sky-300 transition-colors break-all">${text}</a>`;
     }
   }
 });
