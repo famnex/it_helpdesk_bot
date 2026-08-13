@@ -349,13 +349,43 @@ export async function POST(request) {
         }
       });
 
-      let ackBot = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
+      let prefixMsg = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
       if (wasTicketReopened) {
-        ackBot += " Da das zugehörige IT-Support-Ticket geschlossen war, habe ich es automatisch für dich wieder geöffnet.";
+        prefixMsg += " Da das zugehörige IT-Support-Ticket geschlossen war, habe ich es automatisch für dich wieder geöffnet.";
+      }
+
+      // KI-Antwort auf die neuen/ergänzten Informationen generieren
+      let botAnswerText = '';
+      if (combinedInfo && combinedInfo.trim().length > 2) {
+        try {
+          const targetHistory = db.prepare(`
+            SELECT sender, text, image_url as imageUrl 
+            FROM chat_messages 
+            WHERE chat_id = ? 
+            ORDER BY created_at ASC
+          `).all(pendingTargetId);
+
+          const targetChatRow = db.prepare('SELECT ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(pendingTargetId);
+          const isAgentMode = targetChatRow ? targetChatRow.isAgentOnBehalf === 1 : false;
+
+          const aiRes = await generateChatResponse(targetHistory, targetChatRow ? targetChatRow.ticketCreated : 0, isAgentMode);
+          if (aiRes && aiRes.text) {
+            botAnswerText = aiRes.text.replace('[TICKET_CREATED]', '').replace('[CHAT_ABUSE_DETECTED]', '').trim();
+          }
+        } catch (aiErr) {
+          console.error('Fehler bei KI-Antwort für zusammengeführten Chat:', aiErr);
+        }
+      }
+
+      let ackBot = prefixMsg;
+      if (botAnswerText) {
+        ackBot += `\n\n${botAnswerText}`;
+      } else {
+        ackBot += " Wie kann ich dich nun weiter unterstützen?";
       }
 
       db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(pendingTargetId, ackBot);
-      if (targetTicket && wasTicketReopened) {
+      if (targetTicket) {
         db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'IT-Support-Bot\', \'bot\', ?)')
           .run(targetTicket.id, ackBot);
       }
