@@ -362,8 +362,10 @@ export async function POST(request) {
 
             const matchedItem = candidateData.find(c => c.id === dupResult.matchedChatId);
             const matchedDate = matchedItem ? matchedItem.createdAt : 'kürzlich';
+            const perc = dupResult.similarityScore ? Math.round(dupResult.similarityScore * 100) : 0;
+            const percText = perc > 0 ? ` (Wahrscheinlichkeit ca. ${perc}%)` : '';
 
-            const botAsk = `Ich habe gesehen, dass du am ${matchedDate} bereits eine Anfrage zum Thema "${dupResult.matchedTopic}" gestartet hast. Handelt es sich um genau dieses Thema?`;
+            const botAsk = `Ich habe gesehen, dass du am ${matchedDate} bereits eine Anfrage zum Thema "${dupResult.matchedTopic}" gestartet hast${percText}. Handelt es sich um genau dieses Thema?`;
 
             db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAsk);
 

@@ -507,8 +507,31 @@ export default function CustomerChatPage() {
         });
       }
 
-      // Bot-Nachricht hinzufügen
-      setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+      // Falls die Konversation mit einem älteren Chat zusammengeführt wurde, sofort in diesen wechseln!
+      if (data.isMerged && data.targetChatId) {
+        const targetId = data.targetChatId;
+        setChatId(targetId);
+        localStorage.setItem('it_helpdesk_chat_id', targetId);
+        
+        try {
+          const fetchRes = await fetch(`/api/chat?chatId=${targetId}`);
+          if (fetchRes.ok) {
+            const chatData = await fetchRes.json();
+            if (chatData.messages && chatData.messages.length > 0) {
+              setMessages(chatData.messages);
+            } else {
+              setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+            }
+          }
+        } catch (e) {
+          console.error('Fehler beim Laden des zusammengeführten Chats:', e);
+          setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+        }
+      } else {
+        // Bot-Nachricht hinzufügen
+        setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+      }
+
       setIsTyping(false);
  
       // Falls the KI ein Ticket triggert

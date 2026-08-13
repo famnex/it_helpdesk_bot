@@ -785,76 +785,62 @@ Hinweis: Falls kein neues Wissen gefehlt hat, setze "suggestedKnowledge": null.`
  */
 export async function detectDuplicateTopic(newQuery, candidateChats) {
   if (!newQuery || !candidateChats || candidateChats.length === 0) {
-    return { isDuplicate: false };
+    return { isDuplicate: false, similarityScore: 0 };
   }
 
-  const newQueryLower = newQuery.toLowerCase();
-
-  // Schnelle Keyword-Gruppe für verwandte Themen (z. B. Login, Passwort, Anmeldung, WLAN, Moodle)
-  const topicGroups = [
-    { name: 'Anmeldung & Passwort', keywords: ['anmelden', 'anmeldung', 'passwort', 'login', 'zugang', 'account', 'benutzerkonto', 'gesperrt', 'einloggen'] },
-    { name: 'WLAN & Netzwerk', keywords: ['wlan', 'wifi', 'netzwerk', 'internet', 'verbindung', 'ip'] },
-    { name: 'Moodle & Schulportal', keywords: ['moodle', 'schulportal', 'sph', 'sph-app', 'kurs'] },
-    { name: 'E-Mail & Office', keywords: ['email', 'e-mail', 'outlook', 'office', 'teams', '365', 'postfach'] },
-    { name: 'Drucker & Hardware', keywords: ['drucker', 'drucken', 'papier', 'toner', 'pc', 'laptop', 'ipad', 'smartboard'] }
-  ];
-
-  // Fast-Path: Falls die neue Anfrage und ein bestehender Chat in dieselbe Kategorie/Schlüsselwörter fallen
-  for (const group of topicGroups) {
-    const isNewInGroup = group.keywords.some(kw => newQueryLower.includes(kw));
-    if (isNewInGroup) {
-      const matchedCandidate = candidateChats.find(c => {
-        const snipLower = (c.snippet || '').toLowerCase();
-        const titleLower = (c.title || '').toLowerCase();
-        const catLower = (c.category || '').toLowerCase();
-        return group.keywords.some(kw => snipLower.includes(kw) || titleLower.includes(kw) || catLower.includes(kw));
-      });
-
-      if (matchedCandidate) {
-        return {
-          isDuplicate: true,
-          matchedChatId: matchedCandidate.id,
-          matchedTopic: matchedCandidate.title || matchedCandidate.category || group.name
-        };
-      }
-    }
-  }
+  const { geminiModel } = getModelNames();
 
   const chatsOverview = candidateChats.map(c => 
-    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Datum: ${c.createdAt} | Thema/Kategorie: "${c.title || c.category || 'Unbekannt'}" | Auszug: "${c.snippet || ''}"`
+    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Thema/Kategorie: "${c.title || c.category || 'Unbekannt'}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
   ).join('\n');
 
-  const prompt = `Du bist ein intelligenter IT-Support-Klassifizierer.
-Prüfe, ob die folgende neue Anfrage desselben Benutzers dasselbe oder ein eng verwandtes Thema/Problem betrifft wie eine seiner früheren Konversationen:
+  const prompt = `Du bist ein hochentwickelter KI-Analyst für ein IT-Helpdesk-System.
+Analysiere die neue Anfrage eines Benutzers und beurteile mittels einer tiefen semantischen Analyse die Wahrscheinlichkeit (similarityScore von 0.00 bis 1.00), ob die Anfrage dasselbe Anliegen oder dasselbe Themenfeld betrifft wie eine seiner früheren Konversationen.
 
 NEUE ANFRAGE DES BENUTZERS:
 "${newQuery}"
 
-FRÜHERE ANFRAGEN DES BENUTZERS:
+FRÜHERE KONVERSATIONEN DES BENUTZERS:
 ${chatsOverview}
 
+REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
+- 0.85 - 1.00: Nahezu identisch oder direkte Konkretisierung (z. B. "Ich kann mich nicht anmelden" vs. "Ich habe Probleme mit meinem Passwort" -> beides betrifft Zugangsdaten/Login; "WLAN geht nicht" vs. "Drucker im WLAN offline").
+- 0.65 - 0.84: Stark verwandter IT-Bereich für denselben Nutzer.
+- 0.00 - 0.64: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
+
 AUFTRAG:
-1. Wenn die neue Anfrage dasselbe allgemeine Problem betrifft (z.B. Login/Passwort, WLAN, Moodle, Drucker), ordne sie der passenden früheren Konversation zu.
-2. Antworte ZWINGEND als JSON-Objekt ohne Markdown-Codeblock:
+Bestimme für die am besten passende früheren Konversation den similarityScore und das Thema.
+Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
 {
-  "isDuplicate": true oder false,
-  "matchedChatId": "die Chat-ID der am besten passenden früheren Konversation (oder null)",
-  "matchedTopic": "Kurze verständliche Bezeichnung des Themas (z.B. Login & Passwort oder WLAN Verbindung)"
+  "similarityScore": 0.85,
+  "matchedChatId": "die Chat-ID mit dem höchsten Score (oder null falls alle Scores < 0.60)",
+  "matchedTopic": "Kurze prägnante Bezeichnung des Themas (z.B. Login & Passwort-Probleme)",
+  "reason": "Kurzer Satz zur Begründung der Wahrscheinlichkeit"
 }`;
 
   try {
-    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+    };
     const responseText = await callGemini(geminiModel, payload);
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanJson);
+
+    const score = typeof result.similarityScore === 'number' ? result.similarityScore : 0;
+    // Schwellenwert: Ab 60% (0.60) Wahrscheinlichkeit gilt es als Themengleichheit und der Bot fragt nach
+    const isDuplicate = score >= 0.60 && Boolean(result.matchedChatId);
+
     return {
-      isDuplicate: Boolean(result.isDuplicate && result.matchedChatId),
-      matchedChatId: result.matchedChatId || null,
-      matchedTopic: result.matchedTopic || 'Bestehende Anfrage'
+      isDuplicate,
+      similarityScore: score,
+      matchedChatId: isDuplicate ? result.matchedChatId : null,
+      matchedTopic: result.matchedTopic || 'Bestehende Anfrage',
+      reason: result.reason || ''
     };
   } catch (e) {
-    console.error('Fehler bei detectDuplicateTopic:', e);
-    return { isDuplicate: false };
+    console.error('Fehler bei KI-Semantik-Analyse detectDuplicateTopic:', e);
+    return { isDuplicate: false, similarityScore: 0 };
   }
 }
 
