@@ -510,14 +510,40 @@ export async function POST(request) {
     let extractedData = null;
     let autoTicketId = null;
 
-    const ticketPhrases = [
-      'ticket erstellt', 'ticket geöffnet', 'ticket angelegt', 
-      'support-ticket wurde', 'support-ticket für dich erstellt',
-      'ticket für dich eröffnet', 'ticket wurde erstellt'
-    ];
-    const claimsTicketInText = ticketPhrases.some(phrase => aiResponse.toLowerCase().includes(phrase));
+    const aiTextLower = aiResponse.toLowerCase();
 
-    if (aiResponse.includes('[TICKET_CREATED]') || claimsTicketInText) {
+    // Sätze, die eine bereits ERFOLGTE Ticket-Erstellung in der Vergangenheit beschreiben
+    const completedPhrases = [
+      'ich habe ein ticket', 
+      'ich habe dir ein ticket', 
+      'ich habe ein support-ticket', 
+      'ticket wurde erstellt', 
+      'ticket wurde angelegt', 
+      'ticket wurde eröffnet', 
+      'support-ticket wurde erfolgreich', 
+      'ich habe soeben ein ticket'
+    ];
+
+    // Phrasen, die bloße ANGEBOTE, OPTIONEN oder FRAGEN sind (dürfen NIEMALS automatisch ein Ticket triggern!)
+    const offerPhrases = [
+      'möchtest du', 
+      'soll ich', 
+      'kann ich gerne', 
+      'kann gerne', 
+      'sag mir', 
+      'sag einfach', 
+      'falls du', 
+      'wenn du', 
+      'erstellen?', 
+      'anlegen?', 
+      'eröffnen?'
+    ];
+
+    const hasExplicitTag = aiResponse.includes('[TICKET_CREATED]');
+    const isOfferOrQuestion = offerPhrases.some(p => aiTextLower.includes(p));
+    const claimsCompletedAction = completedPhrases.some(p => aiTextLower.includes(p));
+
+    if (hasExplicitTag || (claimsCompletedAction && !isOfferOrQuestion)) {
       ticketCreated = true;
       aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
       
