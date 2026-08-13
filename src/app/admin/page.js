@@ -2887,12 +2887,12 @@ export default function AdminDashboardPage() {
                             {/* Online-Status Badge des Kunden */}
                             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-medium shadow-sm">
                               <span className={`w-2 h-2 rounded-full ${
-                                isCustomerOnline(selectedChatDetails.lastActiveAt) 
+                                isCustomerOnline(selectedChatDetails.customerLastActiveAt || selectedChatDetails.lastActiveAt) 
                                   ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]' 
                                   : 'bg-slate-500'
                               }`}></span>
-                              <span className={isCustomerOnline(selectedChatDetails.lastActiveAt) ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
-                                {formatCustomerPresenceText(selectedChatDetails.lastActiveAt)}
+                              <span className={isCustomerOnline(selectedChatDetails.customerLastActiveAt || selectedChatDetails.lastActiveAt) ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                                {formatCustomerPresenceText(selectedChatDetails.customerLastActiveAt || selectedChatDetails.lastActiveAt)}
                               </span>
                             </div>
                             <span className="text-[11px] text-slate-400 font-mono">

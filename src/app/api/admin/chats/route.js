@@ -22,7 +22,8 @@ export async function GET(request) {
       const chat = db.prepare(`
         SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
                is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId,
-               category, categorized_at as categorizedAt, created_at as createdAt
+               category, categorized_at as categorizedAt, customer_last_active_at as customerLastActiveAt,
+               last_active_at as lastActiveAt, created_at as createdAt
         FROM chats
         WHERE id = ?
       `).get(chatId);
@@ -57,7 +58,8 @@ export async function GET(request) {
     const chats = db.prepare(`
       SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
              is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId,
-             category, categorized_at as categorizedAt, created_at as createdAt
+             category, categorized_at as categorizedAt, customer_last_active_at as customerLastActiveAt,
+             last_active_at as lastActiveAt, created_at as createdAt
       FROM chats
       WHERE EXISTS (
         SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id
