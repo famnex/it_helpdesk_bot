@@ -768,18 +768,108 @@ Hinweis: Falls kein neues Wissen gefehlt hat, setze "suggestedKnowledge": null.`
   };
 
   const responseText = await callGemini(extractionModel, payload);
+  let cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+  
   try {
-    const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const data = JSON.parse(cleaned);
-    return {
-      report: data.report || responseText,
-      suggestedKnowledge: data.suggestedKnowledge || null
-    };
-  } catch (err) {
+    return JSON.parse(cleanJson);
+  } catch (e) {
     return {
       report: responseText,
       suggestedKnowledge: null
     };
+  }
+}
+
+/**
+ * Prüft, ob eine neue Nutzeranfrage zu einem bereits bestehenden, offenen Chat/Ticket desselben Nutzers passt.
+ */
+export async function detectDuplicateTopic(newQuery, candidateChats) {
+  if (!newQuery || !candidateChats || candidateChats.length === 0) {
+    return { isDuplicate: false };
+  }
+
+  const chatsOverview = candidateChats.map(c => 
+    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Datum: ${c.createdAt} | Thema/Kategorie: "${c.title || c.category || 'Unbekannt'}" | Auszug: "${c.snippet || ''}"`
+  ).join('\n');
+
+  const prompt = `Analysiere, ob die folgende neue Anfrage eines Benutzers semantisch dasselbe IT-Problem / Thema betrifft wie eine seiner früheren Konversationen:
+
+NEUE ANFRAGE DES BENUTZERS:
+"${newQuery}"
+
+FRÜHERE ANFRAGEN DES BENUTZERS:
+${chatsOverview}
+
+AUFTRAG:
+Prüfe, ob die neue Anfrage eindeutig zu einer der früheren Konversationen passt.
+Antworte ZWINGEND als JSON-Objekt ohne Markdown:
+{
+  "isDuplicate": true oder false,
+  "matchedChatId": "die Chat-ID der passenden früherer Konversation (oder null)",
+  "matchedTopic": "Kurze verständliche Bezeichnung des passenden Themas (z.B. Moodle Passwort oder WLAN Verbindung)"
+}`;
+
+  try {
+    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+    const responseText = await callGemini(geminiModel, payload);
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleanJson);
+    return {
+      isDuplicate: Boolean(result.isDuplicate && result.matchedChatId),
+      matchedChatId: result.matchedChatId || null,
+      matchedTopic: result.matchedTopic || 'Bestehende Anfrage'
+    };
+  } catch (e) {
+    console.error('Fehler bei detectDuplicateTopic:', e);
+    return { isDuplicate: false };
+  }
+}
+
+/**
+ * Prüft, ob der Nutzer in einer Nachricht mitteilt, dass sich sein Problem erledigt hat oder das Ticket geschlossen werden kann.
+ */
+export async function checkSelfResolutionIntent(userMessage) {
+  if (!userMessage || userMessage.trim().length < 3) {
+    return { isResolved: false };
+  }
+
+  const textLower = userMessage.toLowerCase();
+
+  // Schneller Regex-Check vor KI-Aufruf für eindeutige Phrasen
+  const clearPhrases = [
+    'hat sich erledigt', 'geht wieder', 'funktioniert wieder', 
+    'habe es gelöst', 'habs gelöst', 'problem gelöst', 
+    'ticket schließen', 'kann geschlossen werden', 'danke geht wieder',
+    'erledigt danke', 'klappt wieder', 'brauche keine hilfe mehr'
+  ];
+
+  if (clearPhrases.some(phrase => textLower.includes(phrase))) {
+    return { isResolved: true, confidence: 'high' };
+  }
+
+  const prompt = `Analysiere, ob der Benutzer in der folgenden Nachricht mitteilt, dass sich sein IT-Problem erledigt hat, gelöst wurde oder das Support-Ticket geschlossen werden kann:
+
+NACHRICHT DES BENUTZERS:
+"${userMessage}"
+
+Antworte ZWINGEND als JSON-Objekt ohne Markdown:
+{
+  "isResolved": true oder false,
+  "confidence": "high", "medium" oder "low"
+}`;
+
+  try {
+    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+    const responseText = await callGemini(geminiModel, payload);
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleanJson);
+    return {
+      isResolved: Boolean(result.isResolved && result.confidence !== 'low'),
+      confidence: result.confidence || 'medium'
+    };
+  } catch (e) {
+    console.error('Fehler bei checkSelfResolutionIntent:', e);
+    return { isResolved: false };
   }
 }
 

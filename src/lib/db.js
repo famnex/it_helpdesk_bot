@@ -168,6 +168,27 @@ try {
     console.log("Migration: Spalte 'ticket_created' zur Tabelle 'chats' hinzugefügt.");
   }
 
+  const hasPendingMergeTarget = tableInfoChats.some(col => col.name === 'pending_merge_target_id');
+  if (!hasPendingMergeTarget) {
+    db.exec("ALTER TABLE chats ADD COLUMN pending_merge_target_id TEXT;");
+    db.exec("ALTER TABLE chats ADD COLUMN pending_merge_info TEXT;");
+    db.exec("ALTER TABLE chats ADD COLUMN is_merged BOOLEAN DEFAULT 0;");
+    console.log("Migration: Spalten 'pending_merge_target_id', 'pending_merge_info' und 'is_merged' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pending_ticket_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id TEXT NOT NULL,
+        recipient_email TEXT NOT NULL,
+        recipient_role TEXT NOT NULL,
+        messages_summary TEXT NOT NULL,
+        scheduled_send_at DATETIME NOT NULL,
+        sent_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   const tableInfoChatMessagesFlag = db.prepare("PRAGMA table_info(chat_messages)").all();
   const hasIsFlagged = tableInfoChatMessagesFlag.some(col => col.name === 'is_flagged');
   if (!hasIsFlagged) {

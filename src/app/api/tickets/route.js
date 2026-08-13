@@ -236,6 +236,11 @@ export async function POST(request) {
       if (!exists) {
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)')
           .run(chatId, eventText);
+        
+        // Handover-Mitteilung des Bots einfügen
+        const handoverText = "Dein Anliegen wurde an die IT-Abteilung übergeben. Der Bot antwortet in diesem Chat ab jetzt nicht mehr, da ein menschlicher Support-Mitarbeiter zuständig ist. Antwortzeiten können etwas dauern. Du kannst hier jederzeit weitere Informationen ergänzen – diese werden automatisch an die IT-Abteilung weitergeleitet.";
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)')
+          .run(chatId, handoverText);
       }
 
       // Chat-Verlauf vollständig in die Ticket-Nachrichten importieren

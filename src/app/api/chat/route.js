@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { generateChatResponse, generateTicketTitle, extractAgentBehalfDetails } from '@/lib/gemini';
+import { 
+  generateChatResponse, 
+  generateTicketTitle, 
+  extractAgentBehalfDetails,
+  detectDuplicateTopic,
+  checkSelfResolutionIntent
+} from '@/lib/gemini';
+import { queueTicketNotification } from '@/lib/notifications';
 import fs from 'fs';
 import path from 'path';
 
@@ -202,6 +209,148 @@ export async function POST(request) {
         }
       } catch (e) {
         console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
+      }
+    }
+
+    // -----------------------------------------------------------------------------
+    // PRÜFUNG 1: Handover an IT-Abteilung (Bot-Stummschaltung & KI-Mitlesen auf Selbst-Erledigung)
+    // -----------------------------------------------------------------------------
+    const isTicketHandedOver = chat && chat.ticketCreated === 1;
+    if (isTicketHandedOver && !isSystemEvent) {
+      const ticket = db.prepare('SELECT id, title, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
+
+      // KI liest mit: Prüfen, ob der Nutzer sagt, dass sich das Problem erledigt hat
+      const resolutionCheck = await checkSelfResolutionIntent(text);
+
+      if (resolutionCheck.isResolved && ticket) {
+        const botReply = "Super, freut mich, dass sich dein Anliegen erledigt hat! Ich habe das Support-Ticket für dich geschlossen. Falls du wieder Unterstützung benötigst, bin ich jederzeit für dich da.";
+
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botReply);
+        db.prepare(`
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+          VALUES (?, 'IT-Support-Bot', 'bot', ?)
+        `).run(ticket.id, botReply);
+
+        db.prepare(`
+          UPDATE tickets 
+          SET status = 'closed', 
+              closed_at = CURRENT_TIMESTAMP, 
+              closed_by_name = 'Bot', 
+              closed_by_email = 'bot@system', 
+              closed_by_user_id = 'bot' 
+          WHERE id = ?
+        `).run(ticket.id);
+
+        db.prepare(`
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+          VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_CLOSED_BY_BOT] Ticket wurde durch Benutzerbestätigung vom Bot geschlossen.')
+        `).run(ticket.id);
+
+        return NextResponse.json({
+          text: botReply,
+          isHandedOver: true,
+          isClosedByBot: true,
+          imageUrl: cleanRelativePath
+        });
+      } else {
+        // Bot bleibt stumm bezüglich Fachfragen, gibt aber eine kurze Bestätigung zum Anhängen ans Ticket aus
+        const botAck = "Danke! Ich habe deine Information direkt an das Ticket der IT-Abteilung weitergeleitet.";
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAck);
+
+        if (ticket && ticket.assigned_agent_id) {
+          const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
+          if (agent) {
+            await queueTicketNotification({
+              ticketId: ticket.id,
+              recipientEmail: agent.email,
+              recipientRole: 'agent',
+              senderName: user ? user.name : 'Benutzer',
+              messageText: text || '(Anhang gesendet)'
+            });
+          }
+        }
+
+        return NextResponse.json({
+          text: botAck,
+          isHandedOver: true,
+          imageUrl: cleanRelativePath
+        });
+      }
+    }
+
+    // -----------------------------------------------------------------------------
+    // PRÜFUNG 2: Wiederholungsanfragen (Themen-Übereinstimmung mit früheren Chats/Tickets)
+    // -----------------------------------------------------------------------------
+    const textLower = (text || '').trim().toLowerCase();
+    const pendingTargetId = chat ? chat.pending_merge_target_id : null;
+
+    if (pendingTargetId && (textLower.startsWith('ja') || textLower.includes('ja_zum_chat'))) {
+      const targetTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(pendingTargetId);
+      const mergeText = chat.pending_merge_info || text;
+
+      db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(pendingTargetId, `[Ergänzung aus neuem Chat]: ${mergeText}`);
+      if (targetTicket) {
+        db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
+          .run(targetTicket.id, email || 'Kunde', `[Zusatzinformation]: ${mergeText}`);
+      }
+
+      const ackBot = "Danke! Ich habe deine Informationen zu deiner bestehenden Konversation hinzugefügt und das Gespräch fortgeführt.";
+      db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(pendingTargetId, ackBot);
+
+      db.prepare('UPDATE chats SET is_merged = 1, pending_merge_target_id = NULL WHERE id = ?').run(chatId);
+
+      return NextResponse.json({
+        text: ackBot,
+        isMerged: true,
+        targetChatId: pendingTargetId,
+        imageUrl: cleanRelativePath
+      });
+    } else if (pendingTargetId && (textLower.startsWith('nein') || textLower.includes('nein_neues_thema'))) {
+      db.prepare('UPDATE chats SET pending_merge_target_id = NULL, pending_merge_info = NULL WHERE id = ?').run(chatId);
+    } else if (!isSystemEvent && !pendingTargetId) {
+      const msgCountRes = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE chat_id = ?').get(chatId);
+      const currentMsgCount = msgCountRes ? msgCountRes.count : 0;
+
+      if (currentMsgCount <= 2 && (email || userSessionId || userIp)) {
+        let candidateChats = db.prepare(`
+          SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
+                 (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
+          FROM chats c
+          LEFT JOIN tickets t ON t.chat_id = c.id
+          WHERE c.id != ? AND c.is_merged = 0 AND (c.user_email = ? OR c.user_session_id = ? OR c.user_ip = ?)
+          ORDER BY c.created_at DESC LIMIT 5
+        `).all(chatId, email || 'no_email', userSessionId || 'no_session', userIp || 'no_ip');
+
+        if (candidateChats.length > 0) {
+          const candidateData = candidateChats.map(c => ({
+            id: c.id,
+            ticketId: c.ticketId,
+            title: c.ticketTitle || c.category || 'Anfrage',
+            snippet: c.snippet || '',
+            createdAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString('de-DE') : 'kürzlich'
+          }));
+
+          const dupResult = await detectDuplicateTopic(text, candidateData);
+          if (dupResult.isDuplicate && dupResult.matchedChatId) {
+            db.prepare('UPDATE chats SET pending_merge_target_id = ?, pending_merge_info = ? WHERE id = ?')
+              .run(dupResult.matchedChatId, text, chatId);
+
+            const matchedItem = candidateData.find(c => c.id === dupResult.matchedChatId);
+            const matchedDate = matchedItem ? matchedItem.createdAt : 'kürzlich';
+
+            const botAsk = `Ich habe gesehen, dass du am ${matchedDate} bereits eine Anfrage zum Thema "${dupResult.matchedTopic}" gestartet hast. Handelt es sich um genau dieses Thema?`;
+
+            db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAsk);
+
+            return NextResponse.json({
+              text: botAsk,
+              isDuplicatePrompt: true,
+              matchedChatId: dupResult.matchedChatId,
+              matchedTopic: dupResult.matchedTopic,
+              imageUrl: cleanRelativePath
+            });
+          }
+        }
       }
     }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { sendAgentReplyNotification, sendCustomerReplyNotification } from '@/lib/mailer';
+import { queueTicketNotification } from '@/lib/notifications';
 
 /**
  * GET: Ticket-Details und Nachrichten laden
@@ -136,18 +137,28 @@ export async function POST(request, { params }) {
       db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
     }
 
-    // E-Mail-Benachrichtigungen senden
+    // E-Mail-Benachrichtigungen über den 5-Minuten-Puffer einreihen (Debouncing)
     if (user.role === 'customer') {
-      // Wenn der Kunde antwortet, den zugewiesenen Agenten informieren
       if (ticket.assigned_agent_id) {
-        const agent = db.prepare('SELECT email FROM users WHERE id = ?').get(ticket.assigned_agent_id);
+        const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
         if (agent) {
-          await sendCustomerReplyNotification(agent.email, id, ticket.title);
+          await queueTicketNotification({
+            ticketId: id,
+            recipientEmail: agent.email,
+            recipientRole: 'agent',
+            senderName: user.name || user.email,
+            messageText: text || '(Anhang gesendet)'
+          });
         }
       }
     } else if (!isInternal) {
-      // Wenn der Agent öffentlich antwortet, den Kunden informieren
-      await sendAgentReplyNotification(ticket.creator_email, id, ticket.title);
+      await queueTicketNotification({
+        ticketId: id,
+        recipientEmail: ticket.creator_email,
+        recipientRole: 'customer',
+        senderName: user.name || 'IT-Support-Team',
+        messageText: text || '(Anhang gesendet)'
+      });
     }
 
     return NextResponse.json({ success: true });

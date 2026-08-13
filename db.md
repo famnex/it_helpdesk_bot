@@ -78,6 +78,25 @@ Speichert Chat-Sitzungen mit dem KI-Bot.
 | `user_session_id` | TEXT | NULL | Sitzungs-ID des Browsers |
 | `category` | TEXT | NULL | KI-generierte Kategorie der Bot-Konversation (z. B. WLAN, Moodle) |
 | `categorized_at` | DATETIME | NULL | Zeitpunkt der automatischen oder manuellen Kategorisierung |
+| `pending_merge_target_id` | TEXT | NULL | ID des Zielchats/Tickets bei Themen-Übereinstimmung |
+| `pending_merge_info` | TEXT | NULL | Übertragener Text/Kontext bei Themen-Zusammenführung |
+| `is_merged` | BOOLEAN | DEFAULT 0 | 1 = Chat wurde wegen Themen-Duplikat in anderen Chat/Ticket zusammengeführt |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
+
+---
+
+### 1.5 `pending_ticket_notifications`
+Puffert E-Mail-Benachrichtigungen für 5 Minuten (Debouncing).
+
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Eindeutige Puffer-ID |
+| `ticket_id` | TEXT | NOT NULL | Zugehöriges Ticket |
+| `recipient_email` | TEXT | NOT NULL | E-Mail des Empfängers |
+| `recipient_role` | TEXT | NOT NULL | Rolle (`customer` oder `agent`) |
+| `messages_summary` | TEXT | NOT NULL | Akkumulierte Nachrichten als JSON / Text |
+| `scheduled_send_at` | DATETIME | NOT NULL | Geplanter Sendezeitpunkt (+5 Min nach der letzten Nachricht) |
+| `sent_at` | DATETIME | NULL | Zeitpunkt, an dem die E-Mail versendet wurde (NULL = ausstehend) |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 
 ---
