@@ -46,7 +46,7 @@ export default function LoginPage() {
     } else if (role === 'agent') {
       router.push('/agent');
     } else {
-      router.push('/tickets');
+      router.push('/');
     }
   };
 

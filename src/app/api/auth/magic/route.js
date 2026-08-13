@@ -31,9 +31,9 @@ export async function GET(request) {
     // Session erstellen
     await createSession(user);
 
-    // Weiterleiten zur gewünschten Seite (z.B. Ticket-Details) oder Standard-Portalseite
-    const redirectPath = searchParams.get('redirect') || '/tickets';
-    const safeRedirect = redirectPath.startsWith('/') ? redirectPath : '/tickets';
+    // Weiterleiten zur gewünschten Seite (z.B. Ticket-Details) oder Standard-Portalseite (Chat)
+    const redirectPath = searchParams.get('redirect') || '/';
+    const safeRedirect = redirectPath.startsWith('/') ? redirectPath : '/';
 
     const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     return NextResponse.redirect(`${host}${safeRedirect}`);

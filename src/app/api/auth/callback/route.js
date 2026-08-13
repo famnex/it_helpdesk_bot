@@ -52,7 +52,7 @@ export async function GET(request) {
     } else if (user.role === 'agent') {
       return NextResponse.redirect(`${host}/agent`);
     } else {
-      return NextResponse.redirect(`${host}/tickets`);
+      return NextResponse.redirect(`${host}/`);
     }
   } catch (err) {
     console.error('Fehler beim IdP-Callback:', err);
