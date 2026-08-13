@@ -287,18 +287,51 @@ export async function POST(request) {
 
     if (pendingTargetId && (textLower.startsWith('ja') || textLower.includes('ja_zum_chat'))) {
       const targetTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(pendingTargetId);
-      const mergeText = chat.pending_merge_info || text;
 
-      db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(pendingTargetId, `[Ergänzung aus neuem Chat]: ${mergeText}`);
-      if (targetTicket) {
-        db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
-          .run(targetTicket.id, email || 'Kunde', `[Zusatzinformation]: ${mergeText}`);
+      // Alle Nutzernachrichten aus dem zu verwerfenden Chat laden (außer Bestätigung "Ja")
+      const tempUserMsgs = db.prepare(`
+        SELECT text, image_url as imageUrl FROM chat_messages 
+        WHERE chat_id = ? AND sender = 'user'
+      `).all(chatId);
+
+      const infoTexts = tempUserMsgs.map(m => (m.text || '').trim()).filter(t => {
+        const lower = t.toLowerCase();
+        return t.length > 0 && lower !== 'ja' && lower !== 'ja_zum_chat' && !lower.startsWith('ja,') && !lower.startsWith('ja ');
+      });
+
+      // Falls pending_merge_info vorhanden ist, diese ebenfalls einbinden
+      if (chat.pending_merge_info && !infoTexts.includes(chat.pending_merge_info.trim())) {
+        infoTexts.unshift(chat.pending_merge_info.trim());
       }
 
-      const ackBot = "Danke! Ich habe deine Informationen zu deiner bestehenden Konversation hinzugefügt und das Gespräch fortgeführt.";
+      const combinedInfo = infoTexts.join('\n');
+
+      if (combinedInfo) {
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(pendingTargetId, `[Ergänzte Informationen aus neuem Chat]:\n${combinedInfo}`);
+        if (targetTicket) {
+          db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
+            .run(targetTicket.id, email || 'Kunde', `[Zusatzinformationen aus Chat]:\n${combinedInfo}`);
+        }
+      }
+
+      // Evtl. hochgeladene Bilder/Fotos aus dem verworfenen Chat mit übernehmen
+      tempUserMsgs.forEach(m => {
+        if (m.imageUrl) {
+          db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, \'user\', ?, ?)')
+            .run(pendingTargetId, '[Angehängtes Bild aus verworfenem Chat]', m.imageUrl);
+          if (targetTicket) {
+            db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url) VALUES (?, ?, \'customer\', ?, ?)')
+              .run(targetTicket.id, email || 'Kunde', '[Angehängtes Bild aus Chat]', m.imageUrl);
+          }
+        }
+      });
+
+      const ackBot = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
       db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(pendingTargetId, ackBot);
 
-      db.prepare('UPDATE chats SET is_merged = 1, pending_merge_target_id = NULL WHERE id = ?').run(chatId);
+      // Redundanten Chat als zusammengeführt markieren und seine temporären Nachrichten löschen/verwerfen
+      db.prepare('UPDATE chats SET is_merged = 1, pending_merge_target_id = NULL, pending_merge_info = NULL WHERE id = ?').run(chatId);
+      db.prepare('DELETE FROM chat_messages WHERE chat_id = ?').run(chatId);
 
       return NextResponse.json({
         text: ackBot,
