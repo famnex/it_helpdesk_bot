@@ -534,15 +534,22 @@ export default function CustomerChatPage() {
 
       setIsTyping(false);
  
-      // Falls the KI ein Ticket triggert
+      // Falls die KI ein Ticket triggert
       if (data.ticketCreated) {
-        setPendingTicketTitle(data.proposedTitle || userText || 'Support-Anfrage über Chat-Assistent');
-        if (user) {
-          // Wenn eingeloggt, aktive Bestätigung anfordern
-          setShowConfirmTicket(true);
+        if (data.autoTicketId) {
+          setMessages(prev => [...prev, { 
+            sender: 'system', 
+            text: `Support-Ticket #${data.autoTicketId} wurde automatisch für dich in der Datenbank erstellt! Ein IT-Administrator kümmert sich darum.`,
+            isTicketUI: true,
+            ticketId: data.autoTicketId
+          }]);
         } else {
-          // Andernfalls E-Mail abfragen
-          setShowEmailPrompt(true);
+          setPendingTicketTitle(data.proposedTitle || userText || 'Support-Anfrage über Chat-Assistent');
+          if (user) {
+            setShowConfirmTicket(true);
+          } else {
+            setShowEmailPrompt(true);
+          }
         }
       }
     } catch (err) {

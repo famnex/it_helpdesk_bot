@@ -508,7 +508,16 @@ export async function POST(request) {
     let ticketCreated = false;
     let proposedTitle = null;
     let extractedData = null;
-    if (aiResponse.includes('[TICKET_CREATED]')) {
+    let autoTicketId = null;
+
+    const ticketPhrases = [
+      'ticket erstellt', 'ticket geöffnet', 'ticket angelegt', 
+      'support-ticket wurde', 'support-ticket für dich erstellt',
+      'ticket für dich eröffnet', 'ticket wurde erstellt'
+    ];
+    const claimsTicketInText = ticketPhrases.some(phrase => aiResponse.toLowerCase().includes(phrase));
+
+    if (aiResponse.includes('[TICKET_CREATED]') || claimsTicketInText) {
       ticketCreated = true;
       aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
       
@@ -523,6 +532,27 @@ export async function POST(request) {
           proposedTitle = await generateTicketTitle(chatHistory);
         } catch (err) {
           console.error('Fehler bei der proposedTitle-Generierung:', err);
+        }
+      }
+
+      // Falls der Nutzer angemeldet ist, Ticket SOFORT direkt in der DB anlegen!
+      if (user && user.email) {
+        try {
+          const finalTitle = proposedTitle || 'Support-Anfrage über Chat-Assistent';
+          const existingTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(chatId);
+          if (!existingTicket) {
+            const ins = db.prepare('INSERT INTO tickets (title, creator_email, chat_id, status) VALUES (?, ?, ?, \'open\')')
+              .run(finalTitle, user.email, chatId);
+            autoTicketId = ins.lastInsertRowid;
+            db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
+
+            db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
+              .run(autoTicketId, user.email, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
+          } else {
+            autoTicketId = existingTicket.id;
+          }
+        } catch (dbErr) {
+          console.error('Fehler bei automatischer DB-Ticket-Erstellung:', dbErr);
         }
       }
     }
@@ -608,6 +638,7 @@ export async function POST(request) {
     return NextResponse.json({
       text: aiResponse,
       ticketCreated,
+      autoTicketId,
       proposedTitle,
       extractedData,
       isAgentOnBehalf: isAgentOnBehalfMode,
