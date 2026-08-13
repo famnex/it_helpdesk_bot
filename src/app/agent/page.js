@@ -189,8 +189,8 @@ export default function AgentDashboardPage() {
       });
   }, []);
 
-  // Toast Notification State
-  const [toastNotification, setToastNotification] = useState(null);
+  // Multi-Toast Stack Notification State für Agenten
+  const [toastNotifications, setToastNotifications] = useState([]);
 
   // Sound-Effekt abspielen bei neuer Benachrichtigung (Web Audio API)
   const playNotificationSound = () => {
@@ -210,14 +210,21 @@ export default function AgentDashboardPage() {
     } catch (e) {}
   };
 
-  // Toast nach 7 Sekunden automatisch ausblenden
-  useEffect(() => {
-    if (!toastNotification) return;
-    const timer = setTimeout(() => {
-      setToastNotification(null);
+  const addToastNotification = (toastObj) => {
+    const toastId = `toast-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newToast = { ...toastObj, id: toastId };
+
+    setToastNotifications(prev => [...prev.slice(-3), newToast]); // Stapelt bis zu 4 Toasts gleichzeitig
+    playNotificationSound();
+
+    setTimeout(() => {
+      setToastNotifications(prev => prev.filter(t => t.id !== toastId));
     }, 7000);
-    return () => clearTimeout(timer);
-  }, [toastNotification]);
+  };
+
+  const removeToastNotification = (toastId) => {
+    setToastNotifications(prev => prev.filter(t => t.id !== toastId));
+  };
 
   // Live Heartbeat & Hintergrund-Aktualisierung für Agenten
   useEffect(() => {
@@ -239,29 +246,26 @@ export default function AgentDashboardPage() {
                 const brandNewTickets = data.tickets.filter(t => !prevIds.has(t.id));
                 
                 if (brandNewTickets.length > 0) {
-                  const newest = brandNewTickets[0];
-                  setToastNotification({
-                    id: Date.now(),
-                    type: 'new_ticket',
-                    title: `Neues Ticket: ${newest.title}`,
-                    text: `Erstellt von ${newest.creatorName || newest.creatorEmail}`,
-                    ticketId: newest.id
-                  });
-                  playNotificationSound();
+                  for (const newest of brandNewTickets) {
+                    addToastNotification({
+                      type: 'new_ticket',
+                      title: `Neues Ticket: ${newest.title}`,
+                      text: `Erstellt von ${newest.creatorName || newest.creatorEmail}`,
+                      ticketId: newest.id
+                    });
+                  }
                 } else {
-                  const newlyUnread = data.tickets.find(nt => {
+                  const newlyUnreadTickets = data.tickets.filter(nt => {
                     const ot = prev.find(p => p.id === nt.id);
                     return ot && ot.hasUnread === 0 && nt.hasUnread === 1;
                   });
-                  if (newlyUnread) {
-                    setToastNotification({
-                      id: Date.now(),
+                  for (const newlyUnread of newlyUnreadTickets) {
+                    addToastNotification({
                       type: 'new_message',
                       title: `Neue Nachricht in #${newlyUnread.id}`,
                       text: `${newlyUnread.title} (${newlyUnread.creatorEmail})`,
                       ticketId: newlyUnread.id
                     });
-                    playNotificationSound();
                   }
                 }
               }
@@ -899,42 +903,49 @@ export default function AgentDashboardPage() {
         </div>
       )}
 
-      {/* Abgerundete Toast-Benachrichtigung (Mobil: unten volle Breite mit Margin, Desktop: unten rechts) */}
-      {toastNotification && (
-        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 animate-toast-slide max-w-md w-full sm:w-96 bg-slate-900/95 backdrop-blur-md border border-violet-500/40 p-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex items-start gap-3.5 text-white">
-          <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
-            <i className="fa-solid fa-bell text-lg animate-bounce"></i>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
-                {toastNotification.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
-              </span>
-              <button 
-                onClick={() => setToastNotification(null)}
-                className="text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
-                title="Schließen"
-              >
-                <i className="fa-solid fa-xmark text-sm"></i>
-              </button>
+      {/* Gestapelte Toast-Benachrichtigungen (Mobil: unten von unten nachschiebend, Desktop: unten rechts von rechts einschiebend) */}
+      {toastNotifications.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 flex flex-col gap-3 items-stretch sm:items-end pointer-events-none">
+          {toastNotifications.map((toast) => (
+            <div
+              key={toast.id}
+              className="pointer-events-auto max-w-md w-full sm:w-96 bg-slate-900/95 backdrop-blur-md border border-violet-500/40 p-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex items-start gap-3.5 text-white animate-toast-mobile sm:animate-toast-desktop transition-all duration-300"
+            >
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                <i className="fa-solid fa-bell text-lg animate-bounce"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
+                    {toast.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
+                  </span>
+                  <button 
+                    onClick={() => removeToastNotification(toast.id)}
+                    className="text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                    title="Schließen"
+                  >
+                    <i className="fa-solid fa-xmark text-sm"></i>
+                  </button>
+                </div>
+                <h5 className="text-sm font-bold text-white truncate mt-0.5">
+                  {toast.title}
+                </h5>
+                <p className="text-xs text-slate-300 line-clamp-2 mt-1">
+                  {toast.text}
+                </p>
+                {toast.ticketId && (
+                  <Link
+                    href={`/agent/tickets/${toast.ticketId}`}
+                    onClick={() => removeToastNotification(toast.id)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
+                  >
+                    <span>Zum Ticket wechseln</span>
+                    <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                  </Link>
+                )}
+              </div>
             </div>
-            <h5 className="text-sm font-bold text-white truncate mt-0.5">
-              {toastNotification.title}
-            </h5>
-            <p className="text-xs text-slate-300 line-clamp-2 mt-1">
-              {toastNotification.text}
-            </p>
-            {toastNotification.ticketId && (
-              <Link
-                href={`/agent/tickets/${toastNotification.ticketId}`}
-                onClick={() => setToastNotification(null)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
-              >
-                <span>Zum Ticket wechseln</span>
-                <i className="fa-solid fa-arrow-right text-[10px]"></i>
-              </Link>
-            )}
-          </div>
+          ))}
         </div>
       )}
 
