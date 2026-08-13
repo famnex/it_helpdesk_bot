@@ -136,7 +136,7 @@ export async function POST(request) {
     if (xForwardedFor) {
       userIp = xForwardedFor.split(',')[0].trim();
     } else {
-      userIp = request.headers.get('x-real-ip') || '';
+      userIp = request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || request.ip || '127.0.0.1';
     }
 
     // Persistente Session ID aus Header extrahieren
@@ -377,19 +377,18 @@ export async function POST(request) {
       const currentMsgCount = msgCountRes ? msgCountRes.count : 0;
 
       if (currentMsgCount <= 2) {
-        // 1. Identitäts-Spur nutzen, um alle verknüpften E-Mails, Session-IDs und IPs abzufragen
         const trace = reconstructIdentityTrace(chatId);
         const userEmails = new Set();
         const userSessions = new Set();
         const userIps = new Set();
 
-        if (email) userEmails.add(email.toLowerCase());
-        if (userSessionId) userSessions.add(userSessionId);
-        if (userIp) userIps.add(userIp);
+        if (email && email.trim()) userEmails.add(email.trim().toLowerCase());
+        if (userSessionId && userSessionId.trim()) userSessions.add(userSessionId.trim());
+        if (userIp && userIp.trim()) userIps.add(userIp.trim());
 
         if (trace && trace.identityTrail) {
           trace.identityTrail.forEach(ident => {
-            if (ident.email) userEmails.add(ident.email.toLowerCase());
+            if (ident.email && ident.email.trim()) userEmails.add(ident.email.trim().toLowerCase());
           });
         }
 
@@ -397,31 +396,32 @@ export async function POST(request) {
         const sessionList = Array.from(userSessions);
         const ipList = Array.from(userIps);
 
-        let candidateChats = db.prepare(`
-          SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
-                 (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
-          FROM chats c
-          LEFT JOIN tickets t ON t.chat_id = c.id
-          WHERE c.id != ? AND c.is_merged = 0 AND (
-            LOWER(c.user_email) IN (${emailList.length > 0 ? emailList.map(() => '?').join(',') : "''"})
-            OR c.user_session_id IN (${sessionList.length > 0 ? sessionList.map(() => '?').join(',') : "''"})
-            OR c.user_ip IN (${ipList.length > 0 ? ipList.map(() => '?').join(',') : "''"})
-          )
-          ORDER BY c.created_at DESC LIMIT 10
-        `).all(chatId, ...emailList, ...sessionList, ...ipList);
+        let candidateChats = [];
+        if (emailList.length > 0 || sessionList.length > 0 || ipList.length > 0) {
+          const sqlWhere = [];
+          const params = [chatId];
 
-        // Fallback: Falls keine spezifische Identität passte (z. B. unregistrierter Gast in neuem Tab),
-        // durchsuche alle unverschmolzenen Chats der letzten 2 Stunden
-        if (candidateChats.length === 0) {
+          if (emailList.length > 0) {
+            sqlWhere.push(`LOWER(c.user_email) IN (${emailList.map(() => '?').join(',')})`);
+            params.push(...emailList);
+          }
+          if (sessionList.length > 0) {
+            sqlWhere.push(`c.user_session_id IN (${sessionList.map(() => '?').join(',')})`);
+            params.push(...sessionList);
+          }
+          if (ipList.length > 0) {
+            sqlWhere.push(`c.user_ip IN (${ipList.map(() => '?').join(',')})`);
+            params.push(...ipList);
+          }
+
           candidateChats = db.prepare(`
             SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
                    (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
             FROM chats c
             LEFT JOIN tickets t ON t.chat_id = c.id
-            WHERE c.id != ? AND c.is_merged = 0 
-              AND c.created_at >= datetime('now', '-2 hours')
+            WHERE c.id != ? AND c.is_merged = 0 AND (${sqlWhere.join(' OR ')})
             ORDER BY c.created_at DESC LIMIT 10
-          `).all(chatId);
+          `).all(...params);
         }
 
         if (candidateChats.length > 0) {
