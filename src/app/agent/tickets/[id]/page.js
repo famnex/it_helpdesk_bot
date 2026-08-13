@@ -60,6 +60,14 @@ export default function AgentTicketDetailPage() {
 
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
   const [partnerPresence, setPartnerPresence] = useState(null);
+  const [otherTicketsRef, setOtherTicketsRef] = useState([]);
+  const [toastNotification, setToastNotification] = useState(null);
+
+  useEffect(() => {
+    if (!toastNotification) return;
+    const timer = setTimeout(() => setToastNotification(null), 7000);
+    return () => clearTimeout(timer);
+  }, [toastNotification]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -134,7 +142,35 @@ export default function AgentTicketDetailPage() {
       } catch (e) {
         // Fehler beim Polling ignorieren
       }
-    }, 1500);
+
+      // Stumme Abfrage aller Tickets, um Benachrichtigungen für ANDERE Tickets zu zeigen
+      fetch('/api/tickets')
+        .then(r => r.json())
+        .then(data => {
+          if (data.tickets) {
+            setOtherTicketsRef(prev => {
+              if (prev.length > 0) {
+                const newlyUnreadOther = data.tickets.find(nt => {
+                  if (nt.id === id) return false; // Das aktuell geöffnete Ticket ignorieren
+                  const ot = prev.find(p => p.id === nt.id);
+                  return ot && ot.hasUnread === 0 && nt.hasUnread === 1;
+                });
+                if (newlyUnreadOther) {
+                  setToastNotification({
+                    id: Date.now(),
+                    type: 'new_message',
+                    title: `Neue Nachricht in #${newlyUnreadOther.id}`,
+                    text: `${newlyUnreadOther.title} (${newlyUnreadOther.creatorEmail})`,
+                    ticketId: newlyUnreadOther.id
+                  });
+                }
+              }
+              return data.tickets;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [id, user, messages]);
@@ -894,6 +930,45 @@ export default function AgentTicketDetailPage() {
               </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Abgerundete Toast-Benachrichtigung für Agenten (Mobil: unten volle Breite mit Margin, Desktop: unten rechts) */}
+      {toastNotification && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 animate-toast-slide max-w-md w-full sm:w-96 bg-slate-900/95 backdrop-blur-md border border-violet-500/40 p-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] flex items-start gap-3.5 text-white">
+          <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+            <i className="fa-solid fa-bell text-lg animate-bounce"></i>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
+                {toastNotification.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
+              </span>
+              <button 
+                onClick={() => setToastNotification(null)}
+                className="text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                title="Schließen"
+              >
+                <i className="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+            <h5 className="text-sm font-bold text-white truncate mt-0.5">
+              {toastNotification.title}
+            </h5>
+            <p className="text-xs text-slate-300 line-clamp-2 mt-1">
+              {toastNotification.text}
+            </p>
+            {toastNotification.ticketId && (
+              <Link
+                href={`/agent/tickets/${toastNotification.ticketId}`}
+                onClick={() => setToastNotification(null)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
+              >
+                <span>Zum Ticket wechseln</span>
+                <i className="fa-solid fa-arrow-right text-[10px]"></i>
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
