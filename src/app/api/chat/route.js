@@ -143,7 +143,7 @@ export async function POST(request) {
     const userSessionId = request.headers.get('x-user-session-id') || '';
 
     // 1. Sicherstellen, dass der Chat existiert
-    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(chatId);
+    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf, pending_merge_target_id, pending_merge_info FROM chats WHERE id = ?').get(chatId);
     if (!chat) {
       db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id) VALUES (?, ?, ?, ?, ?, ?)')
         .run(chatId, email, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId);
@@ -360,9 +360,9 @@ export async function POST(request) {
           .run(targetTicket.id, ackBot);
       }
 
-      // Redundanten Chat als zusammengeführt markieren und seine temporären Nachrichten löschen/verwerfen
-      db.prepare('UPDATE chats SET is_merged = 1, pending_merge_target_id = NULL, pending_merge_info = NULL WHERE id = ?').run(chatId);
+      // Redundanten Chat vollständig aus der Datenbank löschen (auch für Admins!)
       db.prepare('DELETE FROM chat_messages WHERE chat_id = ?').run(chatId);
+      db.prepare('DELETE FROM chats WHERE id = ?').run(chatId);
 
       return NextResponse.json({
         text: ackBot,
