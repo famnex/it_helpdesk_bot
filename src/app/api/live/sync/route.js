@@ -147,16 +147,18 @@ export async function GET(request) {
       const diffMs = Date.now() - new Date(lastActiveAt).getTime();
       const diffMins = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
 
       if (diffMins < 2) {
         return { isOnline: true, statusText: `${partnerRole} ist online`, label: 'Online' };
       } else if (diffMins < 60) {
         return { isOnline: false, statusText: `${partnerRole} vor ${diffMins} Min. online`, label: `Vor ${diffMins} Min.` };
       } else if (diffHours < 24) {
-        return { isOnline: false, statusText: `${partnerRole} vor ${diffHours} Std. online`, label: `Vor ${diffHours} Std.` };
+        const hLabel = diffHours === 1 ? '1 Std.' : `${diffHours} Std.`;
+        return { isOnline: false, statusText: `${partnerRole} vor ${hLabel} online`, label: `Vor ${hLabel}` };
       } else {
-        const dateStr = new Date(lastActiveAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-        return { isOnline: false, statusText: `${partnerRole} am ${dateStr} online`, label: `Am ${dateStr}` };
+        const dLabel = diffDays === 1 ? '1 Tag' : `${diffDays} Tagen`;
+        return { isOnline: false, statusText: `${partnerRole} vor ${dLabel} online`, label: `Vor ${dLabel}` };
       }
     };
 

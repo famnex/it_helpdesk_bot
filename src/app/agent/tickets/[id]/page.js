@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
+import { renderMarkdownWithLinks } from '@/lib/formatting';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -700,7 +701,7 @@ export default function AgentTicketDetailPage() {
                         )}
                         <div 
                           className="markdown-content"
-                          dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
                         />
                       </div>
                       <span className="text-[9px] text-slate-500 mt-1 mx-1">

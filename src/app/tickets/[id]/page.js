@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
+import { renderMarkdownWithLinks } from '@/lib/formatting';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -424,7 +425,7 @@ export default function CustomerTicketDetailPage() {
                     >
                       <div 
                         className="markdown-content"
-                        dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                        dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
                       />
                       {msg.imageUrl && (
                         msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (

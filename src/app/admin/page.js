@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
+import { renderMarkdownWithLinks } from '@/lib/formatting';
 
 const safeParseMarkdown = (content) => {
   if (!content) return '';
-  if (typeof content === 'string') return marked.parse(content);
+  if (typeof content === 'string') return renderMarkdownWithLinks(content);
   if (typeof content === 'object') {
-    if (typeof content.report === 'string') return marked.parse(content.report);
-    if (typeof content.text === 'string') return marked.parse(content.text);
-    return marked.parse(JSON.stringify(content, null, 2));
+    if (typeof content.report === 'string') return renderMarkdownWithLinks(content.report);
+    if (typeof content.text === 'string') return renderMarkdownWithLinks(content.text);
+    return renderMarkdownWithLinks(JSON.stringify(content, null, 2));
   }
   return String(content);
 };
@@ -572,12 +573,13 @@ export default function AdminDashboardPage() {
     const diffMs = Date.now() - parseUtcDate(lastActiveAt).getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
 
     if (diffMins < 2) return 'Kunde ist online';
     if (diffMins < 60) return `Kunde vor ${diffMins} Min. online`;
     if (diffHours < 24) return `Kunde vor ${diffHours} Std. online`;
-    const dateStr = parseUtcDate(lastActiveAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-    return `Kunde am ${dateStr} online`;
+    if (diffDays === 1) return 'Kunde vor 1 Tag online';
+    return `Kunde vor ${diffDays} Tagen online`;
   };
 
   const isCustomerOnline = (lastActiveAt) => {
@@ -3120,9 +3122,10 @@ export default function AdminDashboardPage() {
                                   </div>
                                 )}
 
-                                <p className="text-xs text-slate-300 bg-slate-950/40 p-2 rounded-xl border border-slate-850/30 whitespace-pre-wrap leading-relaxed">
-                                  {msg.text}
-                                </p>
+                                <div 
+                                  className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 leading-relaxed"
+                                  dangerouslySetInnerHTML={{ __html: safeParseMarkdown(msg.text || '') }}
+                                />
                               </div>
                             );
                           })
@@ -3299,9 +3302,10 @@ export default function AdminDashboardPage() {
                                     </div>
                                   )}
 
-                                  <p className="text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 whitespace-pre-wrap leading-relaxed">
-                                    {msg.text}
-                                  </p>
+                                  <div 
+                                    className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: safeParseMarkdown(msg.text || '') }}
+                                  />
                                 </div>
                               );
                             })
