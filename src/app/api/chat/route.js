@@ -567,13 +567,23 @@ export async function POST(request) {
           const finalTitle = proposedTitle || 'Support-Anfrage über Chat-Assistent';
           const existingTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(chatId);
           if (!existingTicket) {
-            const ins = db.prepare('INSERT INTO tickets (title, creator_email, chat_id, status) VALUES (?, ?, ?, \'open\')')
-              .run(finalTitle, user.email, chatId);
-            autoTicketId = ins.lastInsertRowid;
+            // Eindeutige Ticket-ID (TK-XXXX) generieren
+            let newTicketId;
+            let isUnique = false;
+            const checkStmt = db.prepare('SELECT id FROM tickets WHERE id = ?');
+            while (!isUnique) {
+              newTicketId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+              if (!checkStmt.get(newTicketId)) isUnique = true;
+            }
+
+            db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, is_authenticated_creator) VALUES (?, ?, ?, ?, \'open\', 1)')
+              .run(newTicketId, finalTitle, user.email, chatId);
+            
+            autoTicketId = newTicketId;
             db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
 
             db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
-              .run(autoTicketId, user.email, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
+              .run(newTicketId, user.email, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
           } else {
             autoTicketId = existingTicket.id;
           }

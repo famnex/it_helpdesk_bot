@@ -249,6 +249,28 @@ try {
     console.log("Migration: Spalte 'user_session_id' zur Tabelle 'chats' hinzugefügt.");
   }
 
+  // Repair-Migration: Tickets ohne gültige ID (NULL oder 'null') reparieren und mit TK-XXXX ausstatten
+  try {
+    const nullTickets = db.prepare("SELECT rowid, title, creator_email, chat_id FROM tickets WHERE id IS NULL OR id = '' OR id = 'null'").all();
+    for (const t of nullTickets) {
+      let newId;
+      let isUnique = false;
+      const checkStmt = db.prepare('SELECT id FROM tickets WHERE id = ?');
+      while (!isUnique) {
+        newId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+        if (!checkStmt.get(newId)) isUnique = true;
+      }
+      db.prepare("UPDATE tickets SET id = ? WHERE rowid = ?").run(newId, t.rowid);
+      db.prepare("UPDATE ticket_messages SET ticket_id = ? WHERE ticket_id IS NULL OR ticket_id = 'null' OR ticket_id = ?").run(newId, String(t.rowid));
+      if (t.chat_id) {
+        db.prepare("UPDATE chats SET ticket_created = 1 WHERE id = ?").run(t.chat_id);
+      }
+      console.log(`Repair-Migration: Ticket rowid #${t.rowid} wurde erfolgreich repariert und hat nun ID ${newId}.`);
+    }
+  } catch (errRepair) {
+    console.error("Fehler bei Repair-Migration von null-Tickets:", errRepair);
+  }
+
   const hasChatCategory = tableInfoChatsAbuse.some(col => col.name === 'category');
   if (!hasChatCategory) {
     db.exec("ALTER TABLE chats ADD COLUMN category TEXT;");

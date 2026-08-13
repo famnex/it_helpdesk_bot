@@ -617,7 +617,7 @@ export default function AdminDashboardPage() {
   const handleConvertChatToTicket = async (chat) => {
     if (!chat) return;
     if (chat.ticketCreated === 1) {
-      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.[0]?.id;
+      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.find(t => t.id && t.id !== 'null')?.id;
       if (linkedTicket) {
         router.push(`/agent/tickets/${linkedTicket}`);
         return;
