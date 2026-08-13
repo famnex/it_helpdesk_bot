@@ -217,6 +217,12 @@ try {
   }
 
   const tableInfoChatsAbuse = db.prepare("PRAGMA table_info(chats)").all();
+  const hasCustomerLastActive = tableInfoChatsAbuse.some(col => col.name === 'customer_last_active_at');
+  if (!hasCustomerLastActive) {
+    db.exec("ALTER TABLE chats ADD COLUMN customer_last_active_at DATETIME;");
+    console.log("Migration: Spalte 'customer_last_active_at' zur Tabelle 'chats' hinzugefügt.");
+  }
+
   const hasIsAbusive = tableInfoChatsAbuse.some(col => col.name === 'is_abusive');
   if (!hasIsAbusive) {
     db.exec("ALTER TABLE chats ADD COLUMN user_name TEXT;");

@@ -134,8 +134,8 @@ export async function GET(request) {
     if (myEmail) {
       db.prepare("UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE LOWER(email) = LOWER(?)").run(myEmail);
     }
-    if (roomType === 'chat' && roomId) {
-      db.prepare("UPDATE chats SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
+    if (roomType === 'chat' && roomId && myRole === 'customer') {
+      db.prepare("UPDATE chats SET customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
     }
 
     // Hilfsfunktion zum korrekten Parsen von UTC-Strings aus SQLite (verhindert 2-Stunden-Offset)
@@ -172,7 +172,7 @@ export async function GET(request) {
     };
 
     if (roomType === 'chat') {
-      const chatRow = db.prepare('SELECT ticket_created as ticketCreated, user_email as userEmail, last_active_at as lastActiveAt FROM chats WHERE id = ?').get(roomId);
+      const chatRow = db.prepare('SELECT ticket_created as ticketCreated, user_email as userEmail, customer_last_active_at as custActive FROM chats WHERE id = ?').get(roomId);
       if (myRole === 'customer') {
         if (chatRow && chatRow.ticketCreated === 1) {
           const agentRow = db.prepare(`
@@ -191,11 +191,15 @@ export async function GET(request) {
           partnerPresence = { isOnline: true, statusText: 'KI-Bot online (24/7)', label: 'Online' };
         }
       } else {
-        // Admin / Agent sieht den Status des Kunden
-        let custActiveAt = chatRow ? chatRow.lastActiveAt : null;
+        // Admin / Agent sieht den echten Kunden-Status
+        let custActiveAt = chatRow ? chatRow.custActive : null;
         if (chatRow && chatRow.userEmail) {
           const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(chatRow.userEmail);
-          if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
+          if (uRow && uRow.lastActiveAt) {
+            const uTime = parseUtc(uRow.lastActiveAt)?.getTime() || 0;
+            const cTime = parseUtc(custActiveAt)?.getTime() || 0;
+            if (uTime > cTime) custActiveAt = uRow.lastActiveAt;
+          }
         }
 
         // Fallback: Letzte Aktivität darf nicht älter sein als die letzte Kundennachricht
@@ -226,23 +230,32 @@ export async function GET(request) {
           partnerPresence = formatPresence(null, 'IT-Support-Team');
         }
       } else {
-        let custActiveAt = ticketRow ? ticketRow.updatedAt : null;
+        let custActiveAt = null;
         if (ticketRow && ticketRow.creatorEmail) {
           const uRow = db.prepare('SELECT last_active_at as lastActiveAt FROM users WHERE LOWER(email) = LOWER(?)').get(ticketRow.creatorEmail);
           if (uRow && uRow.lastActiveAt) custActiveAt = uRow.lastActiveAt;
         }
 
         try {
-          const latestCustMsg = db.prepare(`
+          const cRow = db.prepare('SELECT customer_last_active_at as custActive FROM chats WHERE id = (SELECT chat_id FROM tickets WHERE id = ?)').get(roomId);
+          if (cRow && cRow.custActive) {
+            const cTime = parseUtc(cRow.custActive)?.getTime() || 0;
+            const uTime = parseUtc(custActiveAt)?.getTime() || 0;
+            if (cTime > uTime) custActiveAt = cRow.custActive;
+          }
+        } catch (e) {}
+
+        try {
+          const latestUserMsg = db.prepare(`
             SELECT created_at as createdAt FROM ticket_messages 
             WHERE ticket_id = ? AND sender_role = 'customer' 
             ORDER BY created_at DESC LIMIT 1
           `).get(roomId);
-          if (latestCustMsg && latestCustMsg.createdAt) {
-            const msgTime = parseUtc(latestCustMsg.createdAt)?.getTime() || 0;
+          if (latestUserMsg && latestUserMsg.createdAt) {
+            const msgTime = parseUtc(latestUserMsg.createdAt)?.getTime() || 0;
             const activeTime = parseUtc(custActiveAt)?.getTime() || 0;
             if (msgTime > activeTime) {
-              custActiveAt = latestCustMsg.createdAt;
+              custActiveAt = latestUserMsg.createdAt;
             }
           }
         } catch (e) {}
