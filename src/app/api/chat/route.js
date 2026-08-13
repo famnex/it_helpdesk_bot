@@ -9,6 +9,7 @@ import {
   checkSelfResolutionIntent
 } from '@/lib/gemini';
 import { queueTicketNotification } from '@/lib/notifications';
+import { reconstructIdentityTrace } from '@/lib/identityTrace';
 import fs from 'fs';
 import path from 'path';
 
@@ -311,15 +312,39 @@ export async function POST(request) {
       const msgCountRes = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE chat_id = ?').get(chatId);
       const currentMsgCount = msgCountRes ? msgCountRes.count : 0;
 
-      if (currentMsgCount <= 2 && (email || userSessionId || userIp)) {
+      if (currentMsgCount <= 2) {
+        // 1. Identitäts-Spur nutzen, um alle verknüpften E-Mails, Session-IDs und IPs abzufragen
+        const trace = reconstructIdentityTrace(chatId);
+        const userEmails = new Set();
+        const userSessions = new Set();
+        const userIps = new Set();
+
+        if (email) userEmails.add(email.toLowerCase());
+        if (userSessionId) userSessions.add(userSessionId);
+        if (userIp) userIps.add(userIp);
+
+        if (trace && trace.identityTrail) {
+          trace.identityTrail.forEach(ident => {
+            if (ident.email) userEmails.add(ident.email.toLowerCase());
+          });
+        }
+
+        const emailList = Array.from(userEmails);
+        const sessionList = Array.from(userSessions);
+        const ipList = Array.from(userIps);
+
         let candidateChats = db.prepare(`
           SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
                  (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
           FROM chats c
           LEFT JOIN tickets t ON t.chat_id = c.id
-          WHERE c.id != ? AND c.is_merged = 0 AND (c.user_email = ? OR c.user_session_id = ? OR c.user_ip = ?)
-          ORDER BY c.created_at DESC LIMIT 5
-        `).all(chatId, email || 'no_email', userSessionId || 'no_session', userIp || 'no_ip');
+          WHERE c.id != ? AND c.is_merged = 0 AND (
+            LOWER(c.user_email) IN (${emailList.length > 0 ? emailList.map(() => '?').join(',') : "''"})
+            OR c.user_session_id IN (${sessionList.length > 0 ? sessionList.map(() => '?').join(',') : "''"})
+            OR c.user_ip IN (${ipList.length > 0 ? ipList.map(() => '?').join(',') : "''"})
+          )
+          ORDER BY c.created_at DESC LIMIT 10
+        `).all(chatId, ...emailList, ...sessionList, ...ipList);
 
         if (candidateChats.length > 0) {
           const candidateData = candidateChats.map(c => ({

@@ -788,11 +788,44 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
     return { isDuplicate: false };
   }
 
+  const newQueryLower = newQuery.toLowerCase();
+
+  // Schnelle Keyword-Gruppe für verwandte Themen (z. B. Login, Passwort, Anmeldung, WLAN, Moodle)
+  const topicGroups = [
+    { name: 'Anmeldung & Passwort', keywords: ['anmelden', 'anmeldung', 'passwort', 'login', 'zugang', 'account', 'benutzerkonto', 'gesperrt', 'einloggen'] },
+    { name: 'WLAN & Netzwerk', keywords: ['wlan', 'wifi', 'netzwerk', 'internet', 'verbindung', 'ip'] },
+    { name: 'Moodle & Schulportal', keywords: ['moodle', 'schulportal', 'sph', 'sph-app', 'kurs'] },
+    { name: 'E-Mail & Office', keywords: ['email', 'e-mail', 'outlook', 'office', 'teams', '365', 'postfach'] },
+    { name: 'Drucker & Hardware', keywords: ['drucker', 'drucken', 'papier', 'toner', 'pc', 'laptop', 'ipad', 'smartboard'] }
+  ];
+
+  // Fast-Path: Falls die neue Anfrage und ein bestehender Chat in dieselbe Kategorie/Schlüsselwörter fallen
+  for (const group of topicGroups) {
+    const isNewInGroup = group.keywords.some(kw => newQueryLower.includes(kw));
+    if (isNewInGroup) {
+      const matchedCandidate = candidateChats.find(c => {
+        const snipLower = (c.snippet || '').toLowerCase();
+        const titleLower = (c.title || '').toLowerCase();
+        const catLower = (c.category || '').toLowerCase();
+        return group.keywords.some(kw => snipLower.includes(kw) || titleLower.includes(kw) || catLower.includes(kw));
+      });
+
+      if (matchedCandidate) {
+        return {
+          isDuplicate: true,
+          matchedChatId: matchedCandidate.id,
+          matchedTopic: matchedCandidate.title || matchedCandidate.category || group.name
+        };
+      }
+    }
+  }
+
   const chatsOverview = candidateChats.map(c => 
     `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Datum: ${c.createdAt} | Thema/Kategorie: "${c.title || c.category || 'Unbekannt'}" | Auszug: "${c.snippet || ''}"`
   ).join('\n');
 
-  const prompt = `Analysiere, ob die folgende neue Anfrage eines Benutzers semantisch dasselbe IT-Problem / Thema betrifft wie eine seiner früheren Konversationen:
+  const prompt = `Du bist ein intelligenter IT-Support-Klassifizierer.
+Prüfe, ob die folgende neue Anfrage desselben Benutzers dasselbe oder ein eng verwandtes Thema/Problem betrifft wie eine seiner früheren Konversationen:
 
 NEUE ANFRAGE DES BENUTZERS:
 "${newQuery}"
@@ -801,12 +834,12 @@ FRÜHERE ANFRAGEN DES BENUTZERS:
 ${chatsOverview}
 
 AUFTRAG:
-Prüfe, ob die neue Anfrage eindeutig zu einer der früheren Konversationen passt.
-Antworte ZWINGEND als JSON-Objekt ohne Markdown:
+1. Wenn die neue Anfrage dasselbe allgemeine Problem betrifft (z.B. Login/Passwort, WLAN, Moodle, Drucker), ordne sie der passenden früheren Konversation zu.
+2. Antworte ZWINGEND als JSON-Objekt ohne Markdown-Codeblock:
 {
   "isDuplicate": true oder false,
-  "matchedChatId": "die Chat-ID der passenden früherer Konversation (oder null)",
-  "matchedTopic": "Kurze verständliche Bezeichnung des passenden Themas (z.B. Moodle Passwort oder WLAN Verbindung)"
+  "matchedChatId": "die Chat-ID der am besten passenden früheren Konversation (oder null)",
+  "matchedTopic": "Kurze verständliche Bezeichnung des Themas (z.B. Login & Passwort oder WLAN Verbindung)"
 }`;
 
   try {
