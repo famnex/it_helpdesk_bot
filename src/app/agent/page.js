@@ -537,78 +537,84 @@ export default function AgentDashboardPage() {
       <main className="flex-grow max-w-7xl w-full mx-auto p-6 md:p-8 space-y-6">
         
         {/* Title and Filter Panel */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between w-full md:w-auto flex-grow">
+        <div className="bg-slate-900/50 p-5 md:p-6 border border-slate-800 rounded-2xl space-y-4 shadow-md">
+          {/* Top Row: Title + Action Button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-white">Support-Ticket-Übersicht</h2>
-              <p className="text-xs text-slate-400">Verwalte, weise zu und beantworte Tickets von Kunden</p>
+              <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Support-Ticket-Übersicht</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Verwalte, weise zu und beantworte Support-Tickets</p>
             </div>
             <button
               onClick={handleOpenBehalfModal}
-              className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 self-start shadow-md hover:shadow-violet-550/20 cursor-pointer shrink-0"
+              className="bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 self-start sm:self-auto shadow-md hover:shadow-violet-600/20 cursor-pointer shrink-0"
             >
               <i className="fa-solid fa-plus-circle text-sm"></i>
               <span>Neues Ticket (im Namen von...)</span>
             </button>
           </div>
           
-          {/* Filters */}
-          <div className="flex flex-wrap bg-slate-950 p-1 border border-slate-800 rounded-xl text-xs font-semibold w-full sm:w-auto justify-center gap-1 sm:gap-0">
-            <button 
-              onClick={() => setFilter('active')}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'active' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Aktiv ({ticketCounts.active})
-            </button>
-            <button 
-              onClick={() => setFilter('unread')}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all flex items-center gap-1.5 ${filter === 'unread' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
-              <span>Ungelesen</span> ({ticketCounts.unread})
-            </button>
-            <button 
-              onClick={() => setFilter('mine')}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'mine' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              <span className="hidden sm:inline">Mir zugewiesen</span>
-              <span className="sm:hidden">Meine</span> ({ticketCounts.mine})
-            </button>
-            <button 
-              onClick={() => setFilter('unassigned')}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'unassigned' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              <span className="hidden sm:inline">Unzugewiesen</span>
-              <span className="sm:hidden">Offen</span> ({ticketCounts.unassigned})
-            </button>
-            <button 
-              onClick={() => setFilter('closed')}
-              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'closed' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              <span className="hidden sm:inline">Geschlossen</span>
-              <span className="sm:hidden">Gelöst</span> ({ticketCounts.closed})
-            </button>
-          </div>
-
-          {/* Live Search Bar */}
-          <div className="relative w-full">
-            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tickets durchsuchen (ID, Betreff, Kunde, Agent)..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50 transition-all shadow-inner"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1 text-xs"
-                title="Suche leeren"
+          {/* Bottom Row: Filter Tabs & Live Search Bar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
+            {/* Filter Tabs */}
+            <div className="flex bg-slate-950 p-1 border border-slate-800 rounded-xl text-xs font-semibold overflow-x-auto no-scrollbar gap-1 shrink-0">
+              <button 
+                onClick={() => setFilter('active')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'active' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <i className="fa-solid fa-xmark"></i>
+                <span>Aktiv</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'active' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.active}</span>
               </button>
-            )}
+              <button 
+                onClick={() => setFilter('unread')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'unread' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
+                <span>Ungelesen</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unread' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unread}</span>
+              </button>
+              <button 
+                onClick={() => setFilter('mine')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'mine' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <span>Mir zugewiesen</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.mine}</span>
+              </button>
+              <button 
+                onClick={() => setFilter('unassigned')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'unassigned' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <span>Unzugewiesen</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unassigned' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unassigned}</span>
+              </button>
+              <button 
+                onClick={() => setFilter('closed')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'closed' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <span>Geschlossen</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'closed' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.closed}</span>
+              </button>
+            </div>
+
+            {/* Live Search Bar */}
+            <div className="relative w-full lg:w-72 xl:w-80 shrink-0">
+              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tickets durchsuchen..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50 transition-all shadow-inner"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1 text-xs"
+                  title="Suche leeren"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
