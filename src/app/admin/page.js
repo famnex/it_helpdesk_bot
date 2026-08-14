@@ -701,12 +701,12 @@ export default function AdminDashboardPage() {
 
   const handleConvertChatToTicket = async (chat) => {
     if (!chat) return;
-    if (chat.ticketCreated === 1) {
-      const linkedTicket = selectedChatIdentityTrace?.linkedTickets?.find(t => t.id && t.id !== 'null')?.id;
-      if (linkedTicket) {
-        router.push(`/agent/tickets/${linkedTicket}`);
-        return;
-      }
+
+    // 1. Wenn dieses Chat bereits ein exaktes Ticket besitzt -> direkt dorthin navigieren!
+    const exactTicketId = chat.exactTicketId || selectedChatIdentityTrace?.directTicket?.id;
+    if (exactTicketId) {
+      router.push(`/agent/tickets/${exactTicketId}`);
+      return;
     }
 
     // 1. Ersteller ermitteln (E-Mail der Person, die den Chat geführt hat)
@@ -3108,20 +3108,20 @@ export default function AdminDashboardPage() {
                           {/* Funktions-Buttons sauber aufgereiht mit Hover-Tooltips */}
                           <div className="flex items-center gap-2 shrink-0">
                             {/* In Ticket umwandeln (nur wenn E-Mail bekannt ist) / Ticket öffnen */}
-                            {(selectedChatDetails.ticketCreated === 1 || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
+                            {((selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
                               <button 
                                 type="button"
                                 onClick={() => handleConvertChatToTicket(selectedChatDetails)}
                                 disabled={isConvertingTicket}
                                 className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm ${
-                                  selectedChatDetails.ticketCreated === 1
+                                  (selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id)
                                     ? 'bg-violet-950/60 text-violet-300 border-violet-500/40 hover:bg-violet-600 hover:text-white'
                                     : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600 hover:text-white'
                                 }`}
-                                title={selectedChatDetails.ticketCreated === 1 ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
+                                title={(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? "Zugehöriges Support-Ticket im Ticketportal öffnen" : "Diesen Chat in ein neues Support-Ticket umwandeln"}
                               >
-                                <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
-                                <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'In Ticket umwandeln'}</span>
+                                <i className={`fa-solid ${(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
+                                <span>{(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? `Ticket #${selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id} öffnen` : 'In Ticket umwandeln'}</span>
                               </button>
                             )}
 
@@ -3510,7 +3510,7 @@ export default function AdminDashboardPage() {
                     <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
                       <div className="flex items-center gap-2 w-full">
                         {/* Ticket erstellen (nur wenn E-Mail bekannt ist) / öffnen mit Text */}
-                        {(selectedChatDetails.ticketCreated === 1 || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
+                        {((selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
                           <button 
                             type="button"
                             onClick={() => {
@@ -3519,14 +3519,14 @@ export default function AdminDashboardPage() {
                             }}
                             disabled={isConvertingTicket}
                             className={`font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 border shadow-sm flex-1 justify-center ${
-                              selectedChatDetails.ticketCreated === 1
+                              (selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id)
                                 ? 'bg-violet-950/60 text-violet-300 border-violet-500/40'
                                 : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
                             }`}
-                            title={selectedChatDetails.ticketCreated === 1 ? "Support-Ticket öffnen" : "In Ticket umwandeln"}
+                            title={(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? "Support-Ticket öffnen" : "In Ticket umwandeln"}
                           >
-                            <i className={`fa-solid ${selectedChatDetails.ticketCreated === 1 ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
-                            <span>{selectedChatDetails.ticketCreated === 1 ? 'Ticket öffnen' : 'Ticket erstellen'}</span>
+                            <i className={`fa-solid ${(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? 'fa-ticket text-violet-400' : 'fa-plus-circle text-emerald-400'}`}></i>
+                            <span>{(selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) ? `Ticket #${selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id} öffnen` : 'Ticket erstellen'}</span>
                           </button>
                         )}
 

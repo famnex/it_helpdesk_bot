@@ -255,7 +255,7 @@ export async function POST(request) {
         });
       } else {
         // Bot bleibt stumm bezüglich Fachfragen, gibt aber eine kurze Bestätigung zum Anhängen ans Ticket aus
-        const botAck = "Danke! Ich habe deine Information direkt an das Ticket der IT-Abteilung weitergeleitet.";
+        const botAck = "Danke! Ich habe deine Information direkt an das Ticket der IT-Abteilung weitergeleitet. Ein IT-Admin wird sich bald bei dir melden.";
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAck);
 
         if (ticket) {

@@ -271,6 +271,18 @@ try {
     console.error("Fehler bei Repair-Migration von null-Tickets:", errRepair);
   }
 
+  // Migration: Verwaiste ticket_created Flags bereinigen (falls Ticket gelöscht wurde)
+  try {
+    db.exec(`
+      UPDATE chats 
+      SET ticket_created = 0 
+      WHERE ticket_created = 1 
+        AND NOT EXISTS (SELECT 1 FROM tickets WHERE tickets.chat_id = chats.id);
+    `);
+  } catch (errCleanChats) {
+    console.error("Fehler bei Bereinigung verwaister Chat-Tickets:", errCleanChats);
+  }
+
   // Migration: Kundenzufriedenheits-Rating für Tickets
   const tableInfoTickets = db.prepare("PRAGMA table_info(tickets)").all();
   const hasRating = tableInfoTickets.some(col => col.name === 'rating');

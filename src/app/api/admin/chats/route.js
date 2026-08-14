@@ -18,14 +18,19 @@ export async function GET(request) {
 
   try {
     if (chatId) {
-      // Details eines bestimmten Chats laden (inklusive Nachrichten & Identitäts-Spur)
+      // Details eines bestimmten Chats laden (inklusive exaktem Ticket, Nachrichten & Identitäts-Spur)
       const chat = db.prepare(`
-        SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
-               is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId,
-               category, categorized_at as categorizedAt, customer_last_active_at as customerLastActiveAt,
-               last_active_at as lastActiveAt, created_at as createdAt
-        FROM chats
-        WHERE id = ?
+        SELECT c.id, c.user_email as userEmail, c.user_name as userName,
+               c.is_abusive as isAbusive, c.user_ip as userIp, c.user_session_id as userSessionId,
+               c.category, c.categorized_at as categorizedAt, c.customer_last_active_at as customerLastActiveAt,
+               c.last_active_at as lastActiveAt, c.created_at as createdAt,
+               t.id as exactTicketId,
+               t.title as exactTicketTitle,
+               t.status as exactTicketStatus,
+               CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END as ticketCreated
+        FROM chats c
+        LEFT JOIN tickets t ON t.chat_id = c.id
+        WHERE c.id = ?
       `).get(chatId);
 
       if (!chat) {
@@ -56,15 +61,20 @@ export async function GET(request) {
 
     // Alle Chats abfragen (nur solche, in denen auch eine Konversation stattfand)
     const chats = db.prepare(`
-      SELECT id, user_email as userEmail, user_name as userName, ticket_created as ticketCreated,
-             is_abusive as isAbusive, user_ip as userIp, user_session_id as userSessionId,
-             category, categorized_at as categorizedAt, customer_last_active_at as customerLastActiveAt,
-             last_active_at as lastActiveAt, created_at as createdAt
-      FROM chats
+      SELECT c.id, c.user_email as userEmail, c.user_name as userName,
+             c.is_abusive as isAbusive, c.user_ip as userIp, c.user_session_id as userSessionId,
+             c.category, c.categorized_at as categorizedAt, c.customer_last_active_at as customerLastActiveAt,
+             c.last_active_at as lastActiveAt, c.created_at as createdAt,
+             t.id as exactTicketId,
+             t.title as exactTicketTitle,
+             t.status as exactTicketStatus,
+             CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END as ticketCreated
+      FROM chats c
+      LEFT JOIN tickets t ON t.chat_id = c.id
       WHERE EXISTS (
-        SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id
+        SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = c.id
       )
-      ORDER BY created_at DESC
+      ORDER BY c.created_at DESC
     `).all();
 
     return NextResponse.json({ chats });

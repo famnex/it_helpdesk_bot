@@ -195,10 +195,22 @@ export async function DELETE(request, { params }) {
   }
 
   try {
-    const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
-    if (result.changes === 0) {
+    const ticket = db.prepare('SELECT id, chat_id FROM tickets WHERE id = ?').get(id);
+    if (!ticket) {
       return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
     }
+
+    // 1. Ticketnachrichten löschen
+    db.prepare('DELETE FROM ticket_messages WHERE ticket_id = ?').run(id);
+
+    // 2. Ticket löschen
+    db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
+
+    // 3. Falls verknüpfter Chat existiert: ticket_created zurücksetzen
+    if (ticket.chat_id) {
+      db.prepare('UPDATE chats SET ticket_created = 0 WHERE id = ?').run(ticket.chat_id);
+    }
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Fehler beim Löschen des Tickets:', err);

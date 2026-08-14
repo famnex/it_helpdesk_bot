@@ -132,7 +132,14 @@ export function reconstructIdentityTrace(chatId) {
       }
     }
 
-    // 5. Verknüpfte Tickets suchen
+    // 5. Direktes Ticket für diesen Chat ermitteln
+    const directTicket = db.prepare(`
+      SELECT id, title, status, creator_email as creatorEmail, chat_id as chatId, created_at as createdAt
+      FROM tickets
+      WHERE chat_id = ?
+    `).get(chatId) || null;
+
+    // 5b. Weitere verknüpfte Tickets der Session/Identität suchen
     let linkedTickets = [];
     const chatIdsArr = Array.from(discoveredChatIds);
     if (chatIdsArr.length > 0 || emailsList.length > 0) {
@@ -192,6 +199,7 @@ export function reconstructIdentityTrace(chatId) {
       },
       confidenceScore,
       linkedIdentities,
+      directTicket,
       linkedTickets,
       sessionTrace: {
         sessionId: userSessionId || null,
