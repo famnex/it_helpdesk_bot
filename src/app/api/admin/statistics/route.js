@@ -124,7 +124,42 @@ export async function GET() {
       categoryBreakdown
     };
 
-    return NextResponse.json({ statistics, botStatistics });
+    // 8. Rating & Kundenzufriedenheits-Statistiken
+    const ratingStatsRow = db.prepare(`
+      SELECT 
+        COUNT(rating) as totalRatings,
+        AVG(rating) as averageRating,
+        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as stars5,
+        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as stars4,
+        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as stars3,
+        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as stars2,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as stars1
+      FROM tickets
+      WHERE rating IS NOT NULL
+    `).get();
+
+    const recentFeedbacks = db.prepare(`
+      SELECT id, title, creator_email as creatorEmail, rating, rating_feedback as ratingFeedback, rated_at as ratedAt
+      FROM tickets
+      WHERE rating IS NOT NULL
+      ORDER BY rated_at DESC
+      LIMIT 10
+    `).all();
+
+    const ratingStatistics = {
+      totalRatings: ratingStatsRow?.totalRatings || 0,
+      averageRating: ratingStatsRow?.averageRating ? parseFloat(ratingStatsRow.averageRating.toFixed(2)) : null,
+      breakdown: {
+        stars5: ratingStatsRow?.stars5 || 0,
+        stars4: ratingStatsRow?.stars4 || 0,
+        stars3: ratingStatsRow?.stars3 || 0,
+        stars2: ratingStatsRow?.stars2 || 0,
+        stars1: ratingStatsRow?.stars1 || 0,
+      },
+      recentFeedbacks
+    };
+
+    return NextResponse.json({ statistics, botStatistics, ratingStatistics });
   } catch (err) {
     console.error('Fehler beim Berechnen der Statistiken:', err);
     return NextResponse.json({ error: 'Serverfehler beim Laden der Statistik.' }, { status: 500 });

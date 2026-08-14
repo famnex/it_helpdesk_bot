@@ -25,6 +25,9 @@ export default function AgentDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('active'); // 'active', 'mine', 'unassigned', 'closed'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
   const activeTicketsRef = useRef([]);
   const router = useRouter();
@@ -374,14 +377,38 @@ export default function AgentDashboardPage() {
     }
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
+
   const filteredTickets = tickets.filter(t => {
-    if (filter === 'unread') return t.hasUnread === 1 && t.status !== 'closed';
-    if (filter === 'mine') return (t.status === 'open' || t.status === 'assigned') && t.assignedAgentId === user?.id;
-    if (filter === 'unassigned') return (t.status === 'open' || t.status === 'assigned') && !t.assignedAgentId;
-    if (filter === 'active') return t.status === 'open' || t.status === 'assigned';
-    if (filter === 'closed') return t.status === 'closed';
+    if (filter === 'unread') {
+      if (!(t.hasUnread === 1 && t.status !== 'closed')) return false;
+    } else if (filter === 'mine') {
+      if (!((t.status === 'open' || t.status === 'assigned') && t.assignedAgentId === user?.id)) return false;
+    } else if (filter === 'unassigned') {
+      if (!((t.status === 'open' || t.status === 'assigned') && !t.assignedAgentId)) return false;
+    } else if (filter === 'active') {
+      if (!(t.status === 'open' || t.status === 'assigned')) return false;
+    } else if (filter === 'closed') {
+      if (t.status !== 'closed') return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const idMatch = t.id?.toLowerCase().includes(q);
+      const titleMatch = t.title?.toLowerCase().includes(q);
+      const emailMatch = t.creatorEmail?.toLowerCase().includes(q);
+      const nameMatch = t.creatorName?.toLowerCase().includes(q);
+      const agentMatch = t.assignedAgentEmail?.toLowerCase().includes(q);
+      return idMatch || titleMatch || emailMatch || nameMatch || agentMatch;
+    }
+
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / ITEMS_PER_PAGE));
+  const paginatedTickets = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   if (isLoading) {
     return (
@@ -562,13 +589,36 @@ export default function AgentDashboardPage() {
               <span className="sm:hidden">Gelöst</span> ({ticketCounts.closed})
             </button>
           </div>
+
+          {/* Live Search Bar */}
+          <div className="relative w-full">
+            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tickets durchsuchen (ID, Betreff, Kunde, Agent)..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50 transition-all shadow-inner"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1 text-xs"
+                title="Suche leeren"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tickets Table / List */}
         {filteredTickets.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
             <div className="text-slate-600 text-4xl"><i className="fa-regular fa-folder-open"></i></div>
-            <p className="text-sm text-slate-400">Keine Support-Tickets in dieser Ansicht vorhanden.</p>
+            <p className="text-sm text-slate-400">
+              {searchQuery ? `Keine Tickets gefunden für "${searchQuery}".` : 'Keine Support-Tickets in dieser Ansicht vorhanden.'}
+            </p>
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
@@ -585,7 +635,7 @@ export default function AgentDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
-                  {filteredTickets.map((tk) => {
+                  {paginatedTickets.map((tk) => {
                     
                     let statusLabel = 'Offen';
                     let statusClass = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
@@ -598,24 +648,16 @@ export default function AgentDashboardPage() {
                     }
 
                     return (
-                      <tr key={tk.id} className={`hover:bg-slate-850/40 transition-colors ${tk.hasUnread === 1 ? 'bg-violet-950/20' : ''}`}>
-                        <td className="px-3 sm:px-4 py-2.5 font-mono text-[11px] font-bold text-slate-500">
-                          <div className="flex items-center gap-1.5">
-                            {tk.hasUnread === 1 && (
-                              <span 
-                                className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse shrink-0" 
-                                title="Ungelesene Nachrichten vorhanden"
-                              />
-                            )}
-                            <span>{tk.id}</span>
-                          </div>
+                      <tr key={tk.id} className="hover:bg-slate-850/50 transition-colors">
+                        <td className="px-3 sm:px-4 py-2.5 font-mono text-violet-400 font-bold whitespace-nowrap">
+                          {tk.id}
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 max-w-[180px] sm:max-w-xs md:max-w-md">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {tk.hasUnread === 1 && (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {tk.hasUnread === 1 && tk.status !== 'closed' && (
                               <span 
-                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md text-[9px] font-bold shrink-0 shadow-sm"
-                                title="Ungelesene Nachrichten in diesem Ticket"
+                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold shrink-0 shadow-sm"
+                                title="Ungelesene Nachrichten vorhanden"
                               >
                                 <i className="fa-solid fa-envelope text-amber-400 animate-bounce"></i>
                                 <span>Neu</span>
@@ -623,61 +665,58 @@ export default function AgentDashboardPage() {
                             )}
                             <Link 
                               href={`/agent/tickets/${tk.id}`} 
-                              className={`font-bold hover:text-violet-400 transition-colors block truncate ${tk.hasUnread === 1 ? 'text-white font-extrabold' : 'text-slate-200'}`}
+                              className={`font-bold hover:text-violet-400 transition-colors block truncate ${tk.hasUnread === 1 && tk.status !== 'closed' ? 'text-white font-extrabold' : 'text-slate-200'}`}
                             >
                               {tk.title}
                             </Link>
                           </div>
                           <span className="text-[10px] text-slate-500 block mt-0.5">
-                            Aktualisiert: {parseUtcDate(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            Aktualisiert: {parseUtcDate(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr
                           </span>
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 text-xs">
-                          <div className="flex flex-col gap-0.5 max-w-[160px] sm:max-w-none">
-                            {tk.creatorName && (
-                              <span className="font-bold text-white block truncate">{tk.creatorName}</span>
-                            )}
-                            <span className="font-medium text-slate-400 font-mono text-[10px] truncate">{tk.creatorEmail}</span>
+                        <td className="px-3 sm:px-4 py-2.5 text-slate-400 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-300 font-semibold">{tk.creatorName || tk.creatorEmail.split('@')[0]}</span>
                             {tk.isRegisteredUser === 1 ? (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-bold text-emerald-400 w-fit">
-                                <i className="fa-solid fa-user-check"></i> Angemeldet
+                              <span className="inline-flex items-center gap-0.5 text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded-full font-bold" title="Angemeldeter Benutzer (Passwort/IDP verifiziert)">
+                                <i className="fa-solid fa-circle-check text-[8px]"></i>
+                                <span>Verifiziert</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-bold text-amber-400/80 w-fit">
-                                <i className="fa-solid fa-user-slash"></i> Gast
+                              <span className="inline-flex items-center gap-0.5 text-[9px] bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.2 rounded-full" title="Gast / Unverifiziert">
+                                <span>Gast</span>
                               </span>
                             )}
                           </div>
+                          <span className="text-[10px] text-slate-500 block truncate">{tk.creatorEmail}</span>
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}>
+                            {statusLabel}
+                          </span>
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5">
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
                           {tk.status !== 'closed' ? (
-                            <select 
+                            <select
                               value={tk.assignedAgentId || ''}
                               onChange={(e) => handleQuickAssign(tk.id, e.target.value)}
-                              className="bg-slate-950 border border-slate-800 text-[11px] rounded px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-300 max-w-[130px] sm:max-w-none truncate"
+                              className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 font-medium cursor-pointer"
                             >
-                              <option value="">-- Unzugewiesen --</option>
-                              {agents.map(ag => (
+                              <option value="">(Nicht zugewiesen)</option>
+                              {agents.map((ag) => (
                                 <option key={ag.id} value={ag.id}>
-                                  {ag.name ? `${ag.name} (${ag.email.split('@')[0]})` : ag.email.split('@')[0]}
+                                  {ag.name || ag.email}
                                 </option>
                               ))}
                             </select>
                           ) : (
-                            <span className="text-[11px] text-emerald-400 font-medium truncate flex items-center gap-1">
-                              <i className="fa-solid fa-lock text-[10px] text-emerald-500"></i>
-                              <span>
-                                {tk.closedByName 
-                                  ? `Geschlossen von ${tk.closedByName}` 
-                                  : tk.closedByEmail 
-                                    ? `Geschlossen von ${tk.closedByEmail.split('@')[0]}` 
-                                    : tk.assignedAgentEmail 
-                                      ? `Geschlossen von ${tk.assignedAgentEmail.split('@')[0]}` 
-                                      : 'Geschlossen'}
-                              </span>
+                            <span className="text-[11px] text-slate-500 italic">
+                              Geschlossen
+                              {tk.closedByName && (
+                                <span className="block not-italic text-[10px] text-slate-400 font-medium">
+                                  von {tk.closedByName}
+                                </span>
+                              )}
                             </span>
                           )}
                         </td>
@@ -705,12 +744,41 @@ export default function AgentDashboardPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="bg-slate-950/60 border-t border-slate-800 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+                <div className="text-[11px]">
+                  Zeige <span className="font-bold text-slate-200">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> bis <span className="font-bold text-slate-200">{Math.min(currentPage * ITEMS_PER_PAGE, filteredTickets.length)}</span> von <span className="font-bold text-slate-200">{filteredTickets.length}</span> Tickets
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="bg-slate-850 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-750 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <i className="fa-solid fa-chevron-left text-[10px]"></i>
+                    <span>Zurück</span>
+                  </button>
+                  <span className="px-2 text-[11px] font-bold text-slate-300">
+                    Seite {currentPage} von {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="bg-slate-850 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-750 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Weiter</span>
+                    <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
       </main>
 
-      {/* On-Behalf Ticket Creation Modal */}
       {showBehalfModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">

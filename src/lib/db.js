@@ -271,6 +271,16 @@ try {
     console.error("Fehler bei Repair-Migration von null-Tickets:", errRepair);
   }
 
+  // Migration: Kundenzufriedenheits-Rating für Tickets
+  const tableInfoTickets = db.prepare("PRAGMA table_info(tickets)").all();
+  const hasRating = tableInfoTickets.some(col => col.name === 'rating');
+  if (!hasRating) {
+    db.exec("ALTER TABLE tickets ADD COLUMN rating INTEGER;");
+    db.exec("ALTER TABLE tickets ADD COLUMN rating_feedback TEXT;");
+    db.exec("ALTER TABLE tickets ADD COLUMN rated_at DATETIME;");
+    console.log("Migration: Spalten 'rating', 'rating_feedback' und 'rated_at' zur Tabelle 'tickets' hinzugefügt.");
+  }
+
   const hasChatCategory = tableInfoChatsAbuse.some(col => col.name === 'category');
   if (!hasChatCategory) {
     db.exec("ALTER TABLE chats ADD COLUMN category TEXT;");
@@ -297,6 +307,92 @@ try {
     db.exec("ALTER TABLE knowledge ADD COLUMN is_private BOOLEAN DEFAULT 0");
     console.log("Migration: Spalte 'is_private' zur Tabelle 'knowledge' hinzugefügt.");
   }
+
+  // Migration: Granulare, trennscharfe Schul-IT-Kategorien
+  try {
+    db.exec(`
+      -- 1. Passwörter vs. Benutzerkonten
+      UPDATE knowledge 
+      SET category = 'Passwörter' 
+      WHERE (category IN ('Benutzerkonten & Passwörter', 'E-Mail & Konten', 'Benutzerverwaltung') OR category IS NULL) 
+        AND (title LIKE '%Passwort%' OR fact LIKE '%Passwort%');
+
+      UPDATE knowledge 
+      SET category = 'Benutzerkonten' 
+      WHERE category IN ('Benutzerkonten & Passwörter', 'Benutzerverwaltung') 
+        OR (category = 'E-Mail & Konten' AND (title LIKE '%Konto%' OR title LIKE '%Benutzer%' OR fact LIKE '%Konto%' OR fact LIKE '%Benutzer%'));
+
+      UPDATE knowledge 
+      SET category = 'E-Mail' 
+      WHERE category = 'E-Mail & Konten';
+
+      -- 2. WLAN vs. Netzwerk
+      UPDATE knowledge 
+      SET category = 'WLAN' 
+      WHERE (category IN ('WLAN & Netzwerk', 'WLAN') OR title LIKE '%WLAN%' OR fact LIKE '%WLAN%' OR title LIKE '%WiFi%' OR fact LIKE '%WiFi%');
+
+      UPDATE knowledge 
+      SET category = 'Netzwerk' 
+      WHERE category IN ('WLAN & Netzwerk', 'Netzwerk & Internet', 'Netzwerk & Speicher');
+
+      -- 3. Hardware differenzieren
+      UPDATE knowledge 
+      SET category = 'Smartboards' 
+      WHERE title LIKE '%Smartboard%' OR fact LIKE '%Smartboard%';
+
+      UPDATE knowledge 
+      SET category = 'Beamer' 
+      WHERE title LIKE '%Beamer%' OR fact LIKE '%Beamer%';
+
+      UPDATE knowledge 
+      SET category = 'Dokumentenkameras' 
+      WHERE title LIKE '%Dokumentenkamera%' OR title LIKE '%Elmo%' OR fact LIKE '%Dokumentenkamera%';
+
+      UPDATE knowledge 
+      SET category = 'Stationäre Computer' 
+      WHERE (category IN ('Hardware', 'Hardware & Beamer') OR title LIKE '%PC%' OR title LIKE '%Computer%')
+        AND category NOT IN ('Smartboards', 'Beamer', 'Dokumentenkameras');
+
+      UPDATE knowledge 
+      SET category = 'Sonstige Hardware' 
+      WHERE category IN ('Hardware', 'Hardware & Beamer');
+
+      -- 4. Drucker vs. Kopierer
+      UPDATE knowledge 
+      SET category = 'Drucker' 
+      WHERE category IN ('Drucker & Kopierer', 'Drucker');
+
+      UPDATE knowledge 
+      SET category = 'Kopierer' 
+      WHERE category = 'Kopierer' OR title LIKE '%Kopierer%' OR fact LIKE '%Kopierer%';
+
+      -- 5. Office 365 vs. Software
+      UPDATE knowledge 
+      SET category = 'Office 365' 
+      WHERE title LIKE '%Office%' OR title LIKE '%OneDrive%' OR title LIKE '%Teams%' OR title LIKE '%Word%' OR title LIKE '%Excel%' OR fact LIKE '%Office 365%';
+
+      UPDATE knowledge 
+      SET category = 'Software' 
+      WHERE category IN ('Software & Office 365', 'Software', 'Cloud-Dienste') AND category != 'Office 365';
+
+      -- 6. Raumbuchung
+      UPDATE knowledge 
+      SET category = 'Raumbuchung' 
+      WHERE category IN ('Raumbuchung & Ressourcen', 'Raum- & Ressourcenbuchung');
+
+      -- 7. Vorhandene Chats bereinigen
+      UPDATE chats SET category = 'E-Mail' WHERE category = 'E-Mail & Konten';
+      UPDATE chats SET category = 'Passwörter' WHERE category = 'Benutzerkonten & Passwörter';
+      UPDATE chats SET category = 'Benutzerkonten' WHERE category = 'Benutzerverwaltung';
+      UPDATE chats SET category = 'WLAN' WHERE category IN ('WLAN & Netzwerk', 'WLAN');
+      UPDATE chats SET category = 'Sonstige Hardware' WHERE category IN ('Hardware & Beamer', 'Hardware');
+      UPDATE chats SET category = 'Drucker' WHERE category IN ('Drucker & Kopierer', 'Drucker');
+      UPDATE chats SET category = 'Software' WHERE category IN ('Software & Office 365', 'Software');
+      UPDATE chats SET category = 'Raumbuchung' WHERE category IN ('Raumbuchung & Ressourcen', 'Raum- & Ressourcenbuchung');
+    `);
+  } catch (errCat) {
+    console.error('Fehler bei Kategorie-Bereinigung:', errCat);
+  }
   
   const tableInfoUsers = db.prepare("PRAGMA table_info(users)").all();
   const hasName = tableInfoUsers.some(col => col.name === 'name');
@@ -317,32 +413,32 @@ try {
     console.log("Migration: Spalte 'responsibilities' zur Tabelle 'users' hinzugefügt.");
   }
 
-  const tableInfoTickets = db.prepare("PRAGMA table_info(tickets)").all();
-  const hasChatId = tableInfoTickets.some(col => col.name === 'chat_id');
+  const tableInfoTicketsAll = db.prepare("PRAGMA table_info(tickets)").all();
+  const hasChatId = tableInfoTicketsAll.some(col => col.name === 'chat_id');
   if (!hasChatId) {
     db.exec("ALTER TABLE tickets ADD COLUMN chat_id TEXT");
     console.log("Migration: Spalte 'chat_id' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasSolutionForgotten = tableInfoTickets.some(col => col.name === 'solution_forgotten');
+  const hasSolutionForgotten = tableInfoTicketsAll.some(col => col.name === 'solution_forgotten');
   if (!hasSolutionForgotten) {
     db.exec("ALTER TABLE tickets ADD COLUMN solution_forgotten BOOLEAN DEFAULT 0");
     console.log("Migration: Spalte 'solution_forgotten' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasSolutionContext = tableInfoTickets.some(col => col.name === 'solution_context');
+  const hasSolutionContext = tableInfoTicketsAll.some(col => col.name === 'solution_context');
   if (!hasSolutionContext) {
     db.exec("ALTER TABLE tickets ADD COLUMN solution_context TEXT");
     console.log("Migration: Spalte 'solution_context' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasIsAuthCreator = tableInfoTickets.some(col => col.name === 'is_authenticated_creator');
+  const hasIsAuthCreator = tableInfoTicketsAll.some(col => col.name === 'is_authenticated_creator');
   if (!hasIsAuthCreator) {
     db.exec("ALTER TABLE tickets ADD COLUMN is_authenticated_creator BOOLEAN DEFAULT 0");
     console.log("Migration: Spalte 'is_authenticated_creator' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasLastAgentReadAt = tableInfoTickets.some(col => col.name === 'last_agent_read_at');
+  const hasLastAgentReadAt = tableInfoTicketsAll.some(col => col.name === 'last_agent_read_at');
   if (!hasLastAgentReadAt) {
     db.exec("ALTER TABLE tickets ADD COLUMN last_agent_read_at DATETIME");
     console.log("Migration: Spalte 'last_agent_read_at' zur Tabelle 'tickets' hinzugefügt.");
@@ -365,25 +461,25 @@ try {
     console.log("Migration: Spalte 'base_knowledge' zur Tabelle 'chat_messages' hinzugefügt.");
   }
 
-  const hasClosedByEmail = tableInfoTickets.some(col => col.name === 'closed_by_email');
+  const hasClosedByEmail = tableInfoTicketsAll.some(col => col.name === 'closed_by_email');
   if (!hasClosedByEmail) {
     db.exec("ALTER TABLE tickets ADD COLUMN closed_by_email TEXT");
     console.log("Migration: Spalte 'closed_by_email' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasClosedByName = tableInfoTickets.some(col => col.name === 'closed_by_name');
+  const hasClosedByName = tableInfoTicketsAll.some(col => col.name === 'closed_by_name');
   if (!hasClosedByName) {
     db.exec("ALTER TABLE tickets ADD COLUMN closed_by_name TEXT");
     console.log("Migration: Spalte 'closed_by_name' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasClosedByUserId = tableInfoTickets.some(col => col.name === 'closed_by_user_id');
+  const hasClosedByUserId = tableInfoTicketsAll.some(col => col.name === 'closed_by_user_id');
   if (!hasClosedByUserId) {
     db.exec("ALTER TABLE tickets ADD COLUMN closed_by_user_id TEXT");
     console.log("Migration: Spalte 'closed_by_user_id' zur Tabelle 'tickets' hinzugefügt.");
   }
 
-  const hasClosedAt = tableInfoTickets.some(col => col.name === 'closed_at');
+  const hasClosedAt = tableInfoTicketsAll.some(col => col.name === 'closed_at');
   if (!hasClosedAt) {
     db.exec("ALTER TABLE tickets ADD COLUMN closed_at DATETIME");
     console.log("Migration: Spalte 'closed_at' zur Tabelle 'tickets' hinzugefügt.");
@@ -532,7 +628,7 @@ if (knowledgeCount === 0 && !isProd) {
     'Smartboard flackert',
     'Wenn das Smartboard in Raum 102 oder 103 flackert, muss das HDMI-Kabel am Wandpanel abgezogen und in Port 2 (HDMI-2) eingesteckt werden.',
     'Flackern oder Tonaussetzer am Smartboard in den Räumen 102 und 103 liegen meist an einer defekten Buchse am primären HDMI-Port.\n\n**Lösungsschritte:**\n1. Trennen Sie das HDMI-Kabel vorsichtig vom Wandpanel (Port HDMI-1).\n2. Stecken Sie das Kabel in den zweiten Port (**HDMI-2**) ein.\n3. Schalten Sie das Smartboard mit der Fernbedienung aus und wieder ein.\n4. Vergewissern Sie sich, dass die Eingangsquelle am Smartboard auf "HDMI 2" eingestellt ist.',
-    'Hardware',
+    'Smartboards',
     'manual'
   );
 

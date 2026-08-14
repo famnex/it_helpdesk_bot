@@ -41,6 +41,9 @@ Speichert Support-Tickets.
 | `closed_by_name` | TEXT | NULL | Name des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
 | `closed_by_user_id` | TEXT | NULL | User-ID des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
 | `closed_at` | DATETIME | NULL | Zeitpunkt, an dem das Ticket geschlossen wurde |
+| `rating` | INTEGER | NULL | Kundenzufriedenheits-Bewertung (1 bis 5 Sterne) |
+| `rating_feedback` | TEXT | NULL | Optionaler Text-Kommentar/Feedback des Kunden zur Bewertung |
+| `rated_at` | DATETIME | NULL | Zeitpunkt der Bewertungsabgabe durch den Kunden |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der letzten Änderung |
 
@@ -76,7 +79,7 @@ Speichert Chat-Sitzungen mit dem KI-Bot.
 | `abusive_flagged_at` | DATETIME | NULL | Zeitpunkt der Missbrauchs-Markierung |
 | `user_ip` | TEXT | NULL | IP-Adresse des Benutzers |
 | `user_session_id` | TEXT | NULL | Sitzungs-ID des Browsers |
-| `category` | TEXT | NULL | KI-generierte Kategorie der Bot-Konversation (z. B. WLAN, Moodle) |
+| `category` | TEXT | NULL | Granulare Schul-IT-Kategorie (`Schulportal`, `Moodle`, `WebUntis`, `E-Mail`, `Passwörter`, `Benutzerkonten`, `WLAN`, `Netzwerk`, `Smartboards`, `Beamer`, `Dokumentenkameras`, `Stationäre Computer`, `Laptops & Tablets`, `Drucker`, `Kopierer`, `Office 365`, `Software`, `Raumbuchung`, `Sonstige Hardware`, `Sonstiges`) |
 | `categorized_at` | DATETIME | NULL | Zeitpunkt der automatischen oder manuellen Kategorisierung |
 | `pending_merge_target_id` | TEXT | NULL | ID des Zielchats/Tickets bei Themen-Übereinstimmung |
 | `pending_merge_info` | TEXT | NULL | Übertragener Text/Kontext bei Themen-Zusammenführung |

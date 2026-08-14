@@ -221,8 +221,10 @@ export default function AdminDashboardPage() {
   // Statistics States
   const [statistics, setStatistics] = useState([]);
   const [botStatistics, setBotStatistics] = useState(null);
+  const [ratingStatistics, setRatingStatistics] = useState(null);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
   const [categorizingBotChats, setCategorizingBotChats] = useState(false);
+  const [categorizeMode, setCategorizeMode] = useState('uncategorized'); // 'uncategorized' or 'all'
   const [categorizingResultMsg, setCategorizingResultMsg] = useState('');
 
   // Chats States
@@ -564,6 +566,7 @@ export default function AdminDashboardPage() {
         const data = await res.json();
         setStatistics(data.statistics || []);
         if (data.botStatistics) setBotStatistics(data.botStatistics);
+        if (data.ratingStatistics) setRatingStatistics(data.ratingStatistics);
       }
     } catch (e) {
       console.error('Fehler beim Laden der Statistik:', e);
@@ -572,15 +575,21 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleCategorizeAllChats = async () => {
+  const handleCategorizeAllChats = async (modeOverride) => {
+    const selectedMode = modeOverride || categorizeMode;
     setCategorizingBotChats(true);
     setCategorizingResultMsg('');
     try {
-      const res = await fetch('/api/admin/chats/categorize', { method: 'POST' });
+      const res = await fetch('/api/admin/chats/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: selectedMode })
+      });
       if (res.ok) {
         const data = await res.json();
         const durationSec = (data.durationMs ? (data.durationMs / 1000).toFixed(1) : '1.2');
-        setCategorizingResultMsg(`⚡ ${data.processedCount} Chat(s) in ${durationSec}s per Highspeed-Parallel-Batch einkategorisiert.`);
+        const modeLabel = data.mode === 'all' ? 'alle Chats' : 'unkategorisierte Chats';
+        setCategorizingResultMsg(`⚡ ${data.processedCount} Chat(s) (${modeLabel}) in ${durationSec}s per Highspeed-Parallel-Batch einkategorisiert.`);
         loadStatistics();
         if (activeTab === 'chats') loadChats();
       } else {
@@ -1555,8 +1564,89 @@ export default function AdminDashboardPage() {
         )}
       </header>
 
+      {/* Mobile Horizontal Quick-Tab Scrollbar */}
+      <div className="md:hidden flex bg-slate-900 border-b border-slate-800 px-3 py-2 overflow-x-auto gap-1.5 no-scrollbar shrink-0 shadow-inner">
+        <button 
+          onClick={() => setActiveTab('knowledge')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'knowledge' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-brain text-[10px]"></i>
+          <span>Wissen</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('private_knowledge')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'private_knowledge' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-user-lock text-[10px]"></i>
+          <span>Intern</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('solutions')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'solutions' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-circle-check text-[10px] text-emerald-400"></i>
+          <span>Lösungen</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('import')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'import' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-cloud-arrow-up text-[10px]"></i>
+          <span>Import</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('users')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'users' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-users text-[10px]"></i>
+          <span>Benutzer</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('statistics')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'statistics' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-chart-line text-[10px] text-sky-400"></i>
+          <span>Statistik</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'settings' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-sliders text-[10px]"></i>
+          <span>Settings</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('chats')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'chats' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-comments text-[10px] text-sky-400"></i>
+          <span>Chats</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('flagged')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'flagged' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-flag text-[10px]"></i>
+          <span>Geflaggt</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('abusive')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'abusive' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
+          <span>Missbrauch</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('update')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'update' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-brands fa-github text-[10px]"></i>
+          <span>Update</span>
+        </button>
+      </div>
+
       {/* Tabs - Hidden on mobile, visible on desktop */}
-      <div className="hidden md:flex bg-slate-900 border-b border-slate-800 px-6 overflow-x-auto gap-4 scrollbar-none shrink-0">
+      <div className="hidden md:flex bg-slate-900 border-b border-slate-800 px-6 overflow-x-auto gap-4 no-scrollbar shrink-0">
         
         {/* Hauptmenü: Wissen */}
         <div className="flex items-center gap-1 border-r border-slate-800/80 pr-4 my-2">
@@ -3619,24 +3709,46 @@ export default function AdminDashboardPage() {
                     Automatische KI-Kategorisierung aller Support-Chats (läuft im Hintergrund zusätzlich alle 5 Minuten als Cronjob).
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCategorizeAllChats}
-                  disabled={categorizingBotChats || !botStatistics || botStatistics.uncategorizedCount === 0}
-                  className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-                >
-                  {categorizingBotChats ? (
-                    <>
-                      <i className="fa-solid fa-circle-notch animate-spin"></i>
-                      <span>Kategorisiere Chats...</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fa-solid fa-wand-magic-sparkles"></i>
-                      <span>Alle bisherigen Chats jetzt einkategorisieren</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+                  {/* Modus-Auswahl: Unkategorisiert vs. Alle */}
+                  <div className="bg-slate-950 p-1 border border-slate-800 rounded-xl flex items-center text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setCategorizeMode('uncategorized')}
+                      className={`px-3 py-1.5 rounded-lg transition-all text-[11px] ${categorizeMode === 'uncategorized' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                      title="Nur Chats ohne Kategorie einkategorisieren"
+                    >
+                      Nur unkategorisierte ({botStatistics?.uncategorizedCount || 0})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCategorizeMode('all')}
+                      className={`px-3 py-1.5 rounded-lg transition-all text-[11px] ${categorizeMode === 'all' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                      title="Alle Chats komplett mit den neuen Schul-Kategorien neu analysieren"
+                    >
+                      Alle Chats ({botStatistics?.totalChats || 0})
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCategorizeAllChats(categorizeMode)}
+                    disabled={categorizingBotChats || !botStatistics || (categorizeMode === 'uncategorized' && botStatistics.uncategorizedCount === 0)}
+                    className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                  >
+                    {categorizingBotChats ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch animate-spin"></i>
+                        <span>Kategorisiere Chats...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>{categorizeMode === 'all' ? 'Jetzt alle neu kategorisieren' : 'Jetzt einkategorisieren'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {categorizingBotChats && (
@@ -3780,6 +3892,104 @@ export default function AdminDashboardPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Kundenzufriedenheit & Bewertungs-Statistik */}
+            {ratingStatistics && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <i className="fa-solid fa-star text-amber-400"></i>
+                      <span>Kundenzufriedenheit & Ticket-Bewertungen</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Auswertung der 1-5 Sterne Bewertungen und Kundenfeedbacks zu gelösten Tickets.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-slate-950/80 border border-amber-500/30 px-4 py-2 rounded-xl flex items-center gap-2.5">
+                      <div className="text-2xl font-extrabold text-amber-400">
+                        {ratingStatistics.averageRating ? `${ratingStatistics.averageRating}` : '—'}
+                      </div>
+                      <div className="text-left">
+                        <div className="flex gap-0.5 text-amber-400 text-xs">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <i 
+                              key={star} 
+                              className={`fa-star ${star <= Math.round(ratingStatistics.averageRating || 0) ? 'fa-solid' : 'fa-regular opacity-30'}`}
+                            ></i>
+                          ))}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                          {ratingStatistics.totalRatings} Bewertung{ratingStatistics.totalRatings === 1 ? '' : 'en'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rating Distribution Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left: Star Breakdown Bars */}
+                  <div className="bg-slate-950/50 border border-slate-850 p-4 rounded-xl space-y-2.5">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Sterne-Verteilung</h4>
+                    {[5, 4, 3, 2, 1].map((stars) => {
+                      const count = ratingStatistics.breakdown[`stars${stars}`] || 0;
+                      const percent = ratingStatistics.totalRatings > 0 ? Math.round((count / ratingStatistics.totalRatings) * 100) : 0;
+                      return (
+                        <div key={stars} className="flex items-center gap-3 text-xs">
+                          <span className="w-14 font-bold text-slate-300 flex items-center gap-1">
+                            <span>{stars}</span>
+                            <i className="fa-solid fa-star text-amber-400 text-[10px]"></i>
+                          </span>
+                          <div className="flex-1 bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                            <div 
+                              className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            ></div>
+                          </div>
+                          <span className="w-12 text-right font-mono text-slate-400 text-[11px]">
+                            {count} <span className="text-[10px] text-slate-500">({percent}%)</span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right: Recent Feedbacks */}
+                  <div className="bg-slate-950/50 border border-slate-850 p-4 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Neueste Kunden-Feedbacks</h4>
+                    {ratingStatistics.recentFeedbacks.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic py-4 text-center">Noch keine Kundenfeedbacks eingegangen.</p>
+                    ) : (
+                      <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                        {ratingStatistics.recentFeedbacks.map((fb) => (
+                          <div key={fb.id} className="p-2.5 bg-slate-900/70 border border-slate-800 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-slate-200 truncate">{fb.title}</span>
+                              <div className="flex gap-0.5 text-amber-400 text-[10px] shrink-0">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <i key={s} className={`fa-star ${s <= fb.rating ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
+                                ))}
+                              </div>
+                            </div>
+                            {fb.ratingFeedback && (
+                              <p className="text-xs text-slate-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850/80 italic">
+                                "{fb.ratingFeedback}"
+                              </p>
+                            )}
+                            <div className="text-[10px] text-slate-500 flex justify-between items-center">
+                              <span>{fb.creatorEmail}</span>
+                              <span>{parseUtcDate(fb.ratedAt).toLocaleDateString('de-DE')}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

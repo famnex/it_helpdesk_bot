@@ -17,6 +17,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen.' }, { status: 400 });
     }
 
+    // Dateigröße strikt validieren (max. 10 MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Die Datei ist zu groß. Das maximale Limit beträgt 10 MB.' }, { status: 400 });
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 

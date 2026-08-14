@@ -91,9 +91,9 @@ export async function POST(request) {
       const photoFile = formData.get('photo'); // File-Objekt
       
       if (photoFile && photoFile.size > 0) {
-        // Validierung der Dateigröße (max. 4 MB) und des Dateityps
-        if (photoFile.size > 4 * 1024 * 1024) {
-          return NextResponse.json({ error: 'Das Bild darf maximal 4 MB groß sein.' }, { status: 400 });
+        // Validierung der Dateigröße (max. 10 MB) und des Dateityps
+        if (photoFile.size > 10 * 1024 * 1024) {
+          return NextResponse.json({ error: 'Das Bild darf maximal 10 MB groß sein.' }, { status: 400 });
         }
         
         if (!photoFile.type.startsWith('image/')) {

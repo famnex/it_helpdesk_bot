@@ -100,6 +100,12 @@ export default function AgentTicketDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Die Datei überschreitet die maximale Größe von 10 MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     const isImg = file.type.startsWith('image/');
     let previewUrl = null;
     if (isImg) {
@@ -222,8 +228,19 @@ export default function AgentTicketDetailPage() {
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = (e) => {
+    const el = e.target;
+    if (el) {
+      isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    }
+  };
+
+  const scrollToBottom = (force = false) => {
+    if (force || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const loadData = async () => {
@@ -635,7 +652,7 @@ export default function AgentTicketDetailPage() {
           )}
 
           {/* Messages scroll list */}
-          <div className="flex-grow overflow-y-auto p-6 space-y-6">
+          <div onScroll={handleScroll} className="flex-grow overflow-y-auto p-6 space-y-6">
             
             {ticket.status === 'closed' && ticket.solution && (
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto flex items-start gap-4 mb-2 animate-fade-in">
@@ -728,13 +745,13 @@ export default function AgentTicketDetailPage() {
                     <div className={`flex flex-col ${isRightAligned ? 'items-end' : 'items-start'} max-w-full`}>
                       {/* Internal vermerk header */}
                       {isInternalMessage && (
-                        <span className="text-[9px] text-violet-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                           <i className="fa-solid fa-lock text-[8px]"></i>
                           <span>Interner Vermerk (nur Mitarbeiter)</span>
                         </span>
                       )}
                       <div 
-                        className={`${isRightAligned ? (isInternalMessage ? 'bg-violet-950/60 text-violet-200 border border-violet-500/20 rounded-tr-none' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                        className={`${isRightAligned ? (isInternalMessage ? 'bg-amber-950/40 text-amber-100 border-2 border-amber-500/50 rounded-tr-none shadow-amber-950/30' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                       >
                         {msg.imageUrl && (
                           msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
@@ -775,7 +792,7 @@ export default function AgentTicketDetailPage() {
               );
             })}
 
-            {/* Tipp-Indikator ("...") */}
+            {/* Typing Indicator */}
             {isOtherPartyTyping && (
               <div className="flex items-center gap-2 max-w-full animate-fade-in my-2">
                 <div className="w-8 h-8 rounded-xl bg-sky-600/20 border border-sky-500/30 text-sky-400 flex items-center justify-center font-bold text-xs shrink-0">
@@ -805,16 +822,27 @@ export default function AgentTicketDetailPage() {
                 accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv"
               />
 
-              <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex flex-col gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 shadow-inner">
+              <form onSubmit={handleSendReply} className={`max-w-4xl mx-auto flex flex-col gap-3 rounded-2xl p-2.5 shadow-inner transition-all ${
+                isInternal 
+                  ? 'bg-amber-950/20 border-2 border-amber-500/70 ring-1 ring-amber-500/30' 
+                  : 'bg-slate-950 border border-slate-800'
+              }`}>
+                {isInternal && (
+                  <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in mx-1">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+                    <span>INTERNE NOTIZ: Diese Nachricht ist nur für Support-Mitarbeiter sichtbar (Kunde sieht nichts).</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center px-2 border-b border-slate-900 pb-2">
                   <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer select-none">
                     <input 
                       type="checkbox" 
                       checked={isInternal}
                       onChange={(e) => setIsInternal(e.target.checked)}
-                      className="rounded border-slate-800 text-violet-600 bg-transparent focus:ring-0 focus:ring-offset-0"
+                      className="rounded border-slate-800 text-amber-500 bg-transparent focus:ring-0 focus:ring-offset-0"
                     />
-                    <span className="flex items-center gap-1">
+                    <span className={`flex items-center gap-1 font-bold ${isInternal ? 'text-amber-300' : 'text-slate-400'}`}>
                       <i className="fa-solid fa-lock text-[10px]"></i>
                       <span>Als internen Vermerk speichern (Kunde sieht das nicht)</span>
                     </span>
@@ -868,7 +896,7 @@ export default function AgentTicketDetailPage() {
                         handleSendReply(e);
                       }
                     }}
-                    placeholder={isInternal ? "Schreibe eine interne Notiz..." : "Antworte dem Kunden..."}
+                    placeholder={isInternal ? "Schreibe eine INTERNE Notiz (nur für Kollegen sichtbar)..." : "Antworte dem Kunden..."}
                     rows="1"
                     className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[40px] py-2 px-2 text-sm text-slate-200 placeholder-slate-600 outline-none"
                     disabled={isSending}
@@ -876,9 +904,14 @@ export default function AgentTicketDetailPage() {
                   <button 
                     type="submit"
                     disabled={(!replyText.trim() && !attachment) || isSending}
-                    className={`p-3 transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md text-white ${isInternal ? 'bg-violet-600 hover:bg-violet-700' : 'bg-sky-600 hover:bg-sky-700'}`}
+                    className={`p-3 transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md text-white ${
+                      isInternal 
+                        ? 'bg-amber-600 hover:bg-amber-500' 
+                        : 'bg-sky-600 hover:bg-sky-700'
+                    }`}
+                    title={isInternal ? "Interne Notiz speichern" : "Antwort senden"}
                   >
-                    <i className="fa-solid fa-paper-plane text-sm"></i>
+                    <i className={isInternal ? "fa-solid fa-floppy-disk text-sm" : "fa-solid fa-paper-plane text-sm"}></i>
                   </button>
                 </div>
               </form>

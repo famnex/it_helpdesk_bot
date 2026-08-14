@@ -349,19 +349,30 @@ export default function CustomerChatPage() {
     return () => clearInterval(interval);
   }, [chatId, user]);
 
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = (e) => {
+    const el = e.target;
+    if (el) {
+      isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping, isAgentTyping, showTicketPrompt]);
  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (force = false) => {
+    if (force || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
  
   const handlePhotoSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      alert('Das Foto darf maximal 4 MB groß sein.');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Das Foto darf maximal 10 MB groß sein.');
       return;
     }
     if (!file.type.startsWith('image/')) {
@@ -1079,7 +1090,7 @@ export default function CustomerChatPage() {
         )}
  
         {/* Chat History */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
+        <div onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
           <div className="flex justify-center">
             <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
               Verschlüsselte KI-Sitzung

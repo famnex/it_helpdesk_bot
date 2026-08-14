@@ -24,9 +24,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Ungültiges Dateiformat. Erlaubt sind JPG, PNG, GIF und WEBP.' }, { status: 400 });
     }
 
-    // Dateigröße validieren (max 2 MB)
-    if (file.size > 2 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Die Datei ist zu groß (maximal 2 MB).' }, { status: 400 });
+    // Dateigröße validieren (max 10 MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Die Datei ist zu groß (maximal 10 MB).' }, { status: 400 });
     }
 
     // Datei einlesen

@@ -376,8 +376,86 @@ ${chatText}`;
 }
 
 /**
- * Kategorisiert eine Bot-Konversation basierend auf den Chatnachrichten.
- * Orientiert sich an bestehenden Wissens-Kategorien oder liefert eine prägnante neue Kategorie.
+ * Granulare, standardisierte IT-Kategorien im Schulkontext
+ */
+export const CANONICAL_CATEGORIES = [
+  'Schulportal',
+  'Moodle',
+  'WebUntis',
+  'E-Mail',
+  'Passwörter',
+  'Benutzerkonten',
+  'WLAN',
+  'Netzwerk',
+  'Smartboards',
+  'Beamer',
+  'Dokumentenkameras',
+  'Stationäre Computer',
+  'Laptops & Tablets',
+  'Drucker',
+  'Kopierer',
+  'Office 365',
+  'Software',
+  'Raumbuchung',
+  'Sonstige Hardware',
+  'Sonstiges'
+];
+
+/**
+ * Regelbasierte Erkennung von Kernbegriffen zur Absicherung und Verfeinerung
+ */
+export function matchRuleBasedCategory(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+
+  // 1. Schul-Plattformen
+  if (/\b(schulportal|sph|schulportal[\s-]?hessen|lanis|mein[\s-]?unterricht)\b/i.test(lower)) return 'Schulportal';
+  if (/\b(moodle|lernplattform)\b/i.test(lower)) return 'Moodle';
+  if (/\b(webuntis|untis|stundenplan|vertretungsplan|klassenbuch)\b/i.test(lower)) return 'WebUntis';
+
+  // 2. Mail & Konten
+  if (/\b(outlook|e-mail|email|postfach|webmail|thunderbird|imap|smtp|dienstmail|mailadresse)\b/i.test(lower)) return 'E-Mail';
+  if (/\b(passwort|kennwort|passwörter|passwort-reset|passwort[\s-]?vergessen)\b/i.test(lower)) return 'Passwörter';
+  if (/\b(benutzerkonto|benutzerdaten|erstanmeldung|kontosperre|lusd|schülerkonto|account[\s-]?anlage|benutzername)\b/i.test(lower)) return 'Benutzerkonten';
+
+  // 3. Raumbuchung & Ressourcen
+  if (/\b(raumbuchung|raumreservierung|raumbelegung|fachraum|medienwagen|computerausleihe)\b/i.test(lower) || 
+      (/\b(buchen|reservieren|ausleihen)\b/i.test(lower) && /\b(raum|fachraum|computerraum|wagen)\b/i.test(lower))) {
+    return 'Raumbuchung';
+  }
+
+  // 4. Office 365 & Spezifische Software (vor generischen Hardware-Wörtern wie "Rechner/PC")
+  if (/\b(office[\s-]?365|ms[\s-]?office|word|excel|powerpoint|teams|onedrive|m365)\b/i.test(lower)) return 'Office 365';
+  if (/\b(snv|snvconsole|schulnetzverwalter|browser|pdf-reader|vlc|fachsoftware)\b/i.test(lower)) return 'Software';
+
+  // 5. Druck & Kopie
+  if (/\b(drucker|drucken|druckauftrag|kyocera|follow-me|netzwerkdrucker)\b/i.test(lower)) return 'Drucker';
+  if (/\b(kopierer|großkopierer|kopieren|scan-to-mail|kopierkarte)\b/i.test(lower)) return 'Kopierer';
+
+  // 6. Konnektivität
+  if (/\b(wlan|wifi|wi-fi|eduroam|wlan-zertifikat)\b/i.test(lower)) return 'WLAN';
+  if (/\b(netzwerk|internet|netzlaufwerk|lan-kabel|netzwerkdose|vpn|serververbindung)\b/i.test(lower)) return 'Netzwerk';
+
+  // 7. Spezifische Präsentations- & Medientechnik
+  if (/\b(smartboard|smartboards|interaktives[\s-]?display|touchdisplay)\b/i.test(lower)) return 'Smartboards';
+  if (/\b(beamer|projektor|deckenbeamer|leinwand)\b/i.test(lower)) return 'Beamer';
+  if (/\b(dokumentenkamera|dokumentenkameras|elmo|visualizer)\b/i.test(lower)) return 'Dokumentenkameras';
+
+  // 8. Mobile & Stationäre Computer
+  if (/\b(laptop|laptops|notebook|ipad|ipads|tablet|tablets)\b/i.test(lower)) return 'Laptops & Tablets';
+  if (/\b(lehrer-pc|schüler-pc|computerecke|pc|computer|stationärer[\s-]?computer|rechner|tower|desktop-pc)\b/i.test(lower)) return 'Stationäre Computer';
+
+  // 9. Allgemeine Software
+  if (/\b(software|programm|app|windows)\b/i.test(lower)) return 'Software';
+
+  // 10. Sonstige Hardware
+  if (/\b(hdmi|kabel|adapter|vga|usb|lautsprecher|ton|audiokabel|maus|tastatur|headset|flackert|kein bild)\b/i.test(lower)) return 'Sonstige Hardware';
+
+  return null;
+}
+
+/**
+ * Kategorisiert eine Bot-Konversation automatisch in eine der spezifischen Schul-IT-Kategorien.
  */
 export async function categorizeChatCategory(chatMessages, existingCategories = []) {
   const { extractionModel } = getModelNames();
@@ -392,33 +470,62 @@ export async function categorizeChatCategory(chatMessages, existingCategories = 
     chatText += `${m.sender === 'user' ? 'Benutzer' : 'Support-Assistent'}: ${m.text}\n`;
   });
 
-  const categoriesList = existingCategories.length > 0
-    ? existingCategories.join(', ')
-    : 'WLAN, Moodle, Schulportal, WebUntis, Hardware, Drucker, E-Mail, Benutzerkonto, Sonstiges';
+  // Direkte Regel-Prüfung für eindeutige Fachbegriffe
+  const directRuleMatch = matchRuleBasedCategory(chatText);
 
-  const prompt = `Analysiere die folgende Bot-Konversation und ordne sie genau EINER Thema-Kategorie zu.
-Bevorzuge eine der folgenden vorhandenen Kategorien:
-[${categoriesList}]
+  const mergedCategories = Array.from(new Set([...CANONICAL_CATEGORIES, ...existingCategories]));
 
-Falls keine davon passt, wähle ein kurzes sachliches Substantiv (1-2 Wörter), wie z. B. "Drucker", "WLAN", "Moodle", "Hardware", "Software", "Netzwerk", "E-Mail", "Passwort".
+  const prompt = `Du bist ein hochpräziser IT-Helpdesk-Klassifikator für den Schulbereich.
+Analysiere die folgende Bot-Konversation und ordne sie genau EINER spezifischen Kategorie zu.
 
-Antworte AUSSCHLIESSLICH mit dem reinen Kategorienamen (ohne Satzzeichen, ohne Anführungszeichen, ohne Markdown).
+Verfügbare Kategorien (wähle genau eine):
+- "Schulportal": Schulportal Hessen (SPH), Einwahlen, Module, Mein Unterricht, Pädagogische Organisation.
+- "Moodle": Moodle-Lernplattform, Kurse, Aufgaben, Testabgaben.
+- "WebUntis": Digitaler Stundenplan, Vertretungsplan, Klassenbuch, Untis-App.
+- "E-Mail": Schul-E-Mail-Postfächer, Outlook, Webmail, Thunderbird, IMAP, SMTP, Dienstmail.
+- "Passwörter": Passwort vergessen, Kennwort zurücksetzen, Login-Passwort ändern.
+- "Benutzerkonten": Account-Erstellung, Benutzerdaten, Kontosperre, LUSD, Benutzername.
+- "WLAN": Schul-WLAN (Campus-WiFi, eduroam), WLAN-Zertifikate, WLAN-Verbindungsprobleme.
+- "Netzwerk": LAN-Kabel, Netzwerkdosen, Netzlaufwerke (H:, L:, M:), VPN, Serverzugriff.
+- "Smartboards": Smartboards, interaktive Touchdisplays, Board-Software.
+- "Beamer": Deckenbeamer, Projektoren, Projektionsleinwand.
+- "Dokumentenkameras": Dokumentenkameras, Elmo, Visualizer.
+- "Stationäre Computer": Lehrer-PC, Schüler-PCs in Computerräumen, PC-Tower, Monitor, Tastatur/Maus.
+- "Laptops & Tablets": Schul-Laptops, iPads, Tablets, mobile Geräte.
+- "Drucker": Netzwerkdrucker, Druckertreiber, Kyocera, Follow-Me, Druckprobleme.
+- "Kopierer": Großkopierer, Kopieren, Scan-to-Mail, Kopierkarten, Toner.
+- "Office 365": MS Office (Word, Excel, PowerPoint), Teams, OneDrive, Microsoft 365 Lizenzen.
+- "Software": Schulnetzverwalter (snvConsole), PDF-Reader, Browser, Windows-System, Fachprogramme.
+- "Raumbuchung": Reservierung von Fachräumen (z. B. Computerräume), Medienwagen, Raumbelegung.
+- "Sonstige Hardware": Adapter, HDMI/VGA-Kabel, USB-Hubs, Lautsprecher/Ton.
+- "Sonstiges": Nur wenn es in keines der oberen Themen passt.
+
+Regeln:
+1. Antworte AUSSCHLIESSLICH mit dem reinen Kategorienamen aus der Liste oben.
+2. Keine Erklärungen, keine Satzzeichen, kein Markdown.
 
 Chatverlauf:
 ${chatText}`;
 
   const payload = {
-    contents: [{ parts: [{ text: prompt }] }]
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1 }
   };
 
   try {
     const rawCategory = await callGemini(extractionModel, payload);
-    if (!rawCategory) return 'Sonstiges';
-    const cleanCategory = rawCategory.trim().replace(/^["']|["']$/g, '').replace(/[.#]$/, '');
-    return cleanCategory || 'Sonstiges';
+    if (!rawCategory) return directRuleMatch || 'Sonstiges';
+    let cleanCategory = rawCategory.trim().replace(/^["'`]|["'`]$/g, '').replace(/[.#]$/, '');
+    
+    if ((!cleanCategory || cleanCategory.toLowerCase() === 'sonstiges') && directRuleMatch) {
+      return directRuleMatch;
+    }
+
+    const matched = mergedCategories.find(c => c.toLowerCase() === cleanCategory.toLowerCase());
+    return matched || cleanCategory || directRuleMatch || 'Sonstiges';
   } catch (err) {
     console.error('Fehler bei categorizeChatCategory:', err);
-    return 'Sonstiges';
+    return directRuleMatch || 'Sonstiges';
   }
 }
 
@@ -432,17 +539,13 @@ export async function categorizeChatBatch(chatsBatch, existingCategories = []) {
   if (!chatsBatch || chatsBatch.length === 0) return {};
   const { extractionModel } = getModelNames();
 
-  const categoriesList = existingCategories.length > 0
-    ? existingCategories.join(', ')
-    : 'WLAN, Moodle, Schulportal, WebUntis, Hardware, Drucker, E-Mail, Benutzerkonto, Sonstiges';
+  const mergedCategories = Array.from(new Set([...CANONICAL_CATEGORIES, ...existingCategories]));
 
-  let batchPromptText = `Hier sind mehrere unabhängige Support-Chats. Ordne jeden Chat genau EINER Thema-Kategorie zu.
-Bevorzuge nach Möglichkeit bestehende Kategorien aus folgender Liste:
-[${categoriesList}]
+  let batchPromptText = `Du bist ein hochpräziser IT-Helpdesk-Klassifikator für den Schulbereich.
+Hier sind mehrere unabhängige Support-Chats. Ordne jeden Chat genau EINER der folgenden Kategorien zu:
+[Schulportal, Moodle, WebUntis, E-Mail, Passwörter, Benutzerkonten, WLAN, Netzwerk, Smartboards, Beamer, Dokumentenkameras, Stationäre Computer, Laptops & Tablets, Drucker, Kopierer, Office 365, Software, Raumbuchung, Sonstige Hardware, Sonstiges]
 
-Falls für einen Chat keine dieser Kategorien passt, erstelle eine neue kurze Kategorie (1-2 Wörter), wie z.B. "Drucker", "WLAN", "Moodle", "Hardware", "Software", "Netzwerk", "E-Mail", "Passwort".
-
-Antworte AUSSCHLIESSLICH im folgenden gültigen JSON-Format (keine Erklärungen, kein Markdown-Codeblock):
+Antworte AUSSCHLIESSLICH im folgenden gültigen JSON-Format:
 {
   "CHAT_ID_1": "KategorieName",
   "CHAT_ID_2": "KategorieName"
@@ -463,18 +566,39 @@ Hier sind die Chats:\n`;
 
   const payload = {
     contents: [{ parts: [{ text: batchPromptText }] }],
-    generationConfig: { responseMimeType: "application/json" }
+    generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
   };
 
   try {
     const rawResponse = await callGemini(extractionModel, payload);
     const cleanJson = rawResponse.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
     const mapping = JSON.parse(cleanJson);
-    return mapping;
+    
+    // Bereinige und standardisiere Kategorien
+    const normalized = {};
+    for (const chat of chatsBatch) {
+      const cId = chat.id;
+      const cat = mapping[cId];
+      const chatAllText = (chat.messages || []).map(m => m.text).join(' ');
+      const ruleMatch = matchRuleBasedCategory(chatAllText);
+
+      const cleanCat = cat ? String(cat).trim().replace(/^["'`]|["'`]$/g, '').replace(/[.#]$/, '') : '';
+      const matched = mergedCategories.find(c => c.toLowerCase() === cleanCat.toLowerCase());
+
+      if ((!matched || matched.toLowerCase() === 'sonstiges') && ruleMatch) {
+        normalized[cId] = ruleMatch;
+      } else {
+        normalized[cId] = matched || cleanCat || ruleMatch || 'Sonstiges';
+      }
+    }
+    return normalized;
   } catch (err) {
     console.error('Fehler bei Batch-Kategorisierung mit Gemini:', err);
     const fallbackMapping = {};
-    chatsBatch.forEach(c => { fallbackMapping[c.id] = 'Sonstiges'; });
+    chatsBatch.forEach(c => {
+      const chatAllText = (c.messages || []).map(m => m.text).join(' ');
+      fallbackMapping[c.id] = matchRuleBasedCategory(chatAllText) || 'Sonstiges';
+    });
     return fallbackMapping;
   }
 }

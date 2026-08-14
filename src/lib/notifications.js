@@ -131,7 +131,7 @@ export async function flushPendingNotifications() {
 }
 
 // Serverweiter automatischer Timer: alle 30 Sekunden abgelaufene Puffer (>= 5 Minuten alt) flashen & versenden
-if (typeof setInterval !== 'undefined') {
+if (typeof setInterval !== 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build') {
   if (!global._notificationFlushInterval) {
     global._notificationFlushInterval = setInterval(() => {
       flushPendingNotifications().catch(err => console.error('[Notification-Queue] Background Flush Fehler:', err));

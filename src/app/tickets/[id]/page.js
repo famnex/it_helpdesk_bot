@@ -41,6 +41,13 @@ export default function CustomerTicketDetailPage() {
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
   const [partnerPresence, setPartnerPresence] = useState(null);
 
+  // Rating States
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+
   // Flagging Message States
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [flaggingMessageId, setFlaggingMessageId] = useState(null);
@@ -72,7 +79,71 @@ export default function CustomerTicketDetailPage() {
     scrollToBottom();
   }, [messages, isOtherPartyTyping]);
 
-  // Live Syncing: Nachrichten & Tipp-Status ("...") alle 1.5 Sekunden prüfen
+  // SSE Live Stream Setup mit Fallback auf 5s-Polling
+  useEffect(() => {
+    if (!id || !user) return;
+
+    let eventSource = null;
+    try {
+      eventSource = new EventSource(`/api/live/sse?roomType=ticket&roomId=${id}&myRole=customer&myEmail=${encodeURIComponent(user.email || '')}`);
+      
+      eventSource.addEventListener('messages', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.newMessages && data.newMessages.length > 0) {
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id));
+              if (toAdd.length === 0) return prev;
+              const formattedToAdd = toAdd.map(m => ({
+                ...m,
+                senderRole: m.senderRole || 'agent',
+                senderEmail: m.senderEmail,
+                senderName: m.senderName || 'Support-Mitarbeiter',
+                text: m.text,
+                createdAt: m.createdAt
+              }));
+              return [...prev, ...formattedToAdd];
+            });
+          }
+        } catch (err) {}
+      });
+
+      eventSource.addEventListener('ticket_meta', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.ticketMeta) {
+            setTicket(prev => prev ? ({
+              ...prev,
+              status: data.ticketMeta.status,
+              solution: data.ticketMeta.solution,
+              closedAt: data.ticketMeta.closedAt,
+              closedByName: data.ticketMeta.closedByName,
+              rating: data.ticketMeta.rating,
+              ratingFeedback: data.ticketMeta.ratingFeedback,
+              assignedAgentName: data.ticketMeta.assignedAgentName
+            }) : prev);
+          }
+        } catch (err) {}
+      });
+
+      eventSource.addEventListener('sync', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          setIsOtherPartyTyping(!!data.isOtherPartyTyping);
+          if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
+        } catch (err) {}
+      });
+    } catch (err) {
+      console.warn('SSE nicht verfügbar, nutze Polling.');
+    }
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
+  }, [id, user]);
+
+  // Live Syncing Fallback-Polling alle 5 Sekunden
   useEffect(() => {
     if (!id || !user) return;
 
@@ -86,6 +157,25 @@ export default function CustomerTicketDetailPage() {
           const data = await res.json();
           setIsOtherPartyTyping(!!data.isOtherPartyTyping);
           if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
+
+          if (data.ticketMeta) {
+            setTicket(prev => {
+              if (!prev) return prev;
+              if (prev.status !== data.ticketMeta.status || prev.solution !== data.ticketMeta.solution || prev.rating !== data.ticketMeta.rating) {
+                return {
+                  ...prev,
+                  status: data.ticketMeta.status,
+                  solution: data.ticketMeta.solution,
+                  closedAt: data.ticketMeta.closedAt,
+                  closedByName: data.ticketMeta.closedByName,
+                  rating: data.ticketMeta.rating,
+                  ratingFeedback: data.ticketMeta.ratingFeedback,
+                  assignedAgentName: data.ticketMeta.assignedAgentName
+                };
+              }
+              return prev;
+            });
+          }
 
           if (data.newMessages && data.newMessages.length > 0) {
             setMessages(prev => {
@@ -133,8 +223,19 @@ export default function CustomerTicketDetailPage() {
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = (e) => {
+    const el = e.target;
+    if (el) {
+      isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    }
+  };
+
+  const scrollToBottom = (force = false) => {
+    if (force || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const loadTicketDetails = async () => {
@@ -282,6 +383,27 @@ export default function CustomerTicketDetailPage() {
     }
   };
 
+  const handleSubmitRating = async (starCount) => {
+    const finalRating = starCount || selectedRating;
+    if (!finalRating) return;
+    setIsSubmittingRating(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}/rating`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: finalRating, feedback: ratingComment })
+      });
+      if (res.ok) {
+        setRatingSubmitted(true);
+        setTicket(prev => prev ? ({ ...prev, rating: finalRating, ratingFeedback: ratingComment }) : prev);
+      }
+    } catch (e) {
+      console.error('Fehler beim Senden der Bewertung:', e);
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
   const handleSendReply = async (e) => {
     e.preventDefault();
     if (!replyText.trim() || isSending) return;
@@ -370,17 +492,99 @@ export default function CustomerTicketDetailPage() {
         <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20 min-h-0 w-full">
           
           {/* Nachrichtenhistorie */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
+          <div onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
             
             {/* Lösungsbox oben anzeigen, falls geschlossen */}
             {ticket.status === 'closed' && ticket.solution && (
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto flex items-start gap-4 mb-2 animate-fade-in">
                 <div className="text-emerald-500 bg-emerald-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-circle-check text-xl"></i></div>
-                <div>
+                <div className="flex-1">
                   <h4 className="text-sm font-bold text-emerald-200">Dieses Ticket wurde als gelöst markiert</h4>
                   <p className="text-xs font-bold text-slate-300 mt-2">Bestätigte Lösung:</p>
                   <p className="text-xs text-slate-400 mt-1 bg-slate-950 p-3 rounded-lg border border-slate-800">{ticket.solution}</p>
                 </div>
+              </div>
+            )}
+
+            {/* Kundenzufriedenheits-Rating (1-5 Sterne) */}
+            {ticket.status === 'closed' && (
+              <div className="bg-slate-900/90 border border-violet-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto mb-4 animate-fade-in">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                      <i className="fa-solid fa-star text-sm"></i>
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white">Wie zufrieden warst du mit unserem Support?</h4>
+                      <p className="text-[11px] text-slate-400">Dein Feedback hilft uns, unseren IT-Helpdesk kontinuierlich zu verbessern.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {ticket.rating || ratingSubmitted ? (
+                  <div className="bg-slate-950/60 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1 text-amber-400 text-base">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <i key={star} className={`fa-star ${star <= (ticket.rating || selectedRating) ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold text-emerald-300">Vielen Dank für deine Bewertung!</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Bewertet ({ticket.rating || selectedRating}/5)</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-semibold mr-1">Deine Bewertung:</span>
+                      <div className="flex items-center gap-1.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onMouseEnter={() => setHoverRating(star)}
+                            onMouseLeave={() => setHoverRating(0)}
+                            onClick={() => {
+                              setSelectedRating(star);
+                              handleSubmitRating(star);
+                            }}
+                            className="p-1 text-xl sm:text-2xl transition-transform hover:scale-125 focus:outline-none cursor-pointer"
+                            title={`${star} von 5 Sternen`}
+                          >
+                            <i className={`fa-star ${star <= (hoverRating || selectedRating) ? 'fa-solid text-amber-400' : 'fa-regular text-slate-600'}`}></i>
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold text-amber-300 ml-2">
+                        {hoverRating === 5 || selectedRating === 5 ? 'Hervorragend! ⭐⭐⭐⭐⭐' :
+                         hoverRating === 4 || selectedRating === 4 ? 'Sehr gut! ⭐⭐⭐⭐' :
+                         hoverRating === 3 || selectedRating === 3 ? 'Gut ⭐⭐⭐' :
+                         hoverRating === 2 || selectedRating === 2 ? 'Verbesserungswürdig ⭐⭐' :
+                         hoverRating === 1 || selectedRating === 1 ? 'Unzufrieden ⭐' : ''}
+                      </span>
+                    </div>
+
+                    {selectedRating > 0 && (
+                      <div className="flex flex-col sm:flex-row gap-2 pt-2 animate-fade-in">
+                        <input
+                          type="text"
+                          value={ratingComment}
+                          onChange={(e) => setRatingComment(e.target.value)}
+                          placeholder="Optionales Feedback oder Kommentar hinterlassen..."
+                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSubmitRating(selectedRating)}
+                          disabled={isSubmittingRating}
+                          className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSubmittingRating ? 'Wird gespeichert...' : 'Feedback senden'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

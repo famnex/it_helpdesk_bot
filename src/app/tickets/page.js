@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 export default function CustomerTicketsPage() {
   const [tickets, setTickets] = useState([]);
+  const [ticketCounts, setTicketCounts] = useState({ active: 0, closed: 0 });
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all', 'active', 'closed'
@@ -38,12 +39,14 @@ export default function CustomerTicketsPage() {
 
   const loadTickets = async (currentUser) => {
     try {
-      const res = await fetch('/api/tickets');
+      const res = await fetch('/api/tickets?status=all');
       if (res.ok) {
         const data = await res.json();
-        // Nur Tickets anzeigen, bei denen der eingeloggte Benutzer der Ersteller ist
         const myTickets = (data.tickets || []).filter(t => t.creatorEmail === currentUser?.email);
         setTickets(myTickets);
+        if (data.counts) {
+          setTicketCounts(data.counts);
+        }
       }
     } catch (err) {
       console.error('Fehler beim Laden der Tickets:', err);
@@ -137,19 +140,19 @@ export default function CustomerTicketsPage() {
                 onClick={() => setFilter('all')}
                 className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'all' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                Alle ({tickets.length})
+                Alle ({ticketCounts.active + ticketCounts.closed})
               </button>
               <button 
                 onClick={() => setFilter('active')}
                 className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'active' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                Aktiv ({tickets.filter(t => t.status !== 'closed').length})
+                Aktiv ({ticketCounts.active})
               </button>
               <button 
                 onClick={() => setFilter('closed')}
                 className={`px-3.5 py-1.5 rounded-lg transition-all ${filter === 'closed' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                Geschlossen ({tickets.filter(t => t.status === 'closed').length})
+                Geschlossen ({ticketCounts.closed})
               </button>
             </div>
 

@@ -56,6 +56,23 @@ export async function GET(request) {
         }
         return m;
       });
+
+      // Ticket-Metadaten für Live-Statusaktualisierung laden
+      var ticketMeta = null;
+      try {
+        const tRow = db.prepare(`
+          SELECT t.id, t.status, t.solution, t.assigned_agent_id as assignedAgentId,
+                 u.name as assignedAgentName, u.email as assignedAgentEmail,
+                 t.closed_at as closedAt, t.closed_by_name as closedByName,
+                 t.rating, t.rating_feedback as ratingFeedback, t.rated_at as ratedAt
+          FROM tickets t
+          LEFT JOIN users u ON t.assigned_agent_id = u.id
+          WHERE t.id = ?
+        `).get(roomId);
+        if (tRow) {
+          ticketMeta = tRow;
+        }
+      } catch (e) {}
     } else if (roomType === 'chat') {
       // Abfragen neuer Chat-Nachrichten ab lastMsgId
       const rows = db.prepare(`
@@ -273,7 +290,8 @@ export async function GET(request) {
       newMessages,
       newTicketMessages,
       isOtherPartyTyping,
-      partnerPresence
+      partnerPresence,
+      ticketMeta: typeof ticketMeta !== 'undefined' ? ticketMeta : null
     });
   } catch (err) {
     console.error('Fehler bei /api/live/sync GET:', err);

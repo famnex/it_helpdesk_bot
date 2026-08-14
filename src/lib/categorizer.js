@@ -40,20 +40,33 @@ export async function categorizeOneChat(chatId) {
 }
 
 /**
- * Durchläuft unkategorisierte Chats und kategorisiert diese ULTRA-SCHNELL & PARALLEL IN GROSSEN BATCHES.
- * Verarbeitet z. B. 30 Chats pro KI-Aufruf, mit bis zu 3 parallelen Worker-Requests.
+ * Durchläuft Chats und kategorisiert diese ULTRA-SCHNELL & PARALLEL IN GROSSEN BATCHES.
+ * @param {Object} options
+ * @param {'uncategorized'|'all'} options.mode - 'uncategorized' (nur ohne/mit Sonstiges) oder 'all' (alle Chats komplett neu)
+ * @param {number} options.totalLimit
+ * @param {number} options.batchSize
+ * @param {number} options.concurrency
  */
-export async function categorizeUncategorizedChats(totalLimit = 300, batchSize = 30, concurrency = 3) {
+export async function categorizeChats({ mode = 'uncategorized', totalLimit = 500, batchSize = 30, concurrency = 3 } = {}) {
   const startTime = Date.now();
   try {
-    const uncategorizedChats = db.prepare(`
-      SELECT id FROM chats 
-      WHERE category IS NULL OR category = '' 
-      ORDER BY created_at ASC 
-      LIMIT ?
-    `).all(totalLimit);
+    let targetChats = [];
+    if (mode === 'all') {
+      targetChats = db.prepare(`
+        SELECT id FROM chats 
+        ORDER BY created_at ASC 
+        LIMIT ?
+      `).all(totalLimit);
+    } else {
+      targetChats = db.prepare(`
+        SELECT id FROM chats 
+        WHERE category IS NULL OR category = '' 
+        ORDER BY created_at ASC 
+        LIMIT ?
+      `).all(totalLimit);
+    }
 
-    if (uncategorizedChats.length === 0) {
+    if (targetChats.length === 0) {
       const remainingRow = db.prepare(`
         SELECT COUNT(*) as count FROM chats 
         WHERE category IS NULL OR category = ''
@@ -69,8 +82,8 @@ export async function categorizeUncategorizedChats(totalLimit = 300, batchSize =
 
     // Alle Batches vorbereiten
     const batches = [];
-    for (let i = 0; i < uncategorizedChats.length; i += batchSize) {
-      const chunk = uncategorizedChats.slice(i, i + batchSize);
+    for (let i = 0; i < targetChats.length; i += batchSize) {
+      const chunk = targetChats.slice(i, i + batchSize);
       const chatsPayload = chunk.map(chat => {
         const messages = db.prepare(`
           SELECT sender, text FROM chat_messages 
@@ -132,23 +145,32 @@ export async function categorizeUncategorizedChats(totalLimit = 300, batchSize =
       durationMs
     };
   } catch (err) {
-    console.error('Fehler bei categorizeUncategorizedChats:', err);
+    console.error('Fehler bei categorizeChats:', err);
     return { processedCount: 0, remainingCount: 0, durationMs: Date.now() - startTime };
   }
+}
+
+/**
+ * Kompatibilitäts-Wrapper für automatische Cronjobs
+ */
+export async function categorizeUncategorizedChats(totalLimit = 300, batchSize = 30, concurrency = 3) {
+  return categorizeChats({ mode: 'uncategorized', totalLimit, batchSize, concurrency });
 }
 
 /**
  * Startet den 5-Minuten-Cronjob für die automatische Kategorisierung.
  */
 export function startCategorizerCron() {
-  if (cronInterval) return;
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
+  if (global._cronSingletonStarted) return;
+  global._cronSingletonStarted = true;
   
   console.log('[Cron] Starte Highspeed-5-Minuten-Kategorisierungs-Cronjob für Bot-Chats...');
   
-  // Erstmaliger Durchlauf nach 5 Sekunden
+  // Erstmaliger Durchlauf nach 10 Sekunden
   setTimeout(() => {
     categorizeUncategorizedChats(60, 30, 2);
-  }, 5000);
+  }, 10000);
 
   // Alle 5 Minuten ausführen (5 * 60 * 1000 ms)
   cronInterval = setInterval(() => {
