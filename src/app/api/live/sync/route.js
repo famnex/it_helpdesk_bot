@@ -192,25 +192,57 @@ export async function GET(request) {
       }
     };
 
+    const getActiveSupportPresence = (specificAgent = null) => {
+      // 1. Falls ein spezifischer Agent zugewiesen ist und online ist (< 2 Min):
+      if (specificAgent && specificAgent.lastActiveAt) {
+        const pres = formatPresence(specificAgent.lastActiveAt, `IT-Support (${specificAgent.name || 'Agent'})`);
+        if (pres.isOnline) return pres;
+      }
+
+      // 2. Prüfen, ob irgendein Support-Agent oder Admin aktuell online ist (< 2 Min):
+      const onlineAgents = db.prepare(`
+        SELECT name, email, role, last_active_at as lastActiveAt 
+        FROM users 
+        WHERE role IN ('agent', 'admin') AND last_active_at IS NOT NULL
+        ORDER BY last_active_at DESC
+      `).all();
+
+      const activeNow = onlineAgents.find(a => {
+        const d = parseUtc(a.lastActiveAt);
+        return d && (Date.now() - d.getTime()) < 2 * 60 * 1000;
+      });
+
+      if (activeNow) {
+        return {
+          isOnline: true,
+          statusText: `IT-Support (${activeNow.name || 'Team'}) ist online`,
+          label: 'Online'
+        };
+      }
+
+      // 3. Wenn niemand aktuell online ist:
+      if (specificAgent && specificAgent.lastActiveAt) {
+        return formatPresence(specificAgent.lastActiveAt, `IT-Support (${specificAgent.name || 'Agent'})`);
+      } else if (onlineAgents.length > 0 && onlineAgents[0].lastActiveAt) {
+        return formatPresence(onlineAgents[0].lastActiveAt, 'IT-Support-Team');
+      }
+
+      return { isOnline: false, statusText: 'IT-Support-Team offline', label: 'Offline' };
+    };
+
     if (roomType === 'chat') {
       const chatRow = db.prepare('SELECT ticket_created as ticketCreated, user_email as userEmail, customer_last_active_at as custActive FROM chats WHERE id = ?').get(roomId);
       if (myRole === 'customer') {
+        let assignedAgent = null;
         if (chatRow && chatRow.ticketCreated === 1) {
-          const agentRow = db.prepare(`
+          assignedAgent = db.prepare(`
             SELECT u.name, u.email, u.last_active_at as lastActiveAt 
             FROM tickets t 
             JOIN users u ON t.assigned_agent_id = u.id 
             WHERE t.chat_id = ?
           `).get(roomId);
-          if (agentRow) {
-            partnerPresence = formatPresence(agentRow.lastActiveAt, `IT-Support (${agentRow.name || 'Agent'})`);
-          } else {
-            partnerPresence = formatPresence(null, 'IT-Support-Team');
-          }
-        } else {
-          // KI-Bot ist 24/7 online
-          partnerPresence = { isOnline: true, statusText: 'KI-Bot online (24/7)', label: 'Online' };
         }
+        partnerPresence = getActiveSupportPresence(assignedAgent);
       } else {
         // Admin / Agent sieht den echten Kunden-Status
         let custActiveAt = chatRow ? chatRow.custActive : null;
@@ -244,12 +276,11 @@ export async function GET(request) {
     } else if (roomType === 'ticket') {
       const ticketRow = db.prepare('SELECT creator_email as creatorEmail, assigned_agent_id as assignedAgentId, updated_at as updatedAt FROM tickets WHERE id = ?').get(roomId);
       if (myRole === 'customer') {
+        let assignedAgent = null;
         if (ticketRow && ticketRow.assignedAgentId) {
-          const agentRow = db.prepare('SELECT name, last_active_at as lastActiveAt FROM users WHERE id = ?').get(ticketRow.assignedAgentId);
-          partnerPresence = formatPresence(agentRow ? agentRow.lastActiveAt : null, agentRow ? `IT-Support (${agentRow.name})` : 'IT-Support-Team');
-        } else {
-          partnerPresence = formatPresence(null, 'IT-Support-Team');
+          assignedAgent = db.prepare('SELECT name, email, last_active_at as lastActiveAt FROM users WHERE id = ?').get(ticketRow.assignedAgentId);
         }
+        partnerPresence = getActiveSupportPresence(assignedAgent);
       } else {
         let custActiveAt = null;
         if (ticketRow && ticketRow.creatorEmail) {

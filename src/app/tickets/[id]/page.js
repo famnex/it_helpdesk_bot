@@ -589,8 +589,6 @@ export default function CustomerTicketDetailPage() {
             )}
 
             {messages.map((msg, index) => {
-              const isMyMessage = user ? msg.senderEmail === user.email : msg.senderRole === 'customer';
-              const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
               
               if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
@@ -607,26 +605,66 @@ export default function CustomerTicketDetailPage() {
                 );
               }
 
+              const isMyMessage = user ? msg.senderEmail === user.email : msg.senderRole === 'customer';
+              const isBot = msg.senderRole === 'bot' || (msg.senderEmail && msg.senderEmail.toLowerCase().includes('bot'));
+              const isSupportTeam = !isBot && !isMyMessage && (
+                msg.senderRole === 'system' ||
+                !msg.senderName ||
+                msg.senderName.toLowerCase().includes('support-team')
+              );
+              const isAgent = !isBot && !isMyMessage && !isSupportTeam;
+
               const avatarBg = isMyMessage
                 ? 'bg-slate-700 text-slate-300'
-                : isBot
-                  ? 'bg-violet-650/10 border border-violet-500/20 text-violet-400'
-                  : 'bg-violet-500/10 border border-violet-500/20 text-violet-400';
-
-              const avatarIcon = isMyMessage ? 'user' : isBot ? 'robot' : 'user-tie';
+                : isAgent
+                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                  : isSupportTeam
+                    ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30'
+                    : 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
 
               return (
                 <div 
                   key={index} 
                   className={`flex gap-3 max-w-[80%] ${isMyMessage ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                 >
-                  <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
-                    <i className={`fa-solid fa-${avatarIcon} text-xs`}></i>
+                  <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md overflow-hidden`}>
+                    {isMyMessage ? (
+                      <i className="fa-solid fa-user text-xs"></i>
+                    ) : isAgent ? (
+                      msg.senderAvatarUrl ? (
+                        <img 
+                          src={getCleanImageUrl(msg.senderAvatarUrl)} 
+                          alt={msg.senderName || 'Agent'} 
+                          className="w-full h-full object-cover rounded-xl"
+                        />
+                      ) : (
+                        <i className="fa-solid fa-headset text-xs"></i>
+                      )
+                    ) : isSupportTeam ? (
+                      <i className="fa-solid fa-desktop text-xs"></i>
+                    ) : (
+                      <i className="fa-solid fa-robot text-xs"></i>
+                    )}
                   </div>
                   <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-full`}>
                     <div 
-                      className={`${isMyMessage ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                      className={`${
+                        isMyMessage 
+                          ? 'bg-sky-600 text-white rounded-tr-none' 
+                          : isAgent 
+                            ? 'bg-slate-900 border border-emerald-500/30 text-slate-200 rounded-tl-none' 
+                            : isSupportTeam 
+                              ? 'bg-slate-900 border border-violet-500/30 text-slate-200 rounded-tl-none' 
+                              : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                      } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                     >
+                      {!isMyMessage && (
+                        <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${
+                          isAgent ? 'text-emerald-400' : isSupportTeam ? 'text-violet-400' : 'text-sky-400'
+                        }`}>
+                          {isBot ? 'IT-Helpdesk-Bot' : isSupportTeam ? 'Support-Team' : (msg.senderName || 'Support-Mitarbeiter')}
+                        </span>
+                      )}
                       <div 
                         className="markdown-content"
                         dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
@@ -634,7 +672,7 @@ export default function CustomerTicketDetailPage() {
                       {msg.imageUrl && (
                         msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
                           <img 
-                            src={getCleanImageUrl(msg.imageUrl)}
+                            src={getCleanImageUrl(msg.imageUrl)} 
                             alt="Foto" 
                             onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
                             className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
@@ -657,7 +695,7 @@ export default function CustomerTicketDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-1 mx-1">
                       <span className="text-[9px] text-slate-500">
-                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : isSupportTeam ? 'Support-Team' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                       {isBot && msg.id && (
                         <button
@@ -680,14 +718,14 @@ export default function CustomerTicketDetailPage() {
             {/* Tipp-Indikator ("...") */}
             {isOtherPartyTyping && (
               <div className="flex items-center gap-2 max-w-full animate-fade-in my-2">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 flex items-center justify-center font-bold text-xs shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0">
                   <i className="fa-solid fa-headset"></i>
                 </div>
-                <div className="bg-slate-900 border border-slate-800 text-slate-400 px-4 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
-                  <span className="font-semibold text-slate-300 mr-1">Support schreibt</span>
-                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
-                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                <div className="bg-slate-900 border border-emerald-500/30 text-slate-400 px-4 py-2.5 rounded-2xl rounded-tl-none flex items-center gap-1.5 text-xs shadow-md">
+                  <span className="font-semibold text-emerald-300 mr-1">Support schreibt</span>
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
                 </div>
               </div>
             )}

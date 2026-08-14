@@ -235,10 +235,16 @@ export default function AgentDashboardPage() {
   useEffect(() => {
     if (!user) return;
 
-    const interval = setInterval(() => {
-      // 1. Heartbeat pingen, damit Agent immer live "Online" ist
+    const pingHeartbeat = () => {
       fetch(`/api/live/sync?roomType=dashboard&roomId=global&myRole=${user.role || 'agent'}&myEmail=${encodeURIComponent(user.email || '')}`)
         .catch(() => {});
+    };
+
+    pingHeartbeat();
+
+    const interval = setInterval(() => {
+      // 1. Heartbeat pingen, damit Agent immer live "Online" ist
+      pingHeartbeat();
 
       // 2. Aktive Tickets stumm neu laden für Live-Pushs & Zähler-Updates
       fetch('/api/tickets?status=active')

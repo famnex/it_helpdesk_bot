@@ -88,6 +88,14 @@ export async function getSessionUser() {
   try {
     const secret = getJwtSecret();
     const payload = jwt.verify(token, secret);
+    
+    // Aktivitätszeitstempel für eingeloggte Mitarbeiter/Admins bei jeder Anfrage aktualisieren
+    if (payload && (payload.role === 'agent' || payload.role === 'admin') && payload.email) {
+      try {
+        db.prepare("UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE LOWER(email) = LOWER(?)").run(payload.email);
+      } catch (e) {}
+    }
+    
     return payload;
   } catch (err) {
     return null;

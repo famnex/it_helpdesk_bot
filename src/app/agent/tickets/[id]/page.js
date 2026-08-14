@@ -273,16 +273,23 @@ export default function AgentTicketDetailPage() {
                 preTicketMessages = chatMessages;
               }
 
-              const chatHistory = preTicketMessages.map(m => ({
-                ...m,
-                isPreTicket: true,
-                senderRole: m.sender === 'user' ? 'customer' : 'bot',
-                senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
-                senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
-                text: m.text,
-                imageUrl: m.imageUrl,
-                createdAt: m.createdAt
-              }));
+              const ticketCreatedTime = data.ticket.createdAt ? new Date(data.ticket.createdAt).getTime() : 0;
+
+              const chatHistory = preTicketMessages.map(m => {
+                const mTime = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+                // Pre-Ticket ist eine Nachricht nur dann, wenn sie VOR der Ticketerstellung gesendet wurde
+                const isPre = ticketCreatedTime > 0 ? (mTime < ticketCreatedTime - 1000) : true;
+                return {
+                  ...m,
+                  isPreTicket: isPre,
+                  senderRole: m.sender === 'user' ? 'customer' : 'bot',
+                  senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
+                  senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
+                  text: m.text,
+                  imageUrl: m.imageUrl,
+                  createdAt: m.createdAt
+                };
+              });
 
               const missingPostMessages = postTicketMessages
                 .map(m => ({
@@ -686,7 +693,8 @@ export default function AgentTicketDetailPage() {
                 );
               }
 
-              const isFirstTicketMessage = !msg.isPreTicket && (index === 0 || messages[index - 1]?.isPreTicket);
+              const firstTicketIndex = messages.findIndex(m => !m.isPreTicket);
+              const isFirstTicketMessage = firstTicketIndex !== -1 && index === firstTicketIndex && messages.some(m => m.isPreTicket);
 
               // Avatar rendering helper
               const renderAvatar = () => {

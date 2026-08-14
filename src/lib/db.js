@@ -279,6 +279,11 @@ try {
       WHERE ticket_created = 1 
         AND NOT EXISTS (SELECT 1 FROM tickets WHERE tickets.chat_id = chats.id);
     `);
+    db.exec(`
+      UPDATE ticket_messages
+      SET sender_role = 'system', sender_email = 'system'
+      WHERE sender_role = 'customer' AND text LIKE '[Ticket aus Chat %';
+    `);
   } catch (errCleanChats) {
     console.error("Fehler bei Bereinigung verwaister Chat-Tickets:", errCleanChats);
   }
