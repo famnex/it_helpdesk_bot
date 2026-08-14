@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { flushPendingNotifications } from '@/lib/notifications';
 
 // In-Memory-Speicher für Tipp-Heartbeats
 if (!global._liveTypingStore) {
@@ -11,6 +12,9 @@ if (!global._liveTypingStore) {
  * GET: Prüft auf neue Nachrichten und Tipp-Aktivitäten der Gegenseite
  */
 export async function GET(request) {
+  // Im Hintergrund prüfen, ob abgelaufene 5-Minuten-E-Mail-Puffer versendet werden müssen
+  flushPendingNotifications().catch(err => console.error('[Live-Sync] Flush-Fehler:', err));
+
   const { searchParams } = new URL(request.url);
   const roomType = searchParams.get('roomType') || 'ticket'; // 'ticket' oder 'chat'
   const roomId = searchParams.get('roomId');

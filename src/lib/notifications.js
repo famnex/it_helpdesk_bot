@@ -122,7 +122,7 @@ export async function flushPendingNotifications() {
           </div>
         `;
 
-        await sendMail(item.recipientEmail, subject, html);
+        await sendMail({ to: item.recipientEmail, subject, html });
 
         // Als versendet markieren
         db.prepare('UPDATE pending_ticket_notifications SET sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(item.id);
@@ -133,5 +133,14 @@ export async function flushPendingNotifications() {
     }
   } catch (err) {
     console.error('[Notification-Queue] Fehler bei flushPendingNotifications:', err);
+  }
+}
+
+// Serverweiter automatischer Timer: alle 30 Sekunden abgelaufene Puffer (>= 5 Minuten alt) flashen & versenden
+if (typeof setInterval !== 'undefined') {
+  if (!global._notificationFlushInterval) {
+    global._notificationFlushInterval = setInterval(() => {
+      flushPendingNotifications().catch(err => console.error('[Notification-Queue] Background Flush Fehler:', err));
+    }, 30 * 1000);
   }
 }

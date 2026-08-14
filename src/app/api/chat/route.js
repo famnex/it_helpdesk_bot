@@ -258,16 +258,29 @@ export async function POST(request) {
         const botAck = "Danke! Ich habe deine Information direkt an das Ticket der IT-Abteilung weitergeleitet.";
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAck);
 
-        if (ticket && ticket.assigned_agent_id) {
-          const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
-          if (agent) {
-            await queueTicketNotification({
-              ticketId: ticket.id,
-              recipientEmail: agent.email,
-              recipientRole: 'agent',
-              senderName: user ? user.name : 'Benutzer',
-              messageText: text || '(Anhang gesendet)'
-            });
+        if (ticket) {
+          if (ticket.assigned_agent_id) {
+            const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
+            if (agent) {
+              await queueTicketNotification({
+                ticketId: ticket.id,
+                recipientEmail: agent.email,
+                recipientRole: 'agent',
+                senderName: user ? user.name : 'Benutzer',
+                messageText: text || '(Anhang gesendet)'
+              });
+            }
+          } else {
+            const supportTeam = db.prepare("SELECT email FROM users WHERE role IN ('agent', 'admin')").all();
+            for (const member of supportTeam) {
+              await queueTicketNotification({
+                ticketId: ticket.id,
+                recipientEmail: member.email,
+                recipientRole: 'agent',
+                senderName: user ? user.name : 'Benutzer',
+                messageText: text || '(Anhang gesendet)'
+              });
+            }
           }
         }
 

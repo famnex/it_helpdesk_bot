@@ -150,8 +150,23 @@ export async function POST(request, { params }) {
             messageText: text || '(Anhang gesendet)'
           });
         }
+      } else {
+        // Falls Ticket noch nicht zugewiesen ist: Alle Agenten/Admins benachrichtigen
+        const supportTeam = db.prepare("SELECT email FROM users WHERE role IN ('agent', 'admin')").all();
+        for (const member of supportTeam) {
+          await queueTicketNotification({
+            ticketId: id,
+            recipientEmail: member.email,
+            recipientRole: 'agent',
+            senderName: user.name || user.email,
+            messageText: text || '(Anhang gesendet)'
+          });
+        }
       }
     } else if (!isInternal) {
+      // Agent hat geantwortet: Ausstehende E-Mail-Puffer an den Agenten verwerfen, da er live im Portal geantwortet hat
+      db.prepare("DELETE FROM pending_ticket_notifications WHERE ticket_id = ? AND recipient_role = 'agent' AND sent_at IS NULL").run(id);
+
       await queueTicketNotification({
         ticketId: id,
         recipientEmail: ticket.creator_email,
