@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
@@ -20,11 +20,13 @@ const parseUtcDate = (dateStr) => {
 
 export default function AgentDashboardPage() {
   const [tickets, setTickets] = useState([]);
+  const [ticketCounts, setTicketCounts] = useState({ active: 0, unread: 0, mine: 0, unassigned: 0, closed: 0 });
   const [agents, setAgents] = useState([]);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('active'); // 'active', 'mine', 'unassigned', 'closed'
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
+  const activeTicketsRef = useRef([]);
   const router = useRouter();
 
   // Mobile Menu State
@@ -235,40 +237,49 @@ export default function AgentDashboardPage() {
       fetch(`/api/live/sync?roomType=dashboard&roomId=global&myRole=${user.role || 'agent'}&myEmail=${encodeURIComponent(user.email || '')}`)
         .catch(() => {});
 
-      // 2. Nur offene/aktive Tickets stumm neu laden, um neue Anfragen/Nachrichten live anzuzeigen
+      // 2. Aktive Tickets stumm neu laden für Live-Pushs & Zähler-Updates
       fetch('/api/tickets?status=active')
         .then(r => r.json())
         .then(data => {
+          if (data.counts) {
+            setTicketCounts(data.counts);
+          }
+
           if (data.tickets) {
-            setTickets(prev => {
-              if (prev.length > 0) {
-                const prevIds = new Set(prev.map(t => t.id));
-                const brandNewTickets = data.tickets.filter(t => !prevIds.has(t.id));
-                
-                if (brandNewTickets.length > 0) {
-                  for (const newest of brandNewTickets) {
-                    addToastNotification({
-                      type: 'new_ticket',
-                      title: `Neues Ticket: ${newest.title}`,
-                      text: `Erstellt von ${newest.creatorName || newest.creatorEmail}`,
-                      ticketId: newest.id
-                    });
-                  }
-                } else {
-                  const newlyUnreadTickets = data.tickets.filter(nt => {
-                    const ot = prev.find(p => p.id === nt.id);
-                    return ot && ot.hasUnread === 0 && nt.hasUnread === 1;
+            const prevActive = activeTicketsRef.current;
+            if (prevActive.length > 0) {
+              const prevIds = new Set(prevActive.map(t => t.id));
+              const brandNewTickets = data.tickets.filter(t => !prevIds.has(t.id));
+              
+              if (brandNewTickets.length > 0) {
+                for (const newest of brandNewTickets) {
+                  addToastNotification({
+                    type: 'new_ticket',
+                    title: `Neues Ticket: ${newest.title}`,
+                    text: `Erstellt von ${newest.creatorName || newest.creatorEmail}`,
+                    ticketId: newest.id
                   });
-                  for (const newlyUnread of newlyUnreadTickets) {
-                    addToastNotification({
-                      type: 'new_message',
-                      title: `Neue Nachricht in #${newlyUnread.id}`,
-                      text: `${newlyUnread.title} (${newlyUnread.creatorEmail})`,
-                      ticketId: newlyUnread.id
-                    });
-                  }
+                }
+              } else {
+                const newlyUnreadTickets = data.tickets.filter(nt => {
+                  const ot = prevActive.find(p => p.id === nt.id);
+                  return ot && ot.hasUnread === 0 && nt.hasUnread === 1;
+                });
+                for (const newlyUnread of newlyUnreadTickets) {
+                  addToastNotification({
+                    type: 'new_message',
+                    title: `Neue Nachricht in #${newlyUnread.id}`,
+                    text: `${newlyUnread.title} (${newlyUnread.creatorEmail})`,
+                    ticketId: newlyUnread.id
+                  });
                 }
               }
+            }
+            activeTicketsRef.current = data.tickets;
+
+            // NUR aktualisieren, wenn der Agent nicht gerade in der geschlossenen Ansicht stöbert
+            setTickets(prev => {
+              if (filter === 'closed') return prev;
               return data.tickets;
             });
           }
@@ -277,7 +288,7 @@ export default function AgentDashboardPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, filter]);
 
   useEffect(() => {
     if (user) loadData();
@@ -294,6 +305,9 @@ export default function AgentDashboardPage() {
       if (ticketsRes.ok) {
         const data = await ticketsRes.json();
         setTickets(data.tickets || []);
+        if (data.counts) {
+          setTicketCounts(data.counts);
+        }
       }
       if (agentsRes.ok) {
         const data = await agentsRes.json();
@@ -517,35 +531,35 @@ export default function AgentDashboardPage() {
               onClick={() => setFilter('active')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'active' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              Aktiv ({tickets.filter(t => t.status !== 'closed').length})
+              Aktiv ({ticketCounts.active})
             </button>
             <button 
               onClick={() => setFilter('unread')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all flex items-center gap-1.5 ${filter === 'unread' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
-              <span>Ungelesen</span> ({tickets.filter(t => t.hasUnread === 1 && t.status !== 'closed').length})
+              <span>Ungelesen</span> ({ticketCounts.unread})
             </button>
             <button 
               onClick={() => setFilter('mine')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'mine' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <span className="hidden sm:inline">Mir zugewiesen</span>
-              <span className="sm:hidden">Meine</span> ({tickets.filter(t => t.assignedAgentId === user?.id && t.status !== 'closed').length})
+              <span className="sm:hidden">Meine</span> ({ticketCounts.mine})
             </button>
             <button 
               onClick={() => setFilter('unassigned')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'unassigned' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <span className="hidden sm:inline">Unzugewiesen</span>
-              <span className="sm:hidden">Offen</span> ({tickets.filter(t => !t.assignedAgentId && t.status !== 'closed').length})
+              <span className="sm:hidden">Offen</span> ({ticketCounts.unassigned})
             </button>
             <button 
               onClick={() => setFilter('closed')}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all ${filter === 'closed' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <span className="hidden sm:inline">Geschlossen</span>
-              <span className="sm:hidden">Gelöst</span> ({tickets.filter(t => t.status === 'closed').length})
+              <span className="sm:hidden">Gelöst</span> ({ticketCounts.closed})
             </button>
           </div>
         </div>

@@ -89,7 +89,53 @@ export async function GET(request) {
       `).all();
     }
 
-    return NextResponse.json({ tickets });
+    let counts = { active: 0, closed: 0, unassigned: 0, mine: 0, unread: 0 };
+
+    if (user.role === 'customer') {
+      const countsRow = db.prepare(`
+        SELECT 
+          SUM(CASE WHEN status != 'closed' THEN 1 ELSE 0 END) as active,
+          SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed
+        FROM tickets
+        WHERE creator_email = ?
+      `).get(user.email);
+
+      counts = {
+        active: countsRow?.active || 0,
+        closed: countsRow?.closed || 0,
+        unassigned: 0,
+        mine: 0,
+        unread: 0
+      };
+    } else {
+      const countsRow = db.prepare(`
+        SELECT 
+          SUM(CASE WHEN t.status != 'closed' THEN 1 ELSE 0 END) as active,
+          SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) as closed,
+          SUM(CASE WHEN t.status != 'closed' AND (t.assigned_agent_id IS NULL OR t.assigned_agent_id = '') THEN 1 ELSE 0 END) as unassigned,
+          SUM(CASE WHEN t.status != 'closed' AND t.assigned_agent_id = ? THEN 1 ELSE 0 END) as mine,
+          SUM(CASE WHEN t.status != 'closed' AND (
+            t.last_agent_read_at IS NULL OR EXISTS (
+              SELECT 1 FROM ticket_messages tm WHERE tm.ticket_id = t.id AND tm.sender_role = 'customer' AND tm.created_at > t.last_agent_read_at
+            ) OR (
+              t.chat_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM chat_messages cm WHERE cm.chat_id = t.chat_id AND cm.sender = 'user' AND cm.created_at > t.last_agent_read_at
+              )
+            )
+          ) THEN 1 ELSE 0 END) as unread
+        FROM tickets t
+      `).get(user.id);
+
+      counts = {
+        active: countsRow?.active || 0,
+        closed: countsRow?.closed || 0,
+        unassigned: countsRow?.unassigned || 0,
+        mine: countsRow?.mine || 0,
+        unread: countsRow?.unread || 0
+      };
+    }
+
+    return NextResponse.json({ tickets, counts });
   } catch (err) {
     console.error('Fehler beim Laden der Tickets:', err);
     return NextResponse.json({ error: 'Interner Fehler.' }, { status: 500 });
