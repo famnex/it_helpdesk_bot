@@ -258,8 +258,8 @@ export async function POST(request) {
 
     let requestedAssignee = data.assignedAgentId || data.assigned_agent_id;
 
-    // Wenn der Ersteller selbst Agent/Admin ist und 'me' oder keine explizite Zuweisung wählt, direkt ihm selbst zuweisen
-    if ((!requestedAssignee || requestedAssignee === 'me') && isAgent) {
+    // Wenn der Ersteller explizit 'me' wählt, direkt ihm selbst zuweisen
+    if (requestedAssignee === 'me' && isAgent) {
       requestedAssignee = user.id;
     }
 
@@ -270,17 +270,19 @@ export async function POST(request) {
         assignedAgentId = explicitAgent.id;
         matchedAgent = explicitAgent;
       }
-    } else if (!requestedAssignee || requestedAssignee === 'auto') {
-      if (isAgent) {
-        status = 'assigned';
-        assignedAgentId = user.id;
-        matchedAgent = user;
-      } else if (matchedAgentId) {
+    } else if (requestedAssignee !== 'unassigned') {
+      // 'auto' oder keine explizite Angabe -> Automatische KI-/Keyword-Zuweisung anwenden
+      if (matchedAgentId) {
         matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
         if (matchedAgent) {
           status = 'assigned';
           assignedAgentId = matchedAgentId;
         }
+      } else if (isAgent && requestedAssignee !== 'auto') {
+        // Fallback für Agenten im Backend, wenn keine automatische Zuweisung passt
+        status = 'assigned';
+        assignedAgentId = user.id;
+        matchedAgent = user;
       }
     }
 

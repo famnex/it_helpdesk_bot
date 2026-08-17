@@ -609,7 +609,6 @@ Hier sind die Chats:\n`;
  */
 export async function determineAgentAssignment(ticketTitle, chatMessages, agents) {
   if (!agents || agents.length === 0) return null;
-  const { extractionModel } = getModelNames();
   
   let chatText = "";
   if (chatMessages && chatMessages.length > 0) {
@@ -618,7 +617,10 @@ export async function determineAgentAssignment(ticketTitle, chatMessages, agents
     });
   }
 
-  const prompt = `Du bist ein automatischer IT-Support-Ticket-Dispatcher.
+  // 1. KI-Zuweisung via Gemini versuchen
+  try {
+    const { extractionModel } = getModelNames();
+    const prompt = `Du bist ein automatischer IT-Support-Ticket-Dispatcher.
 Hier ist ein neu erstelltes Support-Ticket:
 Titel: ${ticketTitle}
 ${chatText ? `Chat-Verlauf:\n${chatText}` : ''}
@@ -628,24 +630,76 @@ ${agents.map(ag => `- ID: "${ag.id}", Name: "${ag.name || ''}", E-Mail: "${ag.em
 
 Deine Aufgabe ist es, das Ticket anhand des Titels und Gesprächsverlaufs genau einem Mitarbeiter zuzuordnen, dessen Zuständigkeiten am besten passen.
 Regeln:
-1. Antworte AUSSCHLIESSLICH mit der ID des passenden Mitarbeiters (z. B. "admin-123456").
-2. Falls kein Mitarbeiter zu den Zuständigkeiten passt ODER falls es mehrere passende Mitarbeiter gibt (Mehrdeutigkeit/Konflikt), antworte mit exakt dem Wort: "NONE".
-3. Gib keinerlei Erklärungen, Begründungen, Leerzeichen oder sonstige Zeichen aus. Nur die ID oder "NONE".`;
+1. Antworte AUSSCHLIESSLICH mit der ID des passenden Mitarbeiters (z. B. ${agents[0]?.id || 'agent-1'}).
+2. Falls kein Mitarbeiter zu den Zuständigkeiten passt, antworte mit: NONE.
+3. Gib keinen Markdown-Codeblock, keine Anführungszeichen und keine Erklärungen aus. Nur die ID oder NONE.`;
 
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.1 }
-  };
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 }
+    };
 
-  try {
     const aiResponse = await callGemini(extractionModel, payload);
-    const assignedId = aiResponse.trim();
-    if (assignedId && assignedId !== 'NONE' && agents.some(ag => ag.id === assignedId)) {
-      return assignedId;
+    if (aiResponse) {
+      let cleanResponse = aiResponse.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+      cleanResponse = cleanResponse.replace(/^["'`]|["'`]$/g, '').trim();
+
+      // Exakter Abgleich (Case-insensitive)
+      const exactMatch = agents.find(ag => ag.id.toLowerCase() === cleanResponse.toLowerCase());
+      if (exactMatch) return exactMatch.id;
+
+      // Regex / Teil-Abgleich (falls Gemini z.B. "ID: agent-1" oder "Mitarbeiter: agent-1" schreibt)
+      if (cleanResponse !== 'NONE') {
+        for (const ag of agents) {
+          const regex = new RegExp(`\\b${ag.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          if (regex.test(cleanResponse)) {
+            return ag.id;
+          }
+        }
+      }
     }
   } catch (err) {
     console.error('Fehler bei der automatischen Ticket-Zuweisung via Gemini:', err);
   }
+
+  // 2. Intelligenter Keyword- & Semantik-Fallback (garantierte Zuordnung selbst bei API-Limits / Modell-Timeouts)
+  const fullText = `${ticketTitle} ${chatText}`.toLowerCase();
+  let bestScore = 0;
+  let bestAgent = null;
+
+  for (const ag of agents) {
+    if (!ag.responsibilities) continue;
+    const terms = ag.responsibilities
+      .toLowerCase()
+      .split(/[,;\n/|]+/)
+      .map(t => t.trim())
+      .filter(t => t.length >= 3);
+
+    let score = 0;
+    for (const term of terms) {
+      if (fullText.includes(term)) {
+        score += 2; // Direkter Phrasen-Treffer
+      } else {
+        // Einzelwort-Treffer
+        const words = term.split(/\s+/).filter(w => w.length >= 3);
+        for (const w of words) {
+          if (fullText.includes(w)) {
+            score += 1;
+          }
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestAgent = ag;
+    }
+  }
+
+  if (bestScore > 0 && bestAgent) {
+    return bestAgent.id;
+  }
+
   return null;
 }
 

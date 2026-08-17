@@ -6,9 +6,11 @@ import {
   generateTicketTitle, 
   extractAgentBehalfDetails,
   detectDuplicateTopic,
-  checkSelfResolutionIntent
+  checkSelfResolutionIntent,
+  determineAgentAssignment
 } from '@/lib/gemini';
 import { queueTicketNotification } from '@/lib/notifications';
+import { sendAssignmentNotification, sendUnassignedTicketNotification } from '@/lib/mailer';
 import { reconstructIdentityTrace } from '@/lib/identityTrace';
 import fs from 'fs';
 import path from 'path';
@@ -444,10 +446,15 @@ export async function POST(request) {
         if (userSessionId && userSessionId.trim()) userSessions.add(userSessionId.trim());
         if (userIp && userIp.trim()) userIps.add(userIp.trim());
 
-        if (trace && trace.identityTrail) {
-          trace.identityTrail.forEach(ident => {
+        if (trace && trace.linkedIdentities) {
+          trace.linkedIdentities.forEach(ident => {
             if (ident.email && ident.email.trim()) userEmails.add(ident.email.trim().toLowerCase());
           });
+        }
+        if (trace && trace.primaryDetails) {
+          if (trace.primaryDetails.userEmail) userEmails.add(trace.primaryDetails.userEmail.trim().toLowerCase());
+          if (trace.primaryDetails.userSessionId) userSessions.add(trace.primaryDetails.userSessionId.trim());
+          if (trace.primaryDetails.userIp) userIps.add(trace.primaryDetails.userIp.trim());
         }
 
         const emailList = Array.from(userEmails);
@@ -604,14 +611,62 @@ export async function POST(request) {
               if (!checkStmt.get(newTicketId)) isUnique = true;
             }
 
-            db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, is_authenticated_creator) VALUES (?, ?, ?, ?, \'open\', 1)')
-              .run(newTicketId, finalTitle, user.email, chatId);
+            // Automatische Agenten-Zuweisung prüfen
+            const potentialAgents = db.prepare(`
+              SELECT id, email, name, responsibilities 
+              FROM users 
+              WHERE (role = 'agent' OR role = 'admin') 
+                AND responsibilities IS NOT NULL 
+                AND responsibilities != ''
+            `).all();
+
+            let matchedAgentId = null;
+            let matchedAgent = null;
+            if (potentialAgents.length > 0) {
+              try {
+                const chatHistoryMsgs = db.prepare(`
+                  SELECT sender, text FROM chat_messages 
+                  WHERE chat_id = ? 
+                  ORDER BY created_at ASC
+                `).all(chatId);
+                matchedAgentId = await determineAgentAssignment(finalTitle, chatHistoryMsgs, potentialAgents);
+                if (matchedAgentId) {
+                  matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
+                }
+              } catch (assignErr) {
+                console.error('Fehler bei automatischer Ticket-Zuweisung im Bot:', assignErr);
+              }
+            }
+
+            const ticketStatus = matchedAgent ? 'assigned' : 'open';
+            const assignedId = matchedAgent ? matchedAgent.id : null;
+
+            db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, assigned_agent_id, is_authenticated_creator) VALUES (?, ?, ?, ?, ?, ?, 1)')
+              .run(newTicketId, finalTitle, user.email, chatId, ticketStatus, assignedId);
             
             autoTicketId = newTicketId;
             db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
 
             db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
               .run(newTicketId, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
+
+            if (matchedAgent) {
+              db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+                .run(newTicketId, `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
+              try {
+                await sendAssignmentNotification(matchedAgent.email, newTicketId, finalTitle);
+              } catch (mailErr) {
+                console.error('Fehler beim Senden der Zuweisungs-Mail aus Chat:', mailErr);
+              }
+            } else {
+              try {
+                const allAgents = db.prepare("SELECT email FROM users WHERE role = 'agent' OR role = 'admin'").all();
+                const agentEmails = allAgents.map(a => a.email);
+                if (agentEmails.length > 0) {
+                  await sendUnassignedTicketNotification(agentEmails, newTicketId, finalTitle);
+                }
+              } catch (mailErr) {}
+            }
           } else {
             autoTicketId = existingTicket.id;
           }
