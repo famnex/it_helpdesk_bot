@@ -181,6 +181,16 @@ export async function POST(request) {
         .run(chatId, 'user', text, relativePath);
     }
 
+    // Falls es sich um ein System-Event handelt (z.B. [SYSTEM_EVENT: TICKET_CREATED:...]), keine KI anwerfen
+    if (isSystemEvent) {
+      return NextResponse.json({ 
+        success: true, 
+        text: null, 
+        isSystemEvent: true, 
+        imageUrl: cleanRelativePath 
+      });
+    }
+
     // Falls skipBot wahr ist, an dieser Stelle direkt Erfolg zurückmelden (keine KI-Generierung!)
     if (skipBot) {
       // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)

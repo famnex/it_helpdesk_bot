@@ -180,11 +180,11 @@ Handle einfach entsprechend – ohne Begründung, warum du etwas (nicht) fragst.
   if (ticketAlreadyCreated) {
     ticketInstruction = `
 ACHTUNG / ZWINGENDE REGEL:
-Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins erstellt!
+Für diesen Chat wurde bereits erfolgreich ein Support-Ticket für die IT-Admins erstellt und an das IT-Support-Team übergeben!
 1. Biete dem Benutzer unter KEINEN Umständen eine weitere Ticket-Erstellung an!
 2. Schreibe NIEMALS den Tag [TICKET_CREATED] in deine Antwort!
-3. Wenn du ein System-Event im Verlauf siehst wie "[SYSTEM_EVENT: TICKET_CREATED: TK-XXXX]", reagiere darauf mit einer freundlichen Bestätigung und einer Verabschiedung.
-4. Weise den Benutzer unbedingt darauf hin, dass er jederzeit weitere Informationen, Updates oder Fotos direkt über diesen Chat senden kann. Erkläre ihm auch, dass er dies über den Ticket-Link tun kann, den er automatisch per E-Mail erhält.`;
+3. Behaupte NIEMALS, dass der Chat oder das Support-Ticket geschlossen wurde. Das Ticket ist AKTIV und wird von einem menschlichen IT-Support-Mitarbeiter bearbeitet.
+4. Der Benutzer kann jederzeit weitere Informationen, Updates oder Fotos direkt über diesen Chat senden, welche an das Ticket weitergeleitet werden.`;
   } else {
     ticketInstruction = `
 REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
