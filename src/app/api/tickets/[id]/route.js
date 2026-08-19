@@ -219,7 +219,7 @@ export async function DELETE(request, { params }) {
 }
 
 /**
- * PUT: Ticket-Metadaten (z.B. Thema/Titel) aktualisieren (nur für Mitarbeiter)
+ * PUT: Ticket-Metadaten (z.B. Thema/Titel) aktualisieren oder Ticket wieder öffnen (nur für Mitarbeiter)
  */
 export async function PUT(request, { params }) {
   const { id } = await params;
@@ -230,7 +230,38 @@ export async function PUT(request, { params }) {
   }
 
   try {
-    const { title } = await request.json();
+    const body = await request.json();
+
+    // 1. Ticket wieder öffnen
+    if (body.action === 'reopen' || body.status === 'open' || body.status === 'assigned' || body.reopen) {
+      const ticket = db.prepare('SELECT id, title, assigned_agent_id, status FROM tickets WHERE id = ?').get(id);
+      if (!ticket) {
+        return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
+      }
+
+      const reopenStatus = ticket.assigned_agent_id ? 'assigned' : 'open';
+      db.prepare(`
+        UPDATE tickets 
+        SET status = ?, 
+            closed_at = NULL, 
+            closed_by_name = NULL, 
+            closed_by_email = NULL, 
+            closed_by_user_id = NULL,
+            updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `).run(reopenStatus, id);
+
+      const agentName = user.name || user.email.split('@')[0];
+      db.prepare(`
+        INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+        VALUES (?, 'system', 'system', ?)
+      `).run(id, `Ticket wurde durch Mitarbeiter ${agentName} (${user.email}) wieder geöffnet.`);
+
+      return NextResponse.json({ success: true, status: reopenStatus });
+    }
+
+    // 2. Thema / Titel bearbeiten
+    const { title } = body;
     if (!title || title.trim().length === 0) {
       return NextResponse.json({ error: 'Titel darf nicht leer sein.' }, { status: 400 });
     }

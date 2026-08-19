@@ -43,10 +43,10 @@ export default function AgentTicketDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [attachment, setAttachment] = useState(null); // { file, previewUrl, name }
-  const [solutionText, setSolutionText] = useState('');
+  const [closingMessage, setClosingMessage] = useState('');
+  const [learnBotKnowledge, setLearnBotKnowledge] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeSuccessChunks, setCloseSuccessChunks] = useState(null);
-  const [isSilentClose, setIsSilentClose] = useState(false);
 
   // Edit Title States
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -451,14 +451,17 @@ export default function AgentTicketDetailPage() {
 
   const handleCloseTicket = async (e) => {
     e.preventDefault();
-    if (!isSilentClose && !solutionText.trim()) return;
+    if (!closingMessage.trim()) return;
 
     setIsSending(true);
     try {
       const res = await fetch(`/api/tickets/${id}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ solution: solutionText, silent: isSilentClose })
+        body: JSON.stringify({ 
+          message: closingMessage.trim(), 
+          learnBotKnowledge: learnBotKnowledge 
+        })
       });
       const data = await res.json();
       setIsSending(false);
@@ -466,8 +469,8 @@ export default function AgentTicketDetailPage() {
       if (res.ok) {
         setCloseSuccessChunks(data.savedChunks || []);
         setShowCloseModal(false);
-        setSolutionText('');
-        setIsSilentClose(false);
+        setClosingMessage('');
+        setLearnBotKnowledge(false);
         await loadData();
       } else {
         alert(data.error || 'Fehler beim Schließen.');
@@ -500,6 +503,28 @@ export default function AgentTicketDetailPage() {
       console.error('Fehler beim Aktualisieren des Themas:', err);
     } finally {
       setIsSavingTitle(false);
+    }
+  };
+
+  const handleReopenTicket = async () => {
+    if (!confirm(`Ticket #${id} wirklich wieder öffnen?`)) return;
+
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reopen' })
+      });
+
+      if (res.ok) {
+        await loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Wiedereröffnen.');
+      }
+    } catch (err) {
+      console.error('Fehler beim Wiedereröffnen:', err);
+      alert('Verbindungsfehler.');
     }
   };
 
@@ -618,7 +643,7 @@ export default function AgentTicketDetailPage() {
         </div>
 
         {/* Action Controls */}
-        {ticket.status !== 'closed' && (
+        {ticket.status !== 'closed' ? (
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <select 
               value={ticket.assignedAgentId || ''}
@@ -639,6 +664,17 @@ export default function AgentTicketDetailPage() {
             >
               <i className="fa-solid fa-check text-[10px]"></i>
               <span className="hidden sm:inline">Schließen</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            <button 
+              onClick={handleReopenTicket}
+              className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 font-semibold text-xs px-3 py-1.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Ticket wieder öffnen"
+            >
+              <i className="fa-solid fa-lock-open text-[10px]"></i>
+              <span>Wieder öffnen</span>
             </button>
           </div>
         )}
@@ -933,9 +969,18 @@ export default function AgentTicketDetailPage() {
               </form>
             </div>
           ) : (
-            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 text-center text-xs text-slate-500 font-bold uppercase tracking-wider sticky bottom-0 z-20">
-              <i className="fa-solid fa-lock mr-1.5"></i>
-              Das Ticket wurde gelöst und archiviert.
+            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 flex items-center justify-center gap-3 text-xs text-slate-400 font-medium sticky bottom-0 z-20">
+              <span className="flex items-center gap-1.5 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                <i className="fa-solid fa-lock text-slate-500"></i>
+                Das Ticket ist geschlossen.
+              </span>
+              <button
+                onClick={handleReopenTicket}
+                className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+              >
+                <i className="fa-solid fa-lock-open text-[10px]"></i>
+                <span>Wieder öffnen</span>
+              </button>
             </div>
           )}
 
@@ -949,39 +994,43 @@ export default function AgentTicketDetailPage() {
           <form onSubmit={handleCloseTicket} className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-emerald-500">
-                <i className="fa-solid fa-circle-check text-xl"></i>
+                <i className="fa-solid fa-envelope-circle-check text-xl"></i>
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Ticket schließen & lösen</h3>
-                <p className="text-[10px] text-slate-400">Trage die bestätigte Lösung ein. Die KI lernt aus dieser Lösung für zukünftige Anfragen.</p>
+                <h3 className="text-base font-bold text-white">Ticket abschließen</h3>
+                <p className="text-[10px] text-slate-400">Verfasse eine Abschlussnachricht an den Kunden. Diese wird per E-Mail und im Ticket übermittelt inklusive Bewertungsaufforderung.</p>
               </div>
             </div>
 
              <div className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">Lösung (Pflichtfeld, außer bei lautlosem Schließen)</label>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">Abschlussnachricht an den Kunden</label>
                 <textarea 
-                  value={solutionText}
-                  onChange={(e) => setSolutionText(e.target.value)}
-                  placeholder="Beschreibe die genaue Lösung (z.B. Smartboard HDMI-Kabel an Wandpanel von Port 1 auf Port 2 umgesteckt)..."
+                  value={closingMessage}
+                  onChange={(e) => setClosingMessage(e.target.value)}
+                  placeholder="z.B. Hallo Herr Müller, wir haben Ihr Problem behoben und das Benutzerkonto wieder freigeschaltet..."
                   rows="4"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                  required={!isSilentClose}
-                  disabled={isSilentClose}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  required
                 />
               </div>
 
-              <div>
-                <label className="flex items-start gap-2.5 cursor-pointer py-1 select-none">
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    checked={isSilentClose}
-                    onChange={(e) => setIsSilentClose(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 mt-0.5"
+                    checked={learnBotKnowledge}
+                    onChange={(e) => setLearnBotKnowledge(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 mt-0.5"
                   />
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-slate-200">Ticket ohne Nachricht und Speichern der Lösung schließen</span>
-                    <span className="text-[9px] text-slate-500">Es wird keine Lösungsbenachrichtigung an den Kunden gesendet, kein Lösungsvermerk abgefragt und keine KI-Wissensextraktion durchgeführt.</span>
+                    <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <i className="fa-solid fa-brain text-violet-400 text-[11px]"></i>
+                      Lösung in das Bot-Wissen übernehmen (KI-Wissensdatenbank)
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">
+                      Wenn aktiviert, analysiert die KI diesen Fall und speichert die Lösung als Wissensartikel, damit der Chatbot ähnliche Fragen zukünftig automatisch beantworten kann.
+                    </span>
                   </div>
                 </label>
               </div>
@@ -998,9 +1047,10 @@ export default function AgentTicketDetailPage() {
                 <button 
                   type="submit" 
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
-                  disabled={isSending || (!isSilentClose && !solutionText.trim())}
+                  disabled={isSending || !closingMessage.trim()}
                 >
-                  {isSending ? 'Verarbeite...' : 'Ticket schließen'}
+                  <i className="fa-solid fa-paper-plane text-xs"></i>
+                  <span>{isSending ? 'Verarbeite...' : 'Ticket abschließen & senden'}</span>
                 </button>
               </div>
             </div>

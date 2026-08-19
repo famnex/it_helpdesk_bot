@@ -383,6 +383,30 @@ export default function AgentDashboardPage() {
     }
   };
 
+  const handleReopenTicket = async (ticketId) => {
+    if (!confirm(`Ticket #${ticketId} wirklich wieder öffnen?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reopen' })
+      });
+
+      if (res.ok) {
+        await loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Wiedereröffnen.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    }
+  };
+
   useEffect(() => {
     setCurrentPage(1);
   }, [filter, searchQuery]);
@@ -734,18 +758,29 @@ export default function AgentDashboardPage() {
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 text-right">
                           <div className="flex justify-end items-center gap-1.5">
+                            {tk.status === 'closed' && (
+                              <button
+                                onClick={() => handleReopenTicket(tk.id)}
+                                className="w-7 h-7 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm"
+                                title="Ticket wieder öffnen"
+                              >
+                                <i className="fa-solid fa-lock-open text-xs"></i>
+                              </button>
+                            )}
                             <Link 
                               href={`/agent/tickets/${tk.id}`}
-                              className="bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/20 font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all shrink-0"
+                              className="w-7 h-7 rounded-lg bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/30 flex items-center justify-center transition-all shrink-0 shadow-sm"
+                              title="Ticket bearbeiten / ansehen"
                             >
-                              Bearbeiten
+                              <i className="fa-solid fa-pen-to-square text-xs"></i>
                             </Link>
                             {user?.role === 'admin' && (
                               <button
                                 onClick={() => handleDeleteTicket(tk.id)}
-                                className="bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/20 font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all cursor-pointer shrink-0"
+                                className="w-7 h-7 rounded-lg bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm"
+                                title="Ticket unwiderruflich löschen"
                               >
-                                Löschen
+                                <i className="fa-solid fa-trash-can text-xs"></i>
                               </button>
                             )}
                           </div>

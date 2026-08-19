@@ -14,11 +14,11 @@ export async function POST(request, { params }) {
   }
 
   try {
-    const { solution, silent } = await request.json();
-    const isSilent = !!silent;
+    const { solution, message, learnBotKnowledge } = await request.json();
+    const closingMessage = (message || solution || '').trim();
 
-    if (!isSilent && (!solution || solution.trim().length === 0)) {
-      return NextResponse.json({ error: 'Eine Lösung ist zum Schließen des Tickets erforderlich.' }, { status: 400 });
+    if (!closingMessage) {
+      return NextResponse.json({ error: 'Eine Abschlussnachricht an den Kunden ist erforderlich.' }, { status: 400 });
     }
 
     // Ticket laden
@@ -38,9 +38,6 @@ export async function POST(request, { params }) {
       console.error('Fehler beim sofortigen Flashen der Benachrichtigungen vor Ticket-Schließung:', flushErr);
     }
 
-    const sol = isSilent ? 'Ohne Lösung geschlossen' : solution;
-    let computedContext = null;
-
     const closingName = user.name || user.email.split('@')[0];
     const closingEmail = user.email.toLowerCase();
     const closingUserId = user.id;
@@ -56,43 +53,43 @@ export async function POST(request, { params }) {
           closed_at = CURRENT_TIMESTAMP, 
           updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
-    `).run(sol, closingEmail, closingName, closingUserId, id);
+    `).run(closingMessage, closingEmail, closingName, closingUserId, id);
 
     const closingUserText = user.name ? `${user.name} (${user.email})` : user.email;
 
-    // Systemkommentar einfügen (nur wenn nicht lautlos geschlossen)
-    if (!isSilent) {
-      const systemText = ticket.creatorEmail 
-        ? `Ticket wurde von ${closingUserText} geschlossen mit Lösung: ${sol} (Kunde per E-Mail benachrichtigt.)` 
-        : `Ticket wurde von ${closingUserText} geschlossen mit Lösung: ${sol}`;
-      db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-        .run(id, systemText);
+    // Abschlussnachricht als Agentennachricht einfügen (sichtbar für Kunde und Agent)
+    db.prepare(`
+      INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) 
+      VALUES (?, ?, ?, ?)
+    `).run(id, user.email, user.role, closingMessage);
 
-      // Benachrichtige den Kunden über die Lösung per E-Mail
-      if (ticket.creatorEmail) {
-        try {
-          await sendTicketResolvedNotification(ticket.creatorEmail, id, ticket.title, sol);
-        } catch (mailErr) {
-          console.error('Fehler beim Senden der Lösungs-Benachrichtigung per E-Mail:', mailErr);
-        }
+    // Systemkommentar zur Schließung einfügen
+    const systemText = ticket.creatorEmail 
+      ? `Ticket wurde von ${closingUserText} geschlossen. Abschlussnachricht und Bewertungsaufforderung wurden an den Kunden gesendet.` 
+      : `Ticket wurde von ${closingUserText} geschlossen.`;
+    db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+      .run(id, systemText);
+
+    // Benachrichtige den Kunden über die Abschlussnachricht & 1-Klick-Sternebewertung per E-Mail
+    if (ticket.creatorEmail) {
+      try {
+        await sendTicketResolvedNotification(ticket.creatorEmail, id, ticket.title, closingMessage);
+      } catch (mailErr) {
+        console.error('Fehler beim Senden der Abschluss-Benachrichtigung per E-Mail:', mailErr);
       }
-    } else {
-      // Systemkommentar für lautloses Schließen
-      db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-        .run(id, `Ticket wurde von ${closingUserText} ohne Benachrichtigung des Kunden und ohne Angabe einer Lösung geschlossen.`);
     }
 
-    // --- KI Wissens-Extraktion & Deduplizierung im Hintergrund (bzw. asynchron) ---
-    // Nur durchführen, wenn nicht lautlos geschlossen wurde
+    // --- KI Wissens-Extraktion & Deduplizierung NUR wenn learnBotKnowledge === true ---
     let savedChunks = [];
-    if (!isSilent) {
+    let computedContext = null;
+    if (learnBotKnowledge === true) {
       const messages = db.prepare('SELECT sender_role, text FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC').all(id);
       
       let ticketHistoryText = `TICKET: ${id}\nTHEMA: ${ticket.title}\n\nVERLAUF:\n`;
       messages.forEach(m => {
         ticketHistoryText += `${m.sender_role.toUpperCase()}: ${m.text}\n`;
       });
-      ticketHistoryText += `\nLÖSUNG: ${sol}`;
+      ticketHistoryText += `\nLÖSUNG / ABSCHLUSS: ${closingMessage}`;
 
       try {
         // 0. Kurze Zusammenfassung des Problems erstellen
@@ -106,13 +103,12 @@ export async function POST(request, { params }) {
         savedChunks = await processAndSaveChunks(extractedChunks, 'ticket');
       } catch (kiErr) {
         console.error('Fehler bei der KI-Chunkextraktion beim Schließen:', kiErr);
-        // Wir werfen hier keinen Fehler, da das Ticket bereits geschlossen wurde
       }
     }
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Ticket wurde geschlossen.',
+      message: 'Ticket wurde erfolgreich geschlossen.',
       solutionContext: computedContext,
       savedChunks 
     });

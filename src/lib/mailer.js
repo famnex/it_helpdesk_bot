@@ -274,17 +274,17 @@ export async function sendUnassignedTicketNotification(agentEmails, ticketId, ti
 }
 
 /**
- * Informiert den Kunden, dass sein Ticket gelöst wurde, und teilt ihm die Lösung mit.
+ * Informiert den Kunden, dass sein Ticket gelöst/abgeschlossen wurde, und übermittelt die Abschlussnachricht.
  * Enthält 1-Klick-Sternebewertungslinks (1 bis 5 Sterne) direkt in der E-Mail.
  */
-export async function sendTicketResolvedNotification(customerEmail, ticketId, ticketTitle, solution) {
+export async function sendTicketResolvedNotification(customerEmail, ticketId, ticketTitle, closingMessage) {
   const host = getBaseAppUrl();
   // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink & Direkt-Bewertung
   const loginToken = generateMagicLinkToken(customerEmail, '30d');
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
-  const subject = `Ihr Ticket ${ticketId} wurde gelöst!`;
-  const text = `Hallo,\n\nihr Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich gelöst.\n\nEingetragene Lösung:\n${solution}\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen:\n\n${link}\n\nWie zufrieden waren Sie mit unserem Support? Bewerten Sie mit einem Klick:\n1 Stern: ${host}/api/tickets/${ticketId}/rating?score=1&token=${loginToken}\n2 Sterne: ${host}/api/tickets/${ticketId}/rating?score=2&token=${loginToken}\n3 Sterne: ${host}/api/tickets/${ticketId}/rating?score=3&token=${loginToken}\n4 Sterne: ${host}/api/tickets/${ticketId}/rating?score=4&token=${loginToken}\n5 Sterne: ${host}/api/tickets/${ticketId}/rating?score=5&token=${loginToken}`;
+  const subject = `Ihr Ticket ${ticketId} wurde abgeschlossen`;
+  const text = `Hallo,\n\nihr Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich abgeschlossen.\n\nNachricht unseres Support-Teams:\n${closingMessage}\n\nKlicken Sie auf den folgenden Link, um das Ticket im Portal anzusehen:\n\n${link}\n\nWie zufrieden waren Sie mit unserem Support? Bewerten Sie mit einem Klick:\n1 Stern: ${host}/api/tickets/${ticketId}/rating?score=1&token=${loginToken}\n2 Sterne: ${host}/api/tickets/${ticketId}/rating?score=2&token=${loginToken}\n3 Sterne: ${host}/api/tickets/${ticketId}/rating?score=3&token=${loginToken}\n4 Sterne: ${host}/api/tickets/${ticketId}/rating?score=4&token=${loginToken}\n5 Sterne: ${host}/api/tickets/${ticketId}/rating?score=5&token=${loginToken}`;
 
   const ratingStarsHtml = [
     { stars: 1, label: '1 Stern' },
@@ -303,13 +303,13 @@ export async function sendTicketResolvedNotification(customerEmail, ticketId, ti
 
   const html = `
     <div style="font-family: sans-serif; padding: 24px; color: #f8fafc; max-width: 600px; margin: 0 auto; background-color: #020617; border: 1px solid #1e293b; border-radius: 12px;">
-      <h2 style="color: #10b981; margin-top: 0; font-size: 22px;">Ticket gelöst!</h2>
+      <h2 style="color: #10b981; margin-top: 0; font-size: 22px;">Ticket abgeschlossen</h2>
       <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">Hallo,</p>
-      <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">Ihr Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold; color: #38bdf8;">${ticketId}</span>) wurde erfolgreich gelöst.</p>
+      <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">Ihr Support-Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold; color: #38bdf8;">${ticketId}</span>) wurde erfolgreich bearbeitet und abgeschlossen.</p>
       
-      <div style="background-color: #0f172a; border: 1px solid rgba(16, 185, 129, 0.4); border-left: 4px solid #10b981; border-radius: 8px; padding: 16px; margin: 20px 0;">
-        <strong style="color: #34d399; font-size: 13px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Bestätigte Lösung:</strong>
-        <p style="margin: 0; font-size: 14px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap;">${solution}</p>
+      <div style="background-color: #0f172a; border: 1px solid rgba(14, 165, 233, 0.4); border-left: 4px solid #0284c7; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        <strong style="color: #38bdf8; font-size: 13px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Nachricht unseres Support-Teams:</strong>
+        <p style="margin: 0; font-size: 14px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap;">${closingMessage}</p>
       </div>
 
       <!-- 1-Klick-Sterne-Bewertung -->
@@ -322,7 +322,7 @@ export async function sendTicketResolvedNotification(customerEmail, ticketId, ti
       </div>
 
       <div style="margin: 28px 0; text-align: center;">
-        <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 26px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+        <a href="${link}" style="background-color: #0284c7; color: white; padding: 12px 26px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
           Ticket im Portal ansehen
         </a>
       </div>

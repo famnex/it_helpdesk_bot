@@ -499,9 +499,9 @@ export default function CustomerTicketDetailPage() {
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto flex items-start gap-4 mb-2 animate-fade-in">
                 <div className="text-emerald-500 bg-emerald-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-circle-check text-xl"></i></div>
                 <div className="flex-1">
-                  <h4 className="text-sm font-bold text-emerald-200">Dieses Ticket wurde als gelöst markiert</h4>
-                  <p className="text-xs font-bold text-slate-300 mt-2">Bestätigte Lösung:</p>
-                  <p className="text-xs text-slate-400 mt-1 bg-slate-950 p-3 rounded-lg border border-slate-800">{ticket.solution}</p>
+                  <h4 className="text-sm font-bold text-emerald-200">Dieses Ticket wurde abgeschlossen</h4>
+                  <p className="text-xs font-bold text-slate-300 mt-2">Abschlussnachricht des Support-Teams:</p>
+                  <p className="text-xs text-slate-300 mt-1 bg-slate-950 p-3 rounded-lg border border-slate-800 leading-relaxed whitespace-pre-wrap">{ticket.solution}</p>
                 </div>
               </div>
             )}
