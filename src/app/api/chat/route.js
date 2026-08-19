@@ -355,49 +355,131 @@ export async function POST(request) {
         targetChatId = targetTicket.chat_id;
       }
 
-      // 3. Falls noch immer kein Ticket gefunden, suche das aktuellste Ticket für die E-Mail des Nutzers
+      // 3. Falls noch immer kein Ticket gefunden, suche das Ticket des Nutzers für diesen Chat
       if (!targetTicket && email) {
-        targetTicket = db.prepare('SELECT id, title, status, assigned_agent_id, chat_id, creator_email FROM tickets WHERE LOWER(creator_email) = LOWER(?) ORDER BY created_at DESC LIMIT 1').get(email);
+        targetTicket = db.prepare('SELECT id, title, status, assigned_agent_id, chat_id, creator_email FROM tickets WHERE LOWER(creator_email) = LOWER(?) AND (chat_id = ? OR chat_id IS NULL) ORDER BY created_at DESC LIMIT 1').get(email, targetChatId);
         if (targetTicket && targetTicket.chat_id) {
           targetChatId = targetTicket.chat_id;
         }
       }
 
       // 4. Prüfe, ob targetChatId existiert; falls nicht (z. B. gelöscht), erzeuge den Chat-Eintrag
-      let targetChatRow = db.prepare('SELECT id, ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(targetChatId);
+      let targetChatRow = db.prepare('SELECT id, user_email, ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(targetChatId);
       if (!targetChatRow) {
         db.prepare('INSERT INTO chats (id, user_email, ticket_created) VALUES (?, ?, ?)').run(targetChatId, email || null, targetTicket ? 1 : 0);
-        targetChatRow = { id: targetChatId, ticketCreated: targetTicket ? 1 : 0, isAgentOnBehalf: 0 };
+        targetChatRow = { id: targetChatId, user_email: email || null, ticketCreated: targetTicket ? 1 : 0, isAgentOnBehalf: 0 };
       }
 
-      // 5. Falls das zugehörige Ticket geschlossen war, wieder öffnen!
+      // 5. Reopen oder Neuanlage des Tickets:
       let wasTicketReopened = false;
-      if (targetTicket && targetTicket.status === 'closed') {
-        const newStatus = targetTicket.assigned_agent_id ? 'assigned' : 'open';
-        db.prepare(`
-          UPDATE tickets 
-          SET status = ?, 
-              closed_at = NULL, 
-              closed_by_name = NULL, 
-              closed_by_email = NULL, 
-              closed_by_user_id = NULL,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(newStatus, targetTicket.id);
+      let wasTicketNewlyCreated = false;
 
-        db.prepare(`
-          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-          VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_REOPENED] Ticket wurde durch neue Benutzeranfrage automatisch wieder geöffnet.')
-        `).run(targetTicket.id);
+      if (targetTicket) {
+        // Altes Ticket wiedereröffnen falls geschlossen
+        if (targetTicket.status === 'closed') {
+          const newStatus = targetTicket.assigned_agent_id ? 'assigned' : 'open';
+          db.prepare(`
+            UPDATE tickets 
+            SET status = ?, 
+                closed_at = NULL, 
+                closed_by_name = NULL, 
+                closed_by_email = NULL, 
+                closed_by_user_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(newStatus, targetTicket.id);
 
-        wasTicketReopened = true;
+          db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+            VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_REOPENED] Ticket wurde durch neue Benutzeranfrage automatisch wieder geöffnet.')
+          `).run(targetTicket.id);
+
+          wasTicketReopened = true;
+          targetTicket.status = newStatus;
+        }
+      } else {
+        // Falls noch gar kein Ticket für diese Konversation existierte: JETZT neues Ticket anlegen!
+        const creatorEmail = email || (user ? user.email : null) || (targetChatRow ? targetChatRow.user_email : null) || (chat ? chat.user_email : null);
+        if (creatorEmail) {
+          try {
+            let newTicketId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+            while (db.prepare('SELECT id FROM tickets WHERE id = ?').get(newTicketId)) {
+              newTicketId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+            }
+
+            const allTargetMsgs = db.prepare(`
+              SELECT sender, text FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC
+            `).all(targetChatId);
+            
+            let ticketTitle = 'Support-Anfrage über Chat-Assistent';
+            try {
+              if (allTargetMsgs.length > 0) {
+                const aiTitle = await generateTicketTitle(allTargetMsgs);
+                if (aiTitle && aiTitle.trim()) ticketTitle = aiTitle.trim();
+              }
+            } catch (e) {}
+
+            const potentialAgents = db.prepare(`
+              SELECT id, email, name, responsibilities 
+              FROM users 
+              WHERE (role = 'agent' OR role = 'admin') 
+                AND responsibilities IS NOT NULL AND responsibilities != ''
+            `).all();
+
+            let matchedAgent = null;
+            if (potentialAgents.length > 0) {
+              try {
+                const matchedAgentId = await determineAgentAssignment(ticketTitle, allTargetMsgs, potentialAgents);
+                if (matchedAgentId) matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
+              } catch (e) {}
+            }
+
+            const ticketStatus = matchedAgent ? 'assigned' : 'open';
+            const assignedId = matchedAgent ? matchedAgent.id : null;
+
+            db.prepare(`
+              INSERT INTO tickets (id, title, creator_email, chat_id, status, assigned_agent_id, is_authenticated_creator)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(newTicketId, ticketTitle, creatorEmail, targetChatId, ticketStatus, assignedId, user ? 1 : 0);
+
+            targetTicket = {
+              id: newTicketId,
+              title: ticketTitle,
+              status: ticketStatus,
+              assigned_agent_id: assignedId,
+              creator_email: creatorEmail,
+              chat_id: targetChatId
+            };
+            wasTicketNewlyCreated = true;
+
+            db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+              .run(newTicketId, `[Ticket aus zusammengeführtem Chat #${targetChatId}]: ${ticketTitle}`);
+
+            if (matchedAgent) {
+              db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+                .run(newTicketId, `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
+              try {
+                await sendAssignmentNotification(matchedAgent.email, newTicketId, ticketTitle);
+              } catch (e) {}
+            } else {
+              try {
+                const allAgents = db.prepare("SELECT email FROM users WHERE role = 'agent' OR role = 'admin'").all();
+                const agentEmails = allAgents.map(a => a.email);
+                if (agentEmails.length > 0) {
+                  await sendUnassignedTicketNotification(agentEmails, newTicketId, ticketTitle);
+                }
+              } catch (e) {}
+            }
+          } catch (createErr) {
+            console.error('Fehler bei automatischer Ticketerstellung beim Mergen:', createErr);
+          }
+        }
       }
 
-      // Zielchat zwingend als ticket_created = 1 markieren, falls ein Ticket verknüpft ist
-      const targetHasTicket = Boolean(targetTicket || (targetChatRow && targetChatRow.ticketCreated === 1));
-      if (targetHasTicket) {
+      // Zielchat zwingend als ticket_created = 1 markieren
+      if (targetTicket) {
         db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(targetChatId);
-        if (targetTicket && !targetTicket.chat_id) {
+        if (!targetTicket.chat_id) {
           db.prepare('UPDATE tickets SET chat_id = ? WHERE id = ?').run(targetChatId, targetTicket.id);
         }
       }
@@ -424,7 +506,7 @@ export async function POST(request) {
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(targetChatId, `[Ergänzte Informationen aus neuem Chat]:\n${combinedInfo}`);
         if (targetTicket) {
           db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
-            .run(targetTicket.id, email || 'Kunde', `[Zusatzinformationen aus Chat]:\n${combinedInfo}`);
+            .run(targetTicket.id, email || (user ? user.email : 'Kunde'), `[Zusatzinformationen aus Chat]:\n${combinedInfo}`);
         }
       }
 
@@ -435,42 +517,21 @@ export async function POST(request) {
             .run(targetChatId, '[Angehängtes Bild aus verworfenem Chat]', m.imageUrl);
           if (targetTicket) {
             db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url) VALUES (?, ?, \'customer\', ?, ?)')
-              .run(targetTicket.id, email || 'Kunde', '[Angehängtes Bild aus Chat]', m.imageUrl);
+              .run(targetTicket.id, email || (user ? user.email : 'Kunde'), '[Angehängtes Bild aus Chat]', m.imageUrl);
           }
         }
       });
 
       let prefixMsg = "Danke! Ich habe deine neuen Informationen direkt in deine bestehende Konversation übernommen und den doppelten Chat verworfen.";
       if (wasTicketReopened) {
-        prefixMsg += " Da das zugehörige IT-Support-Ticket geschlossen war, habe ich es automatisch für dich wieder geöffnet.";
-      }
-
-      // KI-Antwort auf die neuen/ergänzten Informationen nur dann generieren, wenn noch KEIN Ticket existiert!
-      let botAnswerText = '';
-      if (!targetHasTicket && combinedInfo && combinedInfo.trim().length > 2) {
-        try {
-          const targetHistory = db.prepare(`
-            SELECT sender, text, image_url as imageUrl 
-            FROM chat_messages 
-            WHERE chat_id = ? 
-            ORDER BY created_at ASC
-          `).all(targetChatId);
-
-          const isAgentMode = targetChatRow ? targetChatRow.isAgentOnBehalf === 1 : false;
-          const aiRes = await generateChatResponse(targetHistory, 0, isAgentMode);
-          if (aiRes && aiRes.text) {
-            botAnswerText = aiRes.text.replace('[TICKET_CREATED]', '').replace('[CHAT_ABUSE_DETECTED]', '').trim();
-          }
-        } catch (aiErr) {
-          console.error('Fehler bei KI-Antwort für zusammengeführten Chat:', aiErr);
-        }
+        prefixMsg += ` Da das zugehörige IT-Support-Ticket (#${targetTicket.id}) geschlossen war, habe ich es automatisch für dich wieder geöffnet.`;
+      } else if (wasTicketNewlyCreated) {
+        prefixMsg += ` Da dein Anliegen weiterhin besteht, habe ich direkt ein neues IT-Support-Ticket (#${targetTicket.id}) für die IT-Abteilung erstellt.`;
       }
 
       let ackBot = prefixMsg;
-      if (targetHasTicket) {
-        ackBot += " Da für dein Anliegen bereits ein IT-Support-Ticket aktiv ist, habe ich deine Angaben direkt an die IT-Abteilung zur Bearbeitung weitergeleitet.";
-      } else if (botAnswerText) {
-        ackBot += `\n\n${botAnswerText}`;
+      if (targetTicket) {
+        ackBot += " Deine Angaben wurden direkt an die IT-Abteilung zur Bearbeitung weitergeleitet.";
       } else {
         ackBot += " Wie kann ich dich nun weiter unterstützen?";
       }
