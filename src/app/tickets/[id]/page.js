@@ -658,13 +658,6 @@ export default function CustomerTicketDetailPage() {
                               : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
                       } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                     >
-                      {!isMyMessage && (
-                        <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${
-                          isAgent ? 'text-emerald-400' : isSupportTeam ? 'text-violet-400' : 'text-sky-400'
-                        }`}>
-                          {isBot ? 'IT-Helpdesk-Bot' : isSupportTeam ? 'Support-Team' : (msg.senderName || 'Support-Mitarbeiter')}
-                        </span>
-                      )}
                       <div 
                         className="markdown-content"
                         dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}

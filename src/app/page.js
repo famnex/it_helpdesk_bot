@@ -1282,16 +1282,6 @@ export default function CustomerChatPage() {
                             ? 'bg-slate-900 border-violet-500/30' 
                             : 'bg-slate-900 border-slate-800'
                       }`}>
-                        {isAgent && (
-                          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                            {msg.senderName || 'Support-Mitarbeiter'}
-                          </span>
-                        )}
-                        {isSupportTeam && (
-                          <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider block">
-                            Support-Team
-                          </span>
-                        )}
                         {msg.imageUrl && (
                           <img 
                             src={getCleanImageUrl(msg.imageUrl)} 
