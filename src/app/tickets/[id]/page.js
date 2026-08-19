@@ -57,6 +57,7 @@ export default function CustomerTicketDetailPage() {
   const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [isFeedbackSaved, setIsFeedbackSaved] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(() => {
     return !!scoreParam || ratedParam === 'true';
   });
@@ -267,6 +268,15 @@ export default function CustomerTicketDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setTicket(data.ticket);
+        if (data.ticket) {
+          if (data.ticket.rating && !scoreParam) {
+            setSelectedRating(data.ticket.rating);
+          }
+          if (data.ticket.ratingFeedback) {
+            setRatingComment(data.ticket.ratingFeedback);
+            setIsFeedbackSaved(true);
+          }
+        }
         
         let ticketMessages = data.messages || [];
         if (data.ticket.chatId) {
@@ -425,6 +435,9 @@ export default function CustomerTicketDetailPage() {
       if (res.ok) {
         setRatingSubmitted(true);
         setSelectedRating(finalRating);
+        if (ratingComment.trim()) {
+          setIsFeedbackSaved(true);
+        }
         setTicket(prev => prev ? ({ ...prev, rating: finalRating, ratingFeedback: ratingComment }) : prev);
       }
     } catch (e) {
@@ -547,79 +560,100 @@ export default function CustomerTicketDetailPage() {
                     </div>
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-white">Wie zufrieden warst du mit unserem Support?</h4>
-                      <p className="text-[11px] text-slate-400">Dein Feedback hilft uns, unseren IT-Helpdesk kontinuierlich zu verbessern.</p>
+                      <p className="text-[11px] text-slate-400">Klicke auf die Sterne, um deine Bewertung abzugeben oder jederzeit anzupassen.</p>
                     </div>
                   </div>
+                  {(ticket.rating || selectedRating > 0) && (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                      {ticket.rating || selectedRating}/5 Sterne
+                    </span>
+                  )}
                 </div>
 
                 {isSubmittingRating ? (
-                  <div className="bg-slate-950/60 border border-violet-500/30 rounded-xl p-5 flex items-center justify-center gap-3 text-xs text-violet-300 animate-pulse">
+                  <div className="bg-slate-950/60 border border-violet-500/30 rounded-xl p-5 flex items-center justify-center gap-3 text-xs text-violet-300 animate-pulse my-2">
                     <i className="fa-solid fa-circle-notch fa-spin text-lg text-violet-400"></i>
                     <span className="font-semibold text-sm">Bewertung wird übermittelt...</span>
                   </div>
-                ) : (ticket.rating || ratingSubmitted || selectedRating > 0) ? (
-                  <div className="space-y-3">
-                    <div className="bg-slate-950/60 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                ) : (
+                  <div className="space-y-4">
+                    {/* Sterne-Auswahl (immer anklickbar & editierbar) */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex gap-1 text-amber-400 text-base">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <i key={star} className={`fa-star ${star <= (ticket.rating || selectedRating) ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
-                          ))}
+                        <span className="text-xs text-slate-400 font-semibold">Deine Sterne:</span>
+                        <div className="flex items-center gap-1.5">
+                          {[1, 2, 3, 4, 5].map((star) => {
+                            const currentScore = hoverRating || selectedRating || ticket.rating || 0;
+                            const isFilled = star <= currentScore;
+                            return (
+                              <button
+                                key={star}
+                                type="button"
+                                onMouseEnter={() => setHoverRating(star)}
+                                onMouseLeave={() => setHoverRating(0)}
+                                onClick={() => {
+                                  setSelectedRating(star);
+                                  handleSubmitRating(star);
+                                }}
+                                className="p-1 text-2xl sm:text-3xl transition-transform hover:scale-125 focus:outline-none cursor-pointer"
+                                title={`${star} von 5 Sternen`}
+                              >
+                                <i className={`fa-star ${isFilled ? 'fa-solid text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'fa-regular text-slate-600 hover:text-amber-400/50'}`}></i>
+                              </button>
+                            );
+                          })}
                         </div>
-                        <span className="text-xs font-bold text-emerald-300">Vielen Dank für deine Bewertung!</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase">Bewertet ({ticket.rating || selectedRating}/5)</span>
+                      
+                      <div className="text-xs font-bold text-amber-300 sm:text-right">
+                        {(hoverRating || selectedRating || ticket.rating) === 5 ? 'Hervorragend! ⭐⭐⭐⭐⭐' :
+                         (hoverRating || selectedRating || ticket.rating) === 4 ? 'Sehr gut! ⭐⭐⭐⭐' :
+                         (hoverRating || selectedRating || ticket.rating) === 3 ? 'Gut ⭐⭐⭐' :
+                         (hoverRating || selectedRating || ticket.rating) === 2 ? 'Verbesserungswürdig ⭐⭐' :
+                         (hoverRating || selectedRating || ticket.rating) === 1 ? 'Unzufrieden ⭐' : 
+                         <span className="text-slate-500 font-normal">Sterne auswählen...</span>}
+                      </div>
                     </div>
 
                     {/* Optionales Feedback-Kommentarfeld */}
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={ratingComment}
-                        onChange={(e) => setRatingComment(e.target.value)}
-                        placeholder={ticket.ratingFeedback ? `Gespeichert: ${ticket.ratingFeedback}` : "Möchtest du uns noch etwas mitteilen? (Optional)"}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                        onChange={(e) => {
+                          setRatingComment(e.target.value);
+                          setIsFeedbackSaved(false);
+                        }}
+                        placeholder="Möchtest du uns noch etwas mitteilen? (Optional)"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
                       />
                       <button
                         type="button"
-                        onClick={() => handleSubmitRating(ticket.rating || selectedRating)}
+                        onClick={() => handleSubmitRating(selectedRating || ticket.rating)}
                         disabled={isSavingFeedback || !ratingComment.trim()}
-                        className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                        className={`font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shrink-0 flex items-center justify-center gap-1.5 ${
+                          isFeedbackSaved 
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 cursor-default'
+                            : 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+                        }`}
                       >
-                        {isSavingFeedback && <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>}
-                        <span>{isSavingFeedback ? 'Wird gespeichert...' : 'Feedback senden'}</span>
+                        {isSavingFeedback ? (
+                          <>
+                            <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                            <span>Wird gespeichert...</span>
+                          </>
+                        ) : isFeedbackSaved ? (
+                          <>
+                            <i className="fa-solid fa-check text-xs"></i>
+                            <span>Feedback gesendet!</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="fa-solid fa-paper-plane text-xs"></i>
+                            <span>Feedback senden</span>
+                          </>
+                        )}
                       </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400 font-semibold mr-1">Deine Bewertung:</span>
-                      <div className="flex items-center gap-1.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onMouseEnter={() => setHoverRating(star)}
-                            onMouseLeave={() => setHoverRating(0)}
-                            onClick={() => {
-                              setSelectedRating(star);
-                              handleSubmitRating(star);
-                            }}
-                            className="p-1 text-xl sm:text-2xl transition-transform hover:scale-125 focus:outline-none cursor-pointer"
-                            title={`${star} von 5 Sternen`}
-                          >
-                            <i className={`fa-star ${star <= (hoverRating || selectedRating) ? 'fa-solid text-amber-400' : 'fa-regular text-slate-600'}`}></i>
-                          </button>
-                        ))}
-                      </div>
-                      <span className="text-xs font-bold text-amber-300 ml-2">
-                        {hoverRating === 5 || selectedRating === 5 ? 'Hervorragend! ⭐⭐⭐⭐⭐' :
-                         hoverRating === 4 || selectedRating === 4 ? 'Sehr gut! ⭐⭐⭐⭐' :
-                         hoverRating === 3 || selectedRating === 3 ? 'Gut ⭐⭐⭐' :
-                         hoverRating === 2 || selectedRating === 2 ? 'Verbesserungswürdig ⭐⭐' :
-                         hoverRating === 1 || selectedRating === 1 ? 'Unzufrieden ⭐' : ''}
-                      </span>
                     </div>
                   </div>
                 )}
