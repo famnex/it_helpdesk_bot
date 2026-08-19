@@ -239,6 +239,10 @@ export default function CustomerChatPage() {
       .then(data => {
         if (data.messages && data.messages.length > 0) {
           setMessages(data.messages);
+          const numericIds = data.messages.map(m => typeof m.id === 'number' ? m.id : 0);
+          if (numericIds.length > 0) {
+            lastChatMsgIdRef.current = Math.max(...numericIds, 0);
+          }
         } else {
           // Standard-Begrüßung
           setMessages([
@@ -316,6 +320,23 @@ export default function CustomerChatPage() {
               if (maxId > lastChatMsgIdRef.current) {
                 lastChatMsgIdRef.current = maxId;
               }
+
+              const newChatItems = data.newMessages.map(m => ({
+                id: m.id,
+                sender: m.sender,
+                text: m.text,
+                imageUrl: m.imageUrl,
+                isFlagged: m.isFlagged,
+                createdAt: m.createdAt
+              }));
+
+              setMessages(prev => {
+                const existingIds = new Set(prev.map(p => p.id));
+                const existingTexts = new Set(prev.map(p => (p.text || '').trim()));
+                const toAdd = newChatItems.filter(m => !existingIds.has(m.id) && !existingTexts.has((m.text || '').trim()));
+                if (toAdd.length === 0) return prev;
+                return [...prev, ...toAdd];
+              });
             }
 
             // Neue Ticket-Nachrichten vom Support/Agent
@@ -375,7 +396,7 @@ export default function CustomerChatPage() {
     };
 
     pollLiveSync();
-    const interval = setInterval(pollLiveSync, 5000);
+    const interval = setInterval(pollLiveSync, 1500);
     return () => clearInterval(interval);
   }, [chatId, user]);
 

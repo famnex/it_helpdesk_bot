@@ -56,6 +56,7 @@ export default function AgentTicketDetailPage() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const lastTypedTimeRef = useRef(0);
+  const maxTicketMsgIdRef = useRef(0);
   const router = useRouter();
 
   const [isOtherPartyTyping, setIsOtherPartyTyping] = useState(false);
@@ -154,19 +155,22 @@ export default function AgentTicketDetailPage() {
 
     const interval = setInterval(async () => {
       try {
-        const lastMsg = messages[messages.length - 1];
-        const lastMsgId = lastMsg?.id && typeof lastMsg.id === 'number' ? lastMsg.id : 0;
-
-        const res = await fetch(`/api/live/sync?roomType=ticket&roomId=${id}&lastMsgId=${lastMsgId}&myRole=${user.role}&myEmail=${encodeURIComponent(user.email || '')}`);
+        const res = await fetch(`/api/live/sync?roomType=ticket&roomId=${id}&lastMsgId=${maxTicketMsgIdRef.current}&myRole=${user.role}&myEmail=${encodeURIComponent(user.email || '')}`);
         if (res.ok) {
           const data = await res.json();
           setIsOtherPartyTyping(!!data.isOtherPartyTyping);
           if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
 
           if (data.newMessages && data.newMessages.length > 0) {
+            const newNumericIds = data.newMessages.map(m => typeof m.id === 'number' ? m.id : 0);
+            if (newNumericIds.length > 0) {
+              maxTicketMsgIdRef.current = Math.max(maxTicketMsgIdRef.current, ...newNumericIds);
+            }
+
             setMessages(prev => {
               const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
-              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id));
+              const existingTexts = new Set(prev.map(m => (m.text || '').trim()));
+              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id) && !existingTexts.has((nm.text || '').trim()));
               if (toAdd.length === 0) return prev;
               return [...prev, ...toAdd];
             });
@@ -202,10 +206,10 @@ export default function AgentTicketDetailPage() {
           }
         })
         .catch(() => {});
-    }, 5000);
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [id, user, messages]);
+  }, [id, user]);
 
   const handleReplyInputChange = (e) => {
     const val = e.target.value;
@@ -255,6 +259,10 @@ export default function AgentTicketDetailPage() {
         setTicket(data.ticket);
         
         let ticketMessages = data.messages || [];
+        const numericTicketIds = ticketMessages.map(m => typeof m.id === 'number' ? m.id : 0);
+        if (numericTicketIds.length > 0) {
+          maxTicketMsgIdRef.current = Math.max(...numericTicketIds, 0);
+        }
         if (data.ticket.chatId) {
           try {
             const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);

@@ -286,23 +286,8 @@ export async function POST(request) {
           `).run(ticket.id);
         }
 
-        // Prüfen, ob bereits ein menschlicher Support-Agent auf dieses Ticket geantwortet hat
-        let hasAgentReplied = false;
-        if (ticket) {
-          const agentMsg = db.prepare(`
-            SELECT 1 FROM ticket_messages 
-            WHERE ticket_id = ? AND sender_role IN ('agent', 'admin') 
-            LIMIT 1
-          `).get(ticket.id);
-          if (agentMsg) hasAgentReplied = true;
-        }
-
-        // Falls ein Agent bereits aktiv geantwortet hat: Bot bleibt komplett stumm (keine Bestätigungs-Nachricht)
+        // Sobald das Ticket existiert / übergeben ist, bleibt der Bot komplett stumm (keine automatischen Füllnachrichten)
         let botAck = null;
-        if (!hasAgentReplied) {
-          botAck = "Danke! Ich habe deine Information direkt an das Ticket der IT-Abteilung weitergeleitet. Ein IT-Admin wird sich bald bei dir melden.";
-          db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAck);
-        }
 
         if (ticket) {
           if (ticket.assigned_agent_id) {
@@ -333,7 +318,7 @@ export async function POST(request) {
         return NextResponse.json({
           text: botAck,
           isHandedOver: true,
-          isSilent: hasAgentReplied,
+          isSilent: true,
           imageUrl: cleanRelativePath
         });
       }
