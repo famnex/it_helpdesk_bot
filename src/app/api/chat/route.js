@@ -228,15 +228,7 @@ export async function POST(request) {
     // -----------------------------------------------------------------------------
     // PRÜFUNG 1: Handover an IT-Abteilung (Bot-Stummschaltung & KI-Mitlesen auf Selbst-Erledigung)
     // -----------------------------------------------------------------------------
-    let ticket = db.prepare('SELECT id, title, status, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
-    if (!ticket && email) {
-      ticket = db.prepare('SELECT id, title, status, creator_email, assigned_agent_id FROM tickets WHERE LOWER(creator_email) = LOWER(?) ORDER BY created_at DESC LIMIT 1').get(email);
-      if (ticket) {
-        db.prepare('UPDATE tickets SET chat_id = ? WHERE id = ?').run(chatId, ticket.id);
-        db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
-      }
-    }
-
+    const ticket = db.prepare('SELECT id, title, status, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
     const isTicketHandedOver = (chat && chat.ticketCreated === 1) || Boolean(ticket);
     if (isTicketHandedOver && !isSystemEvent) {
 
