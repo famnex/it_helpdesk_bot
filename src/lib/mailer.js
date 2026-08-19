@@ -52,11 +52,13 @@ function getSmtpConfig() {
  */
 export async function sendMail({ to, subject, html, text }, overrideConfig = null, errorOut = null) {
   const config = overrideConfig || getSmtpConfig();
+  const isSecure = config.secure === true || config.secure === 'true' || config.secure === 1 || config.secure === '1';
+  const port = Number(config.port) || (isSecure ? 465 : 587);
   
   const transporter = nodemailer.createTransport({
     host: config.host || 'localhost',
-    port: config.port || 1025,
-    secure: !!config.secure,
+    port: port,
+    secure: isSecure,
     auth: config.user ? {
       user: config.user,
       pass: config.pass
@@ -88,6 +90,40 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
     }
     return false;
   }
+}
+
+/**
+ * Informiert den Kunden über die erfolgreiche Erstellung seines Support-Tickets.
+ */
+export async function sendTicketCreatedNotification(customerEmail, ticketId, ticketTitle) {
+  const host = getBaseAppUrl();
+  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
+  
+  const subject = `[IT-Helpdesk] Ihr Ticket ${ticketId} wurde erfolgreich eröffnet`;
+  const text = `Hallo,\n\nIhr Support-Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich bei unserem IT-Support-Team eingereicht.\n\nEin Mitarbeiter wird sich schnellstmöglich darum kümmern.\n\nKlicken Sie auf den folgenden Link, um den Status Ihres Tickets einzusehen:\n\n${link}`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 24px; color: #f8fafc; max-width: 600px; margin: 0 auto; background-color: #020617; border: 1px solid #1e293b; border-radius: 12px;">
+      <h2 style="color: #38bdf8; margin-top: 0; font-size: 20px;">Ticket ${ticketId} eröffnet</h2>
+      <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6;">
+        Hallo,<br/><br/>
+        Ihr Support-Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold; color: #38bdf8;">${ticketId}</span>) wurde erfolgreich bei der IT-Abteilung eingereicht.
+      </p>
+      <p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">
+        Unser Support-Team wurde benachrichtigt und wird Ihr Anliegen zeitnah bearbeiten.
+      </p>
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${link}" style="background-color: #0284c7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+          Ticket im Portal ansehen
+        </a>
+      </div>
+      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-top: 1px solid #1e293b; padding-top: 15px; text-align: center;">
+        Hinweis: Dieser Link meldet Sie automatisch ohne Login an und ist 30 Tage gültig.
+      </p>
+    </div>
+  `;
+
+  return sendMail({ to: customerEmail, subject, html, text });
 }
 
 /**

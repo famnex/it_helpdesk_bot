@@ -1,5 +1,6 @@
 import db from '@/lib/db';
 import { sendMail, getBaseAppUrl } from '@/lib/mailer';
+import { generateMagicLinkToken } from '@/lib/auth';
 
 /**
  * Reiht eine E-Mail-Benachrichtigung für ein Ticket in den 5-Minuten-Puffer ein (Debouncing).
@@ -132,7 +133,9 @@ async function processAndSendNotificationItem(item) {
 
     const isCustomer = item.recipientRole === 'customer';
     const baseUrl = getBaseAppUrl();
-    const ticketUrl = `${baseUrl}/${isCustomer ? 'tickets' : 'agent/tickets'}/${item.ticketId}`;
+    const loginToken = generateMagicLinkToken(item.recipientEmail, '30d');
+    const targetPath = isCustomer ? `/tickets/${item.ticketId}` : `/agent/tickets/${item.ticketId}`;
+    const ticketUrl = `${baseUrl}/api/auth/magic?token=${loginToken}&redirect=${targetPath}`;
 
     const text = `Hallo,\n\nes gibt ${countText} zu dem Support-Ticket "${ticketTitle}" (${item.ticketId}).\n\nAus Datenschutzgründen werden keine Nachrichteninhalte per E-Mail übertragen. Bitte klicke auf den folgenden Link, um direkt zum Ticket / Chat zu wechseln:\n\n${ticketUrl}`;
 

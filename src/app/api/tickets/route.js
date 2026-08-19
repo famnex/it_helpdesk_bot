@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { generateTicketTitle, determineAgentAssignment } from '@/lib/gemini';
-import { sendAssignmentNotification, sendUnassignedTicketNotification } from '@/lib/mailer';
+import { sendAssignmentNotification, sendUnassignedTicketNotification, sendTicketCreatedNotification } from '@/lib/mailer';
 
 /**
  * GET: Gibt die Tickets aus.
@@ -363,6 +363,15 @@ export async function POST(request) {
         }
       } catch (mailErr) {
         console.error('Fehler beim Senden der Unzugewiesen-Mails:', mailErr);
+      }
+    }
+
+    // Kunden über die erfolgreiche Ticket-Erstellung per E-Mail benachrichtigen
+    if (email) {
+      try {
+        await sendTicketCreatedNotification(email, ticketId, title);
+      } catch (custMailErr) {
+        console.error('Fehler beim Senden der Ticket-Erstellungs-Mail an Kunden:', custMailErr);
       }
     }
 

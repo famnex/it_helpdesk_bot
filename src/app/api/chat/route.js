@@ -10,7 +10,7 @@ import {
   determineAgentAssignment
 } from '@/lib/gemini';
 import { queueTicketNotification } from '@/lib/notifications';
-import { sendAssignmentNotification, sendUnassignedTicketNotification } from '@/lib/mailer';
+import { sendAssignmentNotification, sendUnassignedTicketNotification, sendTicketCreatedNotification } from '@/lib/mailer';
 import { reconstructIdentityTrace } from '@/lib/identityTrace';
 import fs from 'fs';
 import path from 'path';
@@ -470,6 +470,10 @@ export async function POST(request) {
                 }
               } catch (e) {}
             }
+
+            try {
+              await sendTicketCreatedNotification(creatorEmail, newTicketId, ticketTitle);
+            } catch (e) {}
           } catch (createErr) {
             console.error('Fehler bei automatischer Ticketerstellung beim Mergen:', createErr);
           }
@@ -820,6 +824,10 @@ export async function POST(request) {
                 }
               } catch (mailErr) {}
             }
+
+            try {
+              await sendTicketCreatedNotification(user.email, newTicketId, finalTitle);
+            } catch (mailErr) {}
           } else {
             autoTicketId = existingTicket.id;
           }
