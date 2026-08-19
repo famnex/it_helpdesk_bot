@@ -3,6 +3,28 @@ import db from './db';
 import { generateMagicLinkToken } from './auth';
 
 /**
+ * Ermittelt die Basis-URL des Helpdesks für E-Mail-Links.
+ */
+export function getBaseAppUrl() {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+  }
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('idp_config');
+    if (row && row.value) {
+      const parsed = JSON.parse(row.value);
+      if (parsed.appUrl) return parsed.appUrl.replace(/\/$/, '');
+    }
+  } catch (e) {}
+
+  // Standard für Produktivumgebung an der MSO
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://cloud.mso-hef.de/helpdesk';
+  }
+  return 'http://localhost:3000';
+}
+
+/**
  * Holt die aktuelle SMTP-Konfiguration aus der Datenbank.
  */
 function getSmtpConfig() {
@@ -72,7 +94,7 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
  * Sendet den Magic-Link für den Kunden-Login.
  */
 export async function sendMagicLinkEmail(email, token) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const host = getBaseAppUrl();
   const link = `${host}/api/auth/magic?token=${token}`;
   
   const subject = 'Anmeldelink für Schul-Support KI';
@@ -97,7 +119,7 @@ export async function sendMagicLinkEmail(email, token) {
  * Informiert den Kunden über eine neue Antwort eines Agenten.
  */
 export async function sendAgentReplyNotification(customerEmail, ticketId, ticketTitle) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const host = getBaseAppUrl();
   // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
   const loginToken = generateMagicLinkToken(customerEmail, '30d');
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
@@ -125,7 +147,7 @@ export async function sendAgentReplyNotification(customerEmail, ticketId, ticket
  * Informiert den Agenten über eine neue Antwort des Kunden.
  */
 export async function sendCustomerReplyNotification(agentEmail, ticketId, ticketTitle) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const host = getBaseAppUrl();
   const link = `${host}/agent/tickets/${ticketId}`;
   
   const subject = `Kundenantwort zu Ticket ${ticketId}`;
@@ -145,7 +167,7 @@ export async function sendCustomerReplyNotification(agentEmail, ticketId, ticket
 }
 
 export async function sendAssignmentNotification(agentEmail, ticketId, ticketTitle) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const host = getBaseAppUrl();
   // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
   const loginToken = generateMagicLinkToken(agentEmail, '30d');
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/agent/tickets/${ticketId}`;
@@ -173,7 +195,7 @@ export async function sendAssignmentNotification(agentEmail, ticketId, ticketTit
  * Informiert alle Agenten/Admins über ein neues, unzugewiesenes Ticket.
  */
 export async function sendUnassignedTicketNotification(agentEmails, ticketId, ticketTitle) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const host = getBaseAppUrl();
   const link = `${host}/agent/tickets/${ticketId}`;
   
   const subject = `Neues unzugewiesenes Ticket: ${ticketId}`;
@@ -198,31 +220,59 @@ export async function sendUnassignedTicketNotification(agentEmails, ticketId, ti
 
 /**
  * Informiert den Kunden, dass sein Ticket gelöst wurde, und teilt ihm die Lösung mit.
+ * Enthält 1-Klick-Sternebewertungslinks (1 bis 5 Sterne) direkt in der E-Mail.
  */
 export async function sendTicketResolvedNotification(customerEmail, ticketId, ticketTitle, solution) {
-  const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
+  const host = getBaseAppUrl();
+  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink & Direkt-Bewertung
   const loginToken = generateMagicLinkToken(customerEmail, '30d');
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
   const subject = `Ihr Ticket ${ticketId} wurde gelöst!`;
-  const text = `Hallo,\n\nihr Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich gelöst.\n\nEingetragene Lösung:\n${solution}\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen:\n\n${link}`;
+  const text = `Hallo,\n\nihr Ticket "${ticketTitle}" (${ticketId}) wurde erfolgreich gelöst.\n\nEingetragene Lösung:\n${solution}\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen:\n\n${link}\n\nWie zufrieden waren Sie mit unserem Support? Bewerten Sie mit einem Klick:\n1 Stern: ${host}/api/tickets/${ticketId}/rating?score=1&token=${loginToken}\n2 Sterne: ${host}/api/tickets/${ticketId}/rating?score=2&token=${loginToken}\n3 Sterne: ${host}/api/tickets/${ticketId}/rating?score=3&token=${loginToken}\n4 Sterne: ${host}/api/tickets/${ticketId}/rating?score=4&token=${loginToken}\n5 Sterne: ${host}/api/tickets/${ticketId}/rating?score=5&token=${loginToken}`;
+
+  const ratingStarsHtml = [
+    { stars: 1, label: '1 Stern' },
+    { stars: 2, label: '2 Sterne' },
+    { stars: 3, label: '3 Sterne' },
+    { stars: 4, label: '4 Sterne' },
+    { stars: 5, label: '5 Sterne' }
+  ].map(item => {
+    const starUrl = `${host}/api/tickets/${ticketId}/rating?score=${item.stars}&token=${loginToken}`;
+    return `
+      <a href="${starUrl}" style="display: inline-block; margin: 3px; padding: 8px 12px; background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; text-decoration: none; font-size: 15px; color: #facc15; font-weight: bold; text-align: center;">
+        ${'★'.repeat(item.stars)}<br/><span style="font-size: 10px; color: #94a3b8; font-weight: normal;">${item.label}</span>
+      </a>
+    `;
+  }).join('');
+
   const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
-      <h2 style="color: #10b981; margin-top: 0;">Ticket gelöst!</h2>
-      <p>Hallo,</p>
-      <p>Ihr Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold;">${ticketId}</span>) wurde erfolgreich gelöst.</p>
+    <div style="font-family: sans-serif; padding: 24px; color: #f8fafc; max-width: 600px; margin: 0 auto; background-color: #020617; border: 1px solid #1e293b; border-radius: 12px;">
+      <h2 style="color: #10b981; margin-top: 0; font-size: 22px;">Ticket gelöst!</h2>
+      <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">Hallo,</p>
+      <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">Ihr Ticket <strong>"${ticketTitle}"</strong> (ID: <span style="font-family: monospace; font-weight: bold; color: #38bdf8;">${ticketId}</span>) wurde erfolgreich gelöst.</p>
       
-      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; margin: 20px 0;">
-        <strong style="color: #15803d; font-size: 13px; display: block; margin-bottom: 5px;">Bestätigte Lösung:</strong>
-        <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.5; white-space: pre-wrap;">${solution}</p>
+      <div style="background-color: #0f172a; border: 1px solid rgba(16, 185, 129, 0.4); border-left: 4px solid #10b981; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        <strong style="color: #34d399; font-size: 13px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Bestätigte Lösung:</strong>
+        <p style="margin: 0; font-size: 14px; color: #e2e8f0; line-height: 1.6; white-space: pre-wrap;">${solution}</p>
       </div>
 
-      <p style="margin: 30px 0;">
-        <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; shadow: 0 4px 6px rgba(16, 185, 129, 0.15);">Ticket im Portal ansehen</a>
-      </p>
-      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
-        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
+      <!-- 1-Klick-Sterne-Bewertung -->
+      <div style="background-color: #0b132b; border: 1px solid #1e293b; border-radius: 10px; padding: 18px; margin: 24px 0; text-align: center;">
+        <h3 style="color: #f1f5f9; font-size: 15px; margin: 0 0 6px 0;">Wie zufrieden waren Sie mit dem Support?</h3>
+        <p style="color: #94a3b8; font-size: 12px; margin: 0 0 14px 0;">Klicken Sie auf Ihre Bewertung (1 Klick, keine Anmeldung erforderlich):</p>
+        <div style="text-align: center;">
+          ${ratingStarsHtml}
+        </div>
+      </div>
+
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${link}" style="background-color: #10b981; color: white; padding: 12px 26px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+          Ticket im Portal ansehen
+        </a>
+      </div>
+      <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-top: 1px solid #1e293b; padding-top: 15px; text-align: center;">
+        Hinweis: Die Links melden Sie automatisch an und sind 30 Tage gültig.
       </p>
     </div>
   `;

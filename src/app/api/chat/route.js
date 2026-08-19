@@ -266,6 +266,26 @@ export async function POST(request) {
           imageUrl: cleanRelativePath
         });
       } else {
+        // Falls das Ticket bereits geschlossen war, automatisch wiedereröffnen!
+        if (ticket && ticket.status === 'closed') {
+          const reopenStatus = ticket.assigned_agent_id ? 'assigned' : 'open';
+          db.prepare(`
+            UPDATE tickets 
+            SET status = ?, 
+                closed_at = NULL, 
+                closed_by_name = NULL, 
+                closed_by_email = NULL, 
+                closed_by_user_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(reopenStatus, ticket.id);
+
+          db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+            VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_REOPENED] Ticket wurde durch neue Kundennachricht im Chat automatisch wieder geöffnet.')
+          `).run(ticket.id);
+        }
+
         // Prüfen, ob bereits ein menschlicher Support-Agent auf dieses Ticket geantwortet hat
         let hasAgentReplied = false;
         if (ticket) {
@@ -394,9 +414,12 @@ export async function POST(request) {
         prefixMsg += " Da das zugehörige IT-Support-Ticket geschlossen war, habe ich es automatisch für dich wieder geöffnet.";
       }
 
-      // KI-Antwort auf die neuen/ergänzten Informationen generieren
+      // KI-Antwort auf die neuen/ergänzten Informationen nur dann generieren, wenn noch KEIN Ticket existiert!
       let botAnswerText = '';
-      if (combinedInfo && combinedInfo.trim().length > 2) {
+      const targetChatRow = db.prepare('SELECT ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(pendingTargetId);
+      const targetHasTicket = targetTicket || (targetChatRow && targetChatRow.ticketCreated === 1);
+
+      if (!targetHasTicket && combinedInfo && combinedInfo.trim().length > 2) {
         try {
           const targetHistory = db.prepare(`
             SELECT sender, text, image_url as imageUrl 
@@ -405,10 +428,8 @@ export async function POST(request) {
             ORDER BY created_at ASC
           `).all(pendingTargetId);
 
-          const targetChatRow = db.prepare('SELECT ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(pendingTargetId);
           const isAgentMode = targetChatRow ? targetChatRow.isAgentOnBehalf === 1 : false;
-
-          const aiRes = await generateChatResponse(targetHistory, targetChatRow ? targetChatRow.ticketCreated : 0, isAgentMode);
+          const aiRes = await generateChatResponse(targetHistory, 0, isAgentMode);
           if (aiRes && aiRes.text) {
             botAnswerText = aiRes.text.replace('[TICKET_CREATED]', '').replace('[CHAT_ABUSE_DETECTED]', '').trim();
           }
@@ -418,7 +439,9 @@ export async function POST(request) {
       }
 
       let ackBot = prefixMsg;
-      if (botAnswerText) {
+      if (targetHasTicket) {
+        ackBot += " Da für dein Anliegen bereits ein IT-Support-Ticket aktiv ist, habe ich deine Angaben direkt an die IT-Abteilung weitergeleitet.";
+      } else if (botAnswerText) {
         ackBot += `\n\n${botAnswerText}`;
       } else {
         ackBot += " Wie kann ich dich nun weiter unterstützen?";
@@ -506,7 +529,8 @@ export async function POST(request) {
           const candidateData = candidateChats.map(c => ({
             id: c.id,
             ticketId: c.ticketId,
-            title: c.ticketTitle || c.category || 'Support-Thema',
+            title: c.ticketTitle || (c.snippet ? (c.snippet.length > 50 ? c.snippet.slice(0, 47) + '...' : c.snippet) : c.category) || 'Support-Thema',
+            category: c.category || 'Support-Thema',
             snippet: c.snippet || '',
             createdAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString('de-DE') : 'kürzlich'
           }));

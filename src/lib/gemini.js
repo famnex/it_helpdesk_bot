@@ -998,7 +998,12 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
       });
 
       if (matchedCandidate) {
-        const bestTopic = cleanTopicName(matchedCandidate.title, cleanTopicName(matchedCandidate.category, group.name));
+        // Bevorzuge den konkreten Titel oder Snippet-Text statt des generischen Gruppennamens
+        let concreteTopic = matchedCandidate.title;
+        if (!concreteTopic || concreteTopic.toLowerCase().includes('support') || concreteTopic.toLowerCase() === group.name.toLowerCase()) {
+          concreteTopic = matchedCandidate.snippet ? (matchedCandidate.snippet.length > 45 ? matchedCandidate.snippet.slice(0, 42) + '...' : matchedCandidate.snippet) : group.name;
+        }
+        const bestTopic = cleanTopicName(concreteTopic, group.name);
         return {
           isDuplicate: true,
           similarityScore: 0.90,
@@ -1013,7 +1018,7 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
   const { geminiModel } = getModelNames();
 
   const chatsOverview = candidateChats.map(c => 
-    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Thema/Kategorie: "${cleanTopicName(c.title, c.category || 'Unbekannt')}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
+    `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Konkreter Titel/Anliegen: "${cleanTopicName(c.title, c.snippet || c.category || 'Unbekannt')}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
   ).join('\n');
 
   const prompt = `Du bist ein hochentwickelter KI-Analyst für ein IT-Helpdesk-System.
@@ -1031,12 +1036,13 @@ REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
 - 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
 
 AUFTRAG:
-Bestimme für die am besten passende früheren Konversation den similarityScore und das konkrete Thema (z.B. "Anmeldung & Passwort", "WLAN Verbindung", "Moodle Zugangsdaten"). Vermeide generische Wörter wie "Anfrage".
+Bestimme für die am besten passende frühere Konversation den similarityScore und das konkrete Thema als prägnante Substantivgruppe / Nominalphrase (z. B. "Passwort-Rücksetzung Schul-PC", "WLAN-Verbindung im Raum 204", "Drucker druckt nicht", "Moodle-Kurs Freischaltung").
+WICHTIGE REGEL: Verwende NIEMALS generische Sammelkategorien wie "Benutzerkonten & Passwörter" oder "Hardware", sondern benenne den konkreten Fall des Benutzers!
 Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
 {
   "similarityScore": 0.85,
   "matchedChatId": "die Chat-ID mit dem höchsten Score (oder null falls alle Scores < 0.45)",
-  "matchedTopic": "Konkrete verständliche Bezeichnung des Themas (z.B. Login & Passwort-Probleme)",
+  "matchedTopic": "Konkrete präzise Bezeichnung des Themas (z.B. Passwort vergessen für Schüler-PC)",
   "reason": "Kurzer Satz zur Begründung der Wahrscheinlichkeit"
 }`;
 
@@ -1052,7 +1058,7 @@ Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
     const score = typeof result.similarityScore === 'number' ? result.similarityScore : 0;
     const isDuplicate = score >= 0.45 && Boolean(result.matchedChatId);
     const matchedItem = candidateChats.find(c => c.id === result.matchedChatId);
-    const fallbackTopic = matchedItem ? cleanTopicName(matchedItem.title, matchedItem.category || 'Support-Thema') : 'Support-Thema';
+    const fallbackTopic = matchedItem ? cleanTopicName(matchedItem.title, matchedItem.snippet ? (matchedItem.snippet.slice(0, 45)) : 'Support-Thema') : 'Support-Thema';
     const finalTopic = cleanTopicName(result.matchedTopic, fallbackTopic);
 
     return {

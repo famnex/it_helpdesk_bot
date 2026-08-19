@@ -3,6 +3,7 @@ import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { extractKnowledgeChunks, processAndSaveChunks, generateSolutionContext } from '@/lib/gemini';
 import { sendTicketResolvedNotification } from '@/lib/mailer';
+import { flushTicketNotificationsNow } from '@/lib/notifications';
 
 export async function POST(request, { params }) {
   const { id } = await params;
@@ -28,6 +29,13 @@ export async function POST(request, { params }) {
 
     if (ticket.status === 'closed') {
       return NextResponse.json({ error: 'Ticket ist bereits geschlossen.' }, { status: 400 });
+    }
+
+    // Ausstehende gepufferte Benachrichtigungen für dieses Ticket sofort versenden
+    try {
+      await flushTicketNotificationsNow(id);
+    } catch (flushErr) {
+      console.error('Fehler beim sofortigen Flashen der Benachrichtigungen vor Ticket-Schließung:', flushErr);
     }
 
     const sol = isSilent ? 'Ohne Lösung geschlossen' : solution;
