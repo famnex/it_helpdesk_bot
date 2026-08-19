@@ -228,9 +228,17 @@ export async function POST(request) {
     // -----------------------------------------------------------------------------
     // PRÜFUNG 1: Handover an IT-Abteilung (Bot-Stummschaltung & KI-Mitlesen auf Selbst-Erledigung)
     // -----------------------------------------------------------------------------
-    const isTicketHandedOver = chat && chat.ticketCreated === 1;
+    let ticket = db.prepare('SELECT id, title, status, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
+    if (!ticket && email) {
+      ticket = db.prepare('SELECT id, title, status, creator_email, assigned_agent_id FROM tickets WHERE LOWER(creator_email) = LOWER(?) ORDER BY created_at DESC LIMIT 1').get(email);
+      if (ticket) {
+        db.prepare('UPDATE tickets SET chat_id = ? WHERE id = ?').run(chatId, ticket.id);
+        db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
+      }
+    }
+
+    const isTicketHandedOver = (chat && chat.ticketCreated === 1) || Boolean(ticket);
     if (isTicketHandedOver && !isSystemEvent) {
-      const ticket = db.prepare('SELECT id, title, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
 
       // KI liest mit: Prüfen, ob der Nutzer sagt, dass sich das Problem erledigt hat
       const resolutionCheck = await checkSelfResolutionIntent(text);
@@ -346,9 +354,31 @@ export async function POST(request) {
     const pendingTargetId = chat ? chat.pending_merge_target_id : null;
 
     if (pendingTargetId && (textLower.startsWith('ja') || textLower.includes('ja_zum_chat'))) {
-      const targetTicket = db.prepare('SELECT id, status, assigned_agent_id FROM tickets WHERE chat_id = ?').get(pendingTargetId);
+      let targetChatId = pendingTargetId;
+      // 1. Suche nach Ticket anhand chat_id oder ticket_id
+      let targetTicket = db.prepare('SELECT id, title, status, assigned_agent_id, chat_id, creator_email FROM tickets WHERE chat_id = ? OR id = ?').get(pendingTargetId, pendingTargetId);
 
-      // Falls das zugehörige Ticket geschlossen war, wieder öffnen!
+      // 2. Falls pendingTargetId ein Ticket ist (z. B. TK-XXXX), setze targetChatId auf dessen chat_id
+      if (targetTicket && targetTicket.chat_id) {
+        targetChatId = targetTicket.chat_id;
+      }
+
+      // 3. Falls noch immer kein Ticket gefunden, suche das aktuellste Ticket für die E-Mail des Nutzers
+      if (!targetTicket && email) {
+        targetTicket = db.prepare('SELECT id, title, status, assigned_agent_id, chat_id, creator_email FROM tickets WHERE LOWER(creator_email) = LOWER(?) ORDER BY created_at DESC LIMIT 1').get(email);
+        if (targetTicket && targetTicket.chat_id) {
+          targetChatId = targetTicket.chat_id;
+        }
+      }
+
+      // 4. Prüfe, ob targetChatId existiert; falls nicht (z. B. gelöscht), erzeuge den Chat-Eintrag
+      let targetChatRow = db.prepare('SELECT id, ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(targetChatId);
+      if (!targetChatRow) {
+        db.prepare('INSERT INTO chats (id, user_email, ticket_created) VALUES (?, ?, ?)').run(targetChatId, email || null, targetTicket ? 1 : 0);
+        targetChatRow = { id: targetChatId, ticketCreated: targetTicket ? 1 : 0, isAgentOnBehalf: 0 };
+      }
+
+      // 5. Falls das zugehörige Ticket geschlossen war, wieder öffnen!
       let wasTicketReopened = false;
       if (targetTicket && targetTicket.status === 'closed') {
         const newStatus = targetTicket.assigned_agent_id ? 'assigned' : 'open';
@@ -371,6 +401,15 @@ export async function POST(request) {
         wasTicketReopened = true;
       }
 
+      // Zielchat zwingend als ticket_created = 1 markieren, falls ein Ticket verknüpft ist
+      const targetHasTicket = Boolean(targetTicket || (targetChatRow && targetChatRow.ticketCreated === 1));
+      if (targetHasTicket) {
+        db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(targetChatId);
+        if (targetTicket && !targetTicket.chat_id) {
+          db.prepare('UPDATE tickets SET chat_id = ? WHERE id = ?').run(targetChatId, targetTicket.id);
+        }
+      }
+
       // Alle Nutzernachrichten aus dem zu verwerfenden Chat laden (außer Bestätigung "Ja")
       const tempUserMsgs = db.prepare(`
         SELECT text, image_url as imageUrl FROM chat_messages 
@@ -390,7 +429,7 @@ export async function POST(request) {
       const combinedInfo = infoTexts.join('\n');
 
       if (combinedInfo) {
-        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(pendingTargetId, `[Ergänzte Informationen aus neuem Chat]:\n${combinedInfo}`);
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(targetChatId, `[Ergänzte Informationen aus neuem Chat]:\n${combinedInfo}`);
         if (targetTicket) {
           db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
             .run(targetTicket.id, email || 'Kunde', `[Zusatzinformationen aus Chat]:\n${combinedInfo}`);
@@ -401,7 +440,7 @@ export async function POST(request) {
       tempUserMsgs.forEach(m => {
         if (m.imageUrl) {
           db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, \'user\', ?, ?)')
-            .run(pendingTargetId, '[Angehängtes Bild aus verworfenem Chat]', m.imageUrl);
+            .run(targetChatId, '[Angehängtes Bild aus verworfenem Chat]', m.imageUrl);
           if (targetTicket) {
             db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url) VALUES (?, ?, \'customer\', ?, ?)')
               .run(targetTicket.id, email || 'Kunde', '[Angehängtes Bild aus Chat]', m.imageUrl);
@@ -416,9 +455,6 @@ export async function POST(request) {
 
       // KI-Antwort auf die neuen/ergänzten Informationen nur dann generieren, wenn noch KEIN Ticket existiert!
       let botAnswerText = '';
-      const targetChatRow = db.prepare('SELECT ticket_created as ticketCreated, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(pendingTargetId);
-      const targetHasTicket = targetTicket || (targetChatRow && targetChatRow.ticketCreated === 1);
-
       if (!targetHasTicket && combinedInfo && combinedInfo.trim().length > 2) {
         try {
           const targetHistory = db.prepare(`
@@ -426,7 +462,7 @@ export async function POST(request) {
             FROM chat_messages 
             WHERE chat_id = ? 
             ORDER BY created_at ASC
-          `).all(pendingTargetId);
+          `).all(targetChatId);
 
           const isAgentMode = targetChatRow ? targetChatRow.isAgentOnBehalf === 1 : false;
           const aiRes = await generateChatResponse(targetHistory, 0, isAgentMode);
@@ -440,17 +476,42 @@ export async function POST(request) {
 
       let ackBot = prefixMsg;
       if (targetHasTicket) {
-        ackBot += " Da für dein Anliegen bereits ein IT-Support-Ticket aktiv ist, habe ich deine Angaben direkt an die IT-Abteilung weitergeleitet.";
+        ackBot += " Da für dein Anliegen bereits ein IT-Support-Ticket aktiv ist, habe ich deine Angaben direkt an die IT-Abteilung zur Bearbeitung weitergeleitet.";
       } else if (botAnswerText) {
         ackBot += `\n\n${botAnswerText}`;
       } else {
         ackBot += " Wie kann ich dich nun weiter unterstützen?";
       }
 
-      db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(pendingTargetId, ackBot);
+      db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(targetChatId, ackBot);
       if (targetTicket) {
         db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'IT-Support-Bot\', \'bot\', ?)')
           .run(targetTicket.id, ackBot);
+
+        // Benachrichtigung an den Agenten über die hinzugefügten Informationen einreihen
+        if (targetTicket.assigned_agent_id) {
+          const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(targetTicket.assigned_agent_id);
+          if (agent) {
+            await queueTicketNotification({
+              ticketId: targetTicket.id,
+              recipientEmail: agent.email,
+              recipientRole: 'agent',
+              senderName: user ? user.name : 'Benutzer',
+              messageText: combinedInfo || 'Ergänzte Informationen aus Chat'
+            });
+          }
+        } else {
+          const supportTeam = db.prepare("SELECT email FROM users WHERE role IN ('agent', 'admin')").all();
+          for (const member of supportTeam) {
+            await queueTicketNotification({
+              ticketId: targetTicket.id,
+              recipientEmail: member.email,
+              recipientRole: 'agent',
+              senderName: user ? user.name : 'Benutzer',
+              messageText: combinedInfo || 'Ergänzte Informationen aus Chat'
+            });
+          }
+        }
       }
 
       // Redundanten Chat vollständig aus der Datenbank löschen (auch für Admins!)
@@ -460,7 +521,7 @@ export async function POST(request) {
       return NextResponse.json({
         text: ackBot,
         isMerged: true,
-        targetChatId: pendingTargetId,
+        targetChatId: targetChatId,
         imageUrl: cleanRelativePath
       });
     } else if (pendingTargetId && (textLower.startsWith('nein') || textLower.includes('nein_neues_thema'))) {
@@ -516,7 +577,7 @@ export async function POST(request) {
             SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
                    (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
             FROM chats c
-            LEFT JOIN tickets t ON t.chat_id = c.id
+            LEFT JOIN tickets t ON (t.chat_id = c.id OR (c.user_email IS NOT NULL AND LOWER(t.creator_email) = LOWER(c.user_email)))
             WHERE c.id != ? 
               AND c.is_merged = 0 
               AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_id = c.id AND sender = 'user' AND LENGTH(TRIM(text)) > 2)
