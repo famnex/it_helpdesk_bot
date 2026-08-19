@@ -490,23 +490,28 @@ export async function POST(request) {
         WHERE chat_id = ? AND sender = 'user'
       `).all(chatId);
 
-      const infoTexts = tempUserMsgs.map(m => (m.text || '').trim()).filter(t => {
-        const lower = t.toLowerCase();
-        return t.length > 0 && lower !== 'ja' && lower !== 'ja_zum_chat' && !lower.startsWith('ja,') && !lower.startsWith('ja ');
-      });
-
-      // Falls pending_merge_info vorhanden ist, diese ebenfalls einbinden
-      if (chat.pending_merge_info && !infoTexts.includes(chat.pending_merge_info.trim())) {
-        infoTexts.unshift(chat.pending_merge_info.trim());
+      const rawInfoList = [];
+      if (chat && chat.pending_merge_info && chat.pending_merge_info.trim()) {
+        rawInfoList.push(chat.pending_merge_info.trim());
+      }
+      for (const m of tempUserMsgs) {
+        if (m.text) {
+          const t = m.text.trim();
+          const tLower = t.toLowerCase();
+          if (tLower !== 'ja' && tLower !== 'ja_zum_chat' && !tLower.startsWith('ja,') && !tLower.startsWith('ja ') && !rawInfoList.includes(t)) {
+            rawInfoList.push(t);
+          }
+        }
       }
 
-      const combinedInfo = infoTexts.join('\n');
+      const combinedInfo = rawInfoList.join('\n\n').trim();
 
       if (combinedInfo) {
-        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(targetChatId, `[Ergänzte Informationen aus neuem Chat]:\n${combinedInfo}`);
+        const formattedMergedText = `**Ergänzende Informationen:**\n\n${combinedInfo}`;
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)').run(targetChatId, formattedMergedText);
         if (targetTicket) {
           db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, ?, \'customer\', ?)')
-            .run(targetTicket.id, email || (user ? user.email : 'Kunde'), `[Zusatzinformationen aus Chat]:\n${combinedInfo}`);
+            .run(targetTicket.id, email || (user ? user.email : 'Kunde'), formattedMergedText);
         }
       }
 

@@ -217,10 +217,13 @@ export default function CustomerChatPage() {
       })
       .catch(err => console.error('Fehler beim Setup-Check:', err));
  
-    // Immer eine neue ChatId beim Laden der Seite generieren (neuer Chat bei jedem Aufruf)
-    const newChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
-    sessionStorage.setItem('support_chat_id', newChatId);
-    setChatId(newChatId);
+    // Prüfen, ob bereits ein aktiver Chat in der aktuellen Browser-Sitzung existiert (oder neuen erstellen)
+    let activeChatId = sessionStorage.getItem('support_chat_id');
+    if (!activeChatId) {
+      activeChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
+      sessionStorage.setItem('support_chat_id', activeChatId);
+    }
+    setChatId(activeChatId);
 
     // Persistente Sitzungs-ID für Missbrauchsnachverfolgung generieren
     let persistentSessionId = localStorage.getItem('it_helpdesk_session_uuid');
@@ -230,8 +233,8 @@ export default function CustomerChatPage() {
     }
     sessionStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
  
-    // Chatverlauf laden (für den neuen leeren Chat)
-    fetch(`/api/chat?chatId=${newChatId}`)
+    // Chatverlauf laden (für den aktiven Chat)
+    fetch(`/api/chat?chatId=${activeChatId}`)
       .then(res => res.json())
       .then(data => {
         if (data.messages && data.messages.length > 0) {
