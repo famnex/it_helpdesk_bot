@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { marked } from 'marked';
 import { renderMarkdownWithLinks } from '@/lib/formatting';
 
@@ -32,6 +32,10 @@ const parseUtcDate = (dateStr) => {
 
 export default function CustomerTicketDetailPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const ratedParam = searchParams.get('rated');
+  const scoreParam = searchParams.get('score');
+
   const [ticket, setTicket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [replyText, setReplyText] = useState('');
@@ -42,11 +46,20 @@ export default function CustomerTicketDetailPage() {
   const [partnerPresence, setPartnerPresence] = useState(null);
 
   // Rating States
-  const [selectedRating, setSelectedRating] = useState(0);
+  const [selectedRating, setSelectedRating] = useState(() => {
+    if (scoreParam) {
+      const s = parseInt(scoreParam, 10);
+      if (s >= 1 && s <= 5) return s;
+    }
+    return 0;
+  });
   const [hoverRating, setHoverRating] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(() => {
+    return !!scoreParam || ratedParam === 'true';
+  });
 
   // Flagging Message States
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -55,6 +68,8 @@ export default function CustomerTicketDetailPage() {
   const [flagReasonText, setFlagReasonText] = useState('');
 
   const messagesEndRef = useRef(null);
+  const topFeedbackRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const lastTypedTimeRef = useRef(0);
   const router = useRouter();
 
@@ -76,8 +91,16 @@ export default function CustomerTicketDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isOtherPartyTyping]);
+    if (ticket?.status === 'closed' || scoreParam || ratedParam === 'true') {
+      isNearBottomRef.current = false;
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+      topFeedbackRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      scrollToBottom();
+    }
+  }, [messages, isOtherPartyTyping, ticket?.status, scoreParam, ratedParam]);
 
   // SSE Live Stream Setup mit Fallback auf 5s-Polling
   useEffect(() => {
@@ -386,7 +409,13 @@ export default function CustomerTicketDetailPage() {
   const handleSubmitRating = async (starCount) => {
     const finalRating = starCount || selectedRating;
     if (!finalRating) return;
-    setIsSubmittingRating(true);
+
+    if (ratingComment.trim()) {
+      setIsSavingFeedback(true);
+    } else {
+      setIsSubmittingRating(true);
+    }
+
     try {
       const res = await fetch(`/api/tickets/${id}/rating`, {
         method: 'POST',
@@ -395,12 +424,14 @@ export default function CustomerTicketDetailPage() {
       });
       if (res.ok) {
         setRatingSubmitted(true);
+        setSelectedRating(finalRating);
         setTicket(prev => prev ? ({ ...prev, rating: finalRating, ratingFeedback: ratingComment }) : prev);
       }
     } catch (e) {
       console.error('Fehler beim Senden der Bewertung:', e);
     } finally {
       setIsSubmittingRating(false);
+      setIsSavingFeedback(false);
     }
   };
 
@@ -485,14 +516,14 @@ export default function CustomerTicketDetailPage() {
         </div>
       </header>
 
-      {/* Ticket Body & Messages Area */}
+{/* Ticket Body & Messages Area */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 w-full">
         
         {/* Chat Verlauf */}
         <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20 min-h-0 w-full">
           
           {/* Nachrichtenhistorie */}
-          <div onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
+          <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
             
             {/* Lösungsbox oben anzeigen, falls geschlossen */}
             {ticket.status === 'closed' && ticket.solution && (
@@ -508,7 +539,7 @@ export default function CustomerTicketDetailPage() {
 
             {/* Kundenzufriedenheits-Rating (1-5 Sterne) */}
             {ticket.status === 'closed' && (
-              <div className="bg-slate-900/90 border border-violet-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto mb-4 animate-fade-in">
+              <div ref={topFeedbackRef} className="bg-slate-900/90 border border-violet-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto mb-4 animate-fade-in">
                 <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
@@ -521,17 +552,44 @@ export default function CustomerTicketDetailPage() {
                   </div>
                 </div>
 
-                {ticket.rating || ratingSubmitted ? (
-                  <div className="bg-slate-950/60 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1 text-amber-400 text-base">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <i key={star} className={`fa-star ${star <= (ticket.rating || selectedRating) ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
-                        ))}
+                {isSubmittingRating ? (
+                  <div className="bg-slate-950/60 border border-violet-500/30 rounded-xl p-5 flex items-center justify-center gap-3 text-xs text-violet-300 animate-pulse">
+                    <i className="fa-solid fa-circle-notch fa-spin text-lg text-violet-400"></i>
+                    <span className="font-semibold text-sm">Bewertung wird übermittelt...</span>
+                  </div>
+                ) : (ticket.rating || ratingSubmitted || selectedRating > 0) ? (
+                  <div className="space-y-3">
+                    <div className="bg-slate-950/60 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1 text-amber-400 text-base">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <i key={star} className={`fa-star ${star <= (ticket.rating || selectedRating) ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
+                          ))}
+                        </div>
+                        <span className="text-xs font-bold text-emerald-300">Vielen Dank für deine Bewertung!</span>
                       </div>
-                      <span className="text-xs font-bold text-emerald-300">Vielen Dank für deine Bewertung!</span>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase">Bewertet ({ticket.rating || selectedRating}/5)</span>
                     </div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase">Bewertet ({ticket.rating || selectedRating}/5)</span>
+
+                    {/* Optionales Feedback-Kommentarfeld */}
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1 animate-fade-in">
+                      <input
+                        type="text"
+                        value={ratingComment}
+                        onChange={(e) => setRatingComment(e.target.value)}
+                        placeholder={ticket.ratingFeedback ? `Gespeichert: ${ticket.ratingFeedback}` : "Möchtest du uns noch etwas mitteilen? (Optional)"}
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSubmitRating(ticket.rating || selectedRating)}
+                        disabled={isSavingFeedback || !ratingComment.trim()}
+                        className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                      >
+                        {isSavingFeedback && <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>}
+                        <span>{isSavingFeedback ? 'Wird gespeichert...' : 'Feedback senden'}</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -563,26 +621,6 @@ export default function CustomerTicketDetailPage() {
                          hoverRating === 1 || selectedRating === 1 ? 'Unzufrieden ⭐' : ''}
                       </span>
                     </div>
-
-                    {selectedRating > 0 && (
-                      <div className="flex flex-col sm:flex-row gap-2 pt-2 animate-fade-in">
-                        <input
-                          type="text"
-                          value={ratingComment}
-                          onChange={(e) => setRatingComment(e.target.value)}
-                          placeholder="Optionales Feedback oder Kommentar hinterlassen..."
-                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSubmitRating(selectedRating)}
-                          disabled={isSubmittingRating}
-                          className="bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50"
-                        >
-                          {isSubmittingRating ? 'Wird gespeichert...' : 'Feedback senden'}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
