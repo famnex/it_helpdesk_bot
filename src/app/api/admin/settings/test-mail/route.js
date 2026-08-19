@@ -38,6 +38,7 @@ export async function POST(request) {
           <strong>Konfigurations-Details:</strong><br>
           • Host: ${smtpConfig.host}:${smtpConfig.port}<br>
           • Benutzer: ${smtpConfig.user || '(keiner)'}<br>
+          • Absender: ${smtpConfig.sender_name ? `"${smtpConfig.sender_name}" <${smtpConfig.sender || 'support@schule.de'}>` : (smtpConfig.sender || 'support@schule.de')}<br>
           • SSL/TLS verschlüsselt: ${smtpConfig.secure ? 'Ja' : 'Nein'}
         </p>
       </div>

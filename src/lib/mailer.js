@@ -25,6 +25,22 @@ export function getBaseAppUrl() {
 }
 
 /**
+ * Formatiert den Absender sauber (inklusive optionalem Anzeigenamen).
+ */
+export function formatFromAddress(config) {
+  const senderEmail = (config.sender || 'support@schule.de').trim();
+  const senderName = (config.sender_name || '').trim();
+
+  if (senderEmail.includes('<') && senderEmail.includes('>')) {
+    return senderEmail;
+  }
+  if (senderName) {
+    return `"${senderName}" <${senderEmail}>`;
+  }
+  return senderEmail;
+}
+
+/**
  * Holt die aktuelle SMTP-Konfiguration aus der Datenbank.
  */
 function getSmtpConfig() {
@@ -43,7 +59,8 @@ function getSmtpConfig() {
     user: '',
     pass: '',
     secure: false,
-    sender: 'support@schule.de'
+    sender: 'support@schule.de',
+    sender_name: 'IT-Helpdesk'
   };
 }
 
@@ -71,8 +88,10 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
     socketTimeout: 8000
   });
 
+  const fromAddress = formatFromAddress(config);
+
   const mailOptions = {
-    from: config.sender || 'support@schule.de',
+    from: fromAddress,
     to,
     subject,
     html,
@@ -81,7 +100,7 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`E-Mail erfolgreich gesendet an ${to}. MessageId: ${info.messageId}`);
+    console.log(`E-Mail erfolgreich gesendet an ${to} von ${fromAddress}. MessageId: ${info.messageId}`);
     return true;
   } catch (error) {
     console.error(`Fehler beim E-Mail-Versand an ${to}:`, error);

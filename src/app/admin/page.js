@@ -272,7 +272,7 @@ export default function AdminDashboardPage() {
   const [importChunksList, setImportChunksList] = useState([]);
 
   // Settings States
-  const [smtpConfig, setSmtpConfig] = useState({ host: '', port: 1025, user: '', pass: '', secure: false, sender: '' });
+  const [smtpConfig, setSmtpConfig] = useState({ host: '', port: 1025, user: '', pass: '', secure: false, sender: '', sender_name: '' });
   const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '', logoutRedirectUrl: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
   const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
@@ -2417,11 +2417,12 @@ export default function AdminDashboardPage() {
                 </ul>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 md:col-span-2">
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">SMTP-Host</label>
                   <input 
                     type="text" 
+                    placeholder="z.B. smtp.office365.com oder mail.schule.de"
                     value={smtpConfig.host}
                     onChange={(e) => setSmtpConfig({ ...smtpConfig, host: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
@@ -2431,8 +2432,9 @@ export default function AdminDashboardPage() {
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">Port</label>
                   <input 
                     type="number" 
+                    placeholder="587 oder 465"
                     value={smtpConfig.port}
-                    onChange={(e) => setSmtpConfig({ ...smtpConfig, port: parseInt(e.target.value) })}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, port: parseInt(e.target.value) || 0 })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
                 </div>
@@ -2440,28 +2442,44 @@ export default function AdminDashboardPage() {
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">Benutzername</label>
                   <input 
                     type="text" 
+                    placeholder="z.B. support@schule.de"
                     value={smtpConfig.user}
                     onChange={(e) => setSmtpConfig({ ...smtpConfig, user: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Passwort</label>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Passwort / App-Passwort</label>
                   <input 
                     type="password" 
+                    placeholder="••••••••"
                     value={smtpConfig.pass}
                     onChange={(e) => setSmtpConfig({ ...smtpConfig, pass: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Absender-Adresse</label>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Absender Anzeigename</label>
                   <input 
                     type="text" 
+                    placeholder="z.B. IT-Helpdesk oder Schul-Support"
+                    value={smtpConfig.sender_name || ''}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, sender_name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                <div className="sm:col-span-2 md:col-span-3">
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Absender E-Mail-Adresse</label>
+                  <input 
+                    type="text" 
+                    placeholder="z.B. support@schule.de"
                     value={smtpConfig.sender}
                     onChange={(e) => setSmtpConfig({ ...smtpConfig, sender: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    E-Mails werden versendet als: <span className="font-mono text-slate-400">{smtpConfig.sender_name ? `"${smtpConfig.sender_name}" <${smtpConfig.sender || 'support@schule.de'}>` : (smtpConfig.sender || 'support@schule.de')}</span>
+                  </p>
                 </div>
               </div>
               
