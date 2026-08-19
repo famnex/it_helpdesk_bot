@@ -115,11 +115,14 @@ export async function destroySession() {
 }
 
 /**
- * Generiert einen Magic-Link-Token für einen Kunden
+ * Generiert einen Magic-Link-Token für einen Kunden / Benutzer (unendlich gültig, sofern nicht anders angegeben)
  */
-export function generateMagicLinkToken(email, expiresIn = '15m') {
+export function generateMagicLinkToken(email, expiresIn = null) {
   const secret = getJwtSecret();
-  return jwt.sign({ email, type: 'magic_link' }, secret, { expiresIn });
+  if (expiresIn && expiresIn !== 'infinite' && expiresIn !== 'never') {
+    return jwt.sign({ email, type: 'magic_link' }, secret, { expiresIn });
+  }
+  return jwt.sign({ email, type: 'magic_link' }, secret);
 }
 
 /**

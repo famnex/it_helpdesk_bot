@@ -133,7 +133,7 @@ async function processAndSendNotificationItem(item) {
 
     const isCustomer = item.recipientRole === 'customer';
     const baseUrl = getBaseAppUrl();
-    const loginToken = generateMagicLinkToken(item.recipientEmail, '30d');
+    const loginToken = generateMagicLinkToken(item.recipientEmail);
     const targetPath = isCustomer ? `/tickets/${item.ticketId}` : `/agent/tickets/${item.ticketId}`;
     const ticketUrl = `${baseUrl}/api/auth/magic?token=${loginToken}&redirect=${targetPath}`;
 

@@ -116,7 +116,7 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
  */
 export async function sendTicketCreatedNotification(customerEmail, ticketId, ticketTitle) {
   const host = getBaseAppUrl();
-  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const loginToken = generateMagicLinkToken(customerEmail);
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
   const subject = `[IT-Helpdesk] Ihr Ticket ${ticketId} wurde erfolgreich eröffnet`;
@@ -137,7 +137,7 @@ export async function sendTicketCreatedNotification(customerEmail, ticketId, tic
         </a>
       </div>
       <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-top: 1px solid #1e293b; padding-top: 15px; text-align: center;">
-        Hinweis: Dieser Link meldet Sie automatisch ohne Login an und ist 30 Tage gültig.
+        Hinweis: Dieser Link meldet Sie automatisch ohne separates Passwort an.
       </p>
     </div>
   `;
@@ -153,7 +153,7 @@ export async function sendMagicLinkEmail(email, token) {
   const link = `${host}/api/auth/magic?token=${token}`;
   
   const subject = 'Anmeldelink für Schul-Support KI';
-  const text = `Hallo,\n\nklicken Sie auf den folgenden Link, um sich anzumelden und Ihre Support-Tickets einzusehen:\n\n${link}\n\nDieser Link ist 15 Minuten lang gültig.`;
+  const text = `Hallo,\n\nklicken Sie auf den folgenden Link, um sich anzumelden und Ihre Support-Tickets einzusehen:\n\n${link}`;
   const html = `
     <div style="font-family: sans-serif; padding: 20px; color: #333;">
       <h2>Anmeldung beim Schul-Support KI</h2>
@@ -163,7 +163,6 @@ export async function sendMagicLinkEmail(email, token) {
         <a href="${link}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Tickets einsehen</a>
       </p>
       <p style="color: #666; font-size: 12px;">Oder kopieren Sie diese URL in Ihren Browser:<br>${link}</p>
-      <p>Dieser Link ist 15 Minuten lang gültig.</p>
     </div>
   `;
 
@@ -175,8 +174,7 @@ export async function sendMagicLinkEmail(email, token) {
  */
 export async function sendAgentReplyNotification(customerEmail, ticketId, ticketTitle) {
   const host = getBaseAppUrl();
-  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
-  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const loginToken = generateMagicLinkToken(customerEmail);
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
   const subject = `Neue Antwort zu Ihrem Ticket ${ticketId}`;
@@ -190,7 +188,7 @@ export async function sendAgentReplyNotification(customerEmail, ticketId, ticket
         <a href="${link}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; shadow: 0 4px 6px rgba(14, 165, 233, 0.15);">Antwort lesen</a>
       </p>
       <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
-        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
+        Hinweis: Dieser Button meldet Sie automatisch ohne separates Passwort an.
       </p>
     </div>
   `;
@@ -223,8 +221,7 @@ export async function sendCustomerReplyNotification(agentEmail, ticketId, ticket
 
 export async function sendAssignmentNotification(agentEmail, ticketId, ticketTitle) {
   const host = getBaseAppUrl();
-  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink
-  const loginToken = generateMagicLinkToken(agentEmail, '30d');
+  const loginToken = generateMagicLinkToken(agentEmail);
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/agent/tickets/${ticketId}`;
   
   const subject = `Ihnen wurde das Ticket ${ticketId} zugewiesen`;
@@ -238,7 +235,7 @@ export async function sendAssignmentNotification(agentEmail, ticketId, ticketTit
         <a href="${link}" style="background-color: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket im Portal ansehen</a>
       </p>
       <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-t: 1px solid #e2e8f0; padding-top: 15px;">
-        Hinweis: Dieser Button meldet Sie automatisch an. Der Link ist aus Sicherheitsgründen 30 Tage gültig.
+        Hinweis: Dieser Button meldet Sie automatisch ohne separates Passwort an.
       </p>
     </div>
   `;
@@ -279,8 +276,7 @@ export async function sendUnassignedTicketNotification(agentEmails, ticketId, ti
  */
 export async function sendTicketResolvedNotification(customerEmail, ticketId, ticketTitle, closingMessage) {
   const host = getBaseAppUrl();
-  // Generiert einen 30-Tage Auto-Login Token speziell für diesen Benachrichtigungslink & Direkt-Bewertung
-  const loginToken = generateMagicLinkToken(customerEmail, '30d');
+  const loginToken = generateMagicLinkToken(customerEmail);
   const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/tickets/${ticketId}`;
   
   const subject = `Ihr Ticket ${ticketId} wurde abgeschlossen`;
@@ -327,7 +323,7 @@ export async function sendTicketResolvedNotification(customerEmail, ticketId, ti
         </a>
       </div>
       <p style="color: #64748b; font-size: 11px; margin-top: 20px; border-top: 1px solid #1e293b; padding-top: 15px; text-align: center;">
-        Hinweis: Die Links melden Sie automatisch an und sind 30 Tage gültig.
+        Hinweis: Die Links melden Sie automatisch ohne separates Passwort an.
       </p>
     </div>
   `;
