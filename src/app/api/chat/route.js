@@ -47,11 +47,11 @@ export async function GET(request) {
     }
 
     if (user && user.email) {
-      // Alle Chats eines angemeldeten Benutzers auflisten
+      // Alle echten Chats eines angemeldeten Benutzers auflisten (ohne Session-Link-Zeilen)
       const userChats = db.prepare(`
         SELECT id, created_at as createdAt 
         FROM chats 
-        WHERE user_email = ? 
+        WHERE user_email = ? AND id NOT LIKE 'link-%'
         ORDER BY created_at DESC
       `).all(user.email);
       
@@ -236,7 +236,8 @@ export async function POST(request) {
       const resolutionCheck = await checkSelfResolutionIntent(text);
 
       if (resolutionCheck.isResolved && ticket) {
-        const botReply = "Super, freut mich, dass sich dein Anliegen erledigt hat! Ich habe das Support-Ticket für dich geschlossen. Falls du wieder Unterstützung benötigst, bin ich jederzeit für dich da.";
+        const botReply = `Alles klar! Ich habe das Support-Ticket (#${ticket.id}) für dich geschlossen. Freut mich, dass sich dein Anliegen erledigt hat! Falls du wieder Unterstützung benötigst, bin ich jederzeit für dich da.`;
+        const resolutionNote = `Vom Benutzer im Chat als erledigt/storniert gemeldet: "${text}"`;
 
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botReply);
         db.prepare(`
@@ -246,18 +247,34 @@ export async function POST(request) {
 
         db.prepare(`
           UPDATE tickets 
-          SET status = 'closed', 
+          SET status = 'closed',
+              solution = ?,
               closed_at = CURRENT_TIMESTAMP, 
-              closed_by_name = 'Bot', 
-              closed_by_email = 'bot@system', 
-              closed_by_user_id = 'bot' 
+              closed_by_name = ?, 
+              closed_by_email = ?, 
+              closed_by_user_id = ?,
+              updated_at = CURRENT_TIMESTAMP 
           WHERE id = ?
-        `).run(ticket.id);
+        `).run(resolutionNote, user ? (user.name || user.email) : (chat?.user_name || ticket.creator_email || 'Kunde'), user ? user.email : (ticket.creator_email || 'kunde@system'), user ? user.id : 'customer', ticket.id);
 
         db.prepare(`
           INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-          VALUES (?, 'system', 'system', '[SYSTEM_EVENT: TICKET_CLOSED_BY_BOT] Ticket wurde durch Benutzerbestätigung vom Bot geschlossen.')
-        `).run(ticket.id);
+          VALUES (?, 'system', 'system', ?)
+        `).run(ticket.id, `[SYSTEM_EVENT: TICKET_CLOSED_BY_CUSTOMER] Ticket wurde durch Benutzer im Chat als erledigt/storniert gemeldet ("${text}").`);
+
+        // Falls Ticket einem Agenten zugewiesen war, diesen benachrichtigen
+        if (ticket.assigned_agent_id) {
+          const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
+          if (agent) {
+            await queueTicketNotification({
+              ticketId: ticket.id,
+              recipientEmail: agent.email,
+              recipientRole: 'agent',
+              senderName: user ? (user.name || user.email) : 'Kunde',
+              messageText: `[Ticket durch Kunden im Chat als erledigt geschlossen]: ${text}`
+            });
+          }
+        }
 
         return NextResponse.json({
           text: botReply,

@@ -71,7 +71,7 @@ export async function GET(request) {
              CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END as ticketCreated
       FROM chats c
       LEFT JOIN tickets t ON t.chat_id = c.id
-      WHERE EXISTS (
+      WHERE c.id NOT LIKE 'link-%' AND EXISTS (
         SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = c.id
       )
       ORDER BY c.created_at DESC

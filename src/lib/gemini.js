@@ -1015,7 +1015,7 @@ export async function detectDuplicateTopic(newQuery, candidateChats) {
     }
   }
 
-  const { geminiModel } = getModelNames();
+  const { extractionModel } = getModelNames();
 
   const chatsOverview = candidateChats.map(c => 
     `- Chat-ID: ${c.id}${c.ticketId ? ` (Ticket: #${c.ticketId})` : ''} | Erstellt am: ${c.createdAt} | Konkreter Titel/Anliegen: "${cleanTopicName(c.title, c.snippet || c.category || 'Unbekannt')}" | Auszug/Erste Nachricht: "${c.snippet || ''}"`
@@ -1034,6 +1034,7 @@ REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
 - 0.85 - 1.00: Nahezu identisch oder direkte Konkretisierung (z. B. "Ich kann mich nicht anmelden" vs. "Ich habe Probleme mit meinem Passwort" -> beides betrifft Zugangsdaten/Login; "WLAN geht nicht" vs. "Drucker im WLAN offline").
 - 0.50 - 0.84: Stark verwandter IT-Bereich für denselben Nutzer.
 - 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
+- 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
 
 AUFTRAG:
 Bestimme für die am besten passende frühere Konversation den similarityScore und das konkrete Thema als prägnante Substantivgruppe / Nominalphrase (z. B. "Passwort-Rücksetzung Schul-PC", "WLAN-Verbindung im Raum 204", "Drucker druckt nicht", "Moodle-Kurs Freischaltung").
@@ -1051,7 +1052,7 @@ Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
     };
-    const responseText = await callGemini(geminiModel, payload);
+    const responseText = await callGemini(extractionModel, payload);
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanJson);
 
@@ -1075,28 +1076,51 @@ Antworte ZWINGEND als valides JSON-Objekt ohne Markdown-Codeblock:
 }
 
 /**
- * Prüft, ob der Nutzer in einer Nachricht mitteilt, dass sich sein Problem erledigt hat oder das Ticket geschlossen werden kann.
+ * Prüft, ob der Nutzer in einer Nachricht mitteilt, dass sich sein Problem erledigt hat,
+ * das Ticket zurückgenommen/storniert werden soll oder geschlossen werden kann.
  */
 export async function checkSelfResolutionIntent(userMessage) {
-  if (!userMessage || userMessage.trim().length < 3) {
+  if (!userMessage || userMessage.trim().length < 2) {
     return { isResolved: false };
   }
 
-  const textLower = userMessage.toLowerCase();
+  const textLower = userMessage.toLowerCase().trim();
 
-  // Schneller Regex-Check vor KI-Aufruf für eindeutige Phrasen
+  // Schneller Regex-/Phrasen-Check vor KI-Aufruf für eindeutige Absichten
   const clearPhrases = [
-    'hat sich erledigt', 'geht wieder', 'funktioniert wieder', 
-    'habe es gelöst', 'habs gelöst', 'problem gelöst', 
-    'ticket schließen', 'kann geschlossen werden', 'danke geht wieder',
-    'erledigt danke', 'klappt wieder', 'brauche keine hilfe mehr'
+    'hat sich erledigt', 'hat sich schon erledigt', 'hat sich von selbst erledigt', 'hat sich gelöst',
+    'geht wieder', 'funktioniert wieder', 'klappt wieder', 'läuft wieder',
+    'habe es gelöst', 'habs gelöst', 'problem gelöst', 'problem behoben',
+    'ticket schließen', 'ticket bitte schließen', 'bitte ticket schließen', 'schließe das ticket',
+    'kann geschlossen werden', 'kannst du das ticket schließen', 'bitte schließen', 'schließen bitte',
+    'nimm das ticket bitte zurück', 'nimm das ticket zurück', 'ticket zurücknehmen', 'ticket bitte zurücknehmen',
+    'ticket zurückziehen', 'ticket bitte zurück', 'ticket zurück',
+    'ticket stornieren', 'ticket bitte stornieren', 'storniere das ticket', 'stornieren bitte', 'bitte stornieren',
+    'ticket abbrechen', 'bitte ticket abbrechen', 'ticket löschen', 'bitte ticket löschen',
+    'danke geht wieder', 'erledigt danke', 'danke erledigt', 'ist erledigt', 'alles erledigt', 'bereits erledigt',
+    'brauche keine hilfe mehr', 'brauche kein ticket mehr', 'kein ticket mehr nötig', 'nicht mehr nötig',
+    'hat sich erübrigt', 'ist nicht mehr nötig', 'ist nicht mehr erforderlich'
   ];
 
   if (clearPhrases.some(phrase => textLower.includes(phrase))) {
     return { isResolved: true, confidence: 'high' };
   }
 
-  const prompt = `Analysiere, ob der Benutzer in der folgenden Nachricht mitteilt, dass sich sein IT-Problem erledigt hat, gelöst wurde oder das Support-Ticket geschlossen werden kann:
+  // Regex-Muster für flexible Formulierungen (z. B. "nimm ... ticket ... zurück", "ticket ... nicht mehr ... nötig")
+  const regexPatterns = [
+    /nimm.*ticket.*zurück/i,
+    /ticket.*(zurücknehmen|stornieren|abbrechen|schließen|löschen)/i,
+    /(problem|anliegen|sache).*(erledigt|gelöst|behoben)/i,
+    /(brauche|benötige).*(kein ticket|keine hilfe|nicht mehr)/i
+  ];
+
+  if (regexPatterns.some(pattern => pattern.test(textLower))) {
+    return { isResolved: true, confidence: 'high' };
+  }
+
+  const { extractionModel } = getModelNames();
+
+  const prompt = `Analysiere, ob der Benutzer in der folgenden Nachricht mitteilt, dass sich sein IT-Problem erledigt hat, gelöst wurde, er keine Hilfe mehr benötigt oder das Support-Ticket storniert, zurückgenommen oder geschlossen werden soll:
 
 NACHRICHT DES BENUTZERS:
 "${userMessage}"
@@ -1109,7 +1133,7 @@ Antworte ZWINGEND als JSON-Objekt ohne Markdown:
 
   try {
     const payload = { contents: [{ parts: [{ text: prompt }] }] };
-    const responseText = await callGemini(geminiModel, payload);
+    const responseText = await callGemini(extractionModel, payload);
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanJson);
     return {

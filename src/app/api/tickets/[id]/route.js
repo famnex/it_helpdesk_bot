@@ -3,6 +3,7 @@ import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { sendAgentReplyNotification, sendCustomerReplyNotification } from '@/lib/mailer';
 import { queueTicketNotification } from '@/lib/notifications';
+import { checkSelfResolutionIntent } from '@/lib/gemini';
 
 /**
  * GET: Ticket-Details und Nachrichten laden
@@ -174,6 +175,61 @@ export async function POST(request, { params }) {
         senderName: user.name || 'IT-Support-Team',
         messageText: text || '(Anhang gesendet)'
       });
+    }
+
+    // Prüfen, ob der Kunde mitteilt, dass sich das Ticket erledigt hat / storniert werden soll
+    if (user.role === 'customer' && text) {
+      try {
+        const resolutionCheck = await checkSelfResolutionIntent(text);
+        if (resolutionCheck.isResolved) {
+          const resolutionNote = `Vom Kunden als erledigt/storniert gemeldet: "${text}"`;
+          const autoBotReply = "Vielen Dank für die Rückmeldung! Das Ticket wurde als erledigt geschlossen. Solltest du später erneut Hilfe benötigen, kannst du dich jederzeit wieder bei uns melden.";
+
+          db.prepare(`
+            UPDATE tickets 
+            SET status = 'closed',
+                solution = ?,
+                closed_at = CURRENT_TIMESTAMP,
+                closed_by_name = ?,
+                closed_by_email = ?,
+                closed_by_user_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(resolutionNote, user.name || user.email || 'Kunde', user.email, user.id || 'customer', id);
+
+          db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+            VALUES (?, 'IT-Support-Team', 'bot', ?)
+          `).run(id, autoBotReply);
+
+          db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
+            VALUES (?, 'system', 'system', ?)
+          `).run(id, `[SYSTEM_EVENT: TICKET_CLOSED_BY_CUSTOMER] Ticket wurde durch den Kunden als erledigt/storniert gemeldet ("${text}").`);
+
+          // Agenten benachrichtigen
+          if (ticket.assigned_agent_id) {
+            const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
+            if (agent) {
+              await queueTicketNotification({
+                ticketId: id,
+                recipientEmail: agent.email,
+                recipientRole: 'agent',
+                senderName: user.name || user.email,
+                messageText: `[Ticket durch Kunden als erledigt geschlossen]: ${text}`
+              });
+            }
+          }
+
+          return NextResponse.json({ 
+            success: true, 
+            isClosedByCustomer: true,
+            message: 'Ticket wurde als erledigt geschlossen.' 
+          });
+        }
+      } catch (resErr) {
+        console.error('Fehler bei Self-Resolution-Check in Ticket-Route:', resErr);
+      }
     }
 
     return NextResponse.json({ success: true });

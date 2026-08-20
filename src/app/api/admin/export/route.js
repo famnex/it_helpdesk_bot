@@ -232,7 +232,7 @@ function generateExportData({ since, until, includeTickets, includeChats, includ
         c.categorized_at as categorizedAt, c.last_active_at as lastActiveAt,
         c.created_at as createdAt
       FROM chats c
-      WHERE c.created_at >= ? AND c.created_at <= ?
+      WHERE c.created_at >= ? AND c.created_at <= ? AND c.id NOT LIKE 'link-%'
       ORDER BY c.created_at DESC
     `).all(sinceTimestamp, untilTimestamp);
 

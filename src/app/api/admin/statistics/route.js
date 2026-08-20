@@ -95,18 +95,18 @@ export async function GET() {
       };
     });
 
-    // 7. Statistiken über Bot-Konversationen und Kategorien berechnen
-    const totalChatsRow = db.prepare('SELECT COUNT(*) as count FROM chats').get();
+    // 7. Statistiken über Bot-Konversationen und Kategorien berechnen (nur echte Chats)
+    const totalChatsRow = db.prepare("SELECT COUNT(*) as count FROM chats WHERE id NOT LIKE 'link-%' AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)").get();
     const totalChats = totalChatsRow?.count || 0;
 
-    const uncategorizedChatsRow = db.prepare("SELECT COUNT(*) as count FROM chats WHERE category IS NULL OR category = ''").get();
+    const uncategorizedChatsRow = db.prepare("SELECT COUNT(*) as count FROM chats WHERE id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)").get();
     const uncategorizedCount = uncategorizedChatsRow?.count || 0;
     const categorizedCount = totalChats - uncategorizedCount;
 
     const categoriesRows = db.prepare(`
       SELECT category, COUNT(*) as count 
       FROM chats 
-      WHERE category IS NOT NULL AND category != ''
+      WHERE id NOT LIKE 'link-%' AND category IS NOT NULL AND category != '' AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
       GROUP BY category
       ORDER BY count DESC
     `).all();
