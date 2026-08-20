@@ -1480,7 +1480,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative">
+    <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative overflow-hidden">
       
       {/* Restart Overlay */}
       {showRestartOverlay && (
@@ -1494,31 +1494,50 @@ export default function AdminDashboardPage() {
       )}
 
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0 shadow-lg z-30 relative h-[72px]">
+      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3 flex justify-between items-center shrink-0 shadow-lg z-30 relative h-[64px]">
         <div className="flex items-center gap-3">
+          {/* Hamburger-Button für mobile Navigation */}
+          <button 
+            type="button" 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
+            title="Admin-Menü öffnen"
+          >
+            <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
+          </button>
+
           <div className="bg-violet-600 text-white p-2 rounded-xl shadow-md flex items-center justify-center shrink-0">
-            <i className="fa-solid fa-gears text-lg md:text-xl"></i>
+            <i className="fa-solid fa-gears text-base sm:text-lg"></i>
           </div>
           <div>
-            <h1 className="text-sm md:text-base font-bold text-white leading-tight">System-Administration</h1>
-            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Verwaltungs-Bereich</p>
+            <h1 className="text-xs sm:text-sm md:text-base font-bold text-white leading-tight">System-Administration</h1>
+            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Admin Control Center</p>
           </div>
         </div>
 
-        {/* Hamburger-Button für mobile Navigation */}
-        <button 
-          type="button" 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
-        >
-          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
-        </button>
+        {/* Top Quick Links & User */}
+        <div className="flex items-center gap-2 sm:gap-3 text-xs">
+          <Link
+            href="/"
+            className="hidden sm:flex bg-slate-850 hover:bg-slate-800 text-slate-350 hover:text-white border border-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all items-center gap-1.5"
+            title="Zum Chat-Frontend wechseln"
+          >
+            <i className="fa-solid fa-comments text-sky-400"></i>
+            <span>Chat-Frontend</span>
+          </Link>
 
-        {/* Desktop-Menu */}
-        <div className="hidden md:flex items-center gap-4 text-sm">
+          <Link 
+            href="/agent"
+            className="hidden sm:flex bg-slate-850 hover:bg-slate-800 text-slate-350 hover:text-white border border-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all items-center gap-1.5"
+            title="Zum Agenten-Portal wechseln"
+          >
+            <i className="fa-solid fa-ticket text-violet-400"></i>
+            <span>Agenten-Portal</span>
+          </Link>
+
           <Link 
             href="/profile"
-            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-xs text-slate-350 hover:border-violet-500/50"
+            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-slate-350 hover:border-violet-500/50"
             title="Profil bearbeiten"
           >
             {user?.avatarUrl ? (
@@ -1526,367 +1545,309 @@ export default function AdminDashboardPage() {
             ) : (
               <i className="fa-solid fa-user-shield text-violet-400"></i>
             )}
-            <span className="font-semibold">{user?.name || user?.email}</span>
-          </Link>
-
-          <Link
-            href="/"
-            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-comments text-sky-400"></i>
-            <span>Zum Chat-Frontend</span>
-          </Link>
-
-          <Link 
-            href="/agent"
-            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-ticket text-violet-400"></i>
-            <span>Agenten-Portal</span>
+            <span className="font-semibold hidden md:inline">{user?.name || user?.email}</span>
           </Link>
 
           <button 
             onClick={handleLogout}
-            className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold"
+            className="text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold cursor-pointer"
+            title="Abmelden"
           >
             <i className="fa-solid fa-right-from-bracket"></i>
-            <span>{logoutLabel}</span>
+            <span className="hidden md:inline">{logoutLabel}</span>
           </button>
         </div>
+      </header>
 
-        {/* Mobile Menu Dropdown */}
-        {mobileMenuOpen && (
-          <div className="md:hidden absolute top-[72px] left-0 right-0 bg-slate-900 border-b border-slate-800 p-5 shadow-2xl flex flex-col gap-3 animate-fade-in z-30">
-            <Link 
-              href="/profile"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl transition-all text-xs text-slate-350 font-semibold"
-            >
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-violet-500/30" />
-              ) : (
-                <i className="fa-solid fa-user-shield text-violet-400"></i>
-              )}
-              <span>Profil: {user?.name || user?.email}</span>
-            </Link>
+      {/* Main Layout Wrapper: Left Sidebar + Content */}
+      <div className="flex-1 flex flex-row min-h-0 overflow-hidden relative w-full">
+        
+        {/* Left Sidebar Menu */}
+        <aside className={`
+          w-64 lg:w-72 shrink-0 bg-slate-900/95 border-r border-slate-800/80 flex flex-col justify-between overflow-y-auto z-40 transition-all duration-300
+          ${mobileMenuOpen ? 'fixed inset-y-[64px] left-0 shadow-2xl bg-slate-900' : 'hidden md:flex'}
+        `}>
+          <div className="p-3.5 space-y-5">
+            
+            {/* Kategorie 1: WISSENSMANAGEMENT */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+                Wissensmanagement
+              </span>
+              
+              <button
+                onClick={() => { setActiveTab('knowledge'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'knowledge' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-brain text-sm w-4 shrink-0 ${activeTab === 'knowledge' ? 'text-white' : 'text-violet-400 group-hover:text-violet-300'}`}></i>
+                  <span className="truncate">Öffentliches Wissen</span>
+                </div>
+                {knowledge.filter(k => !k.isPrivate).length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    activeTab === 'knowledge' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {knowledge.filter(k => !k.isPrivate).length}
+                  </span>
+                )}
+              </button>
 
-            <Link
-              href="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-comments text-sky-400"></i>
-              <span>Zum Chat-Frontend</span>
-            </Link>
+              <button
+                onClick={() => { setActiveTab('private_knowledge'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'private_knowledge' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-user-lock text-sm w-4 shrink-0 ${activeTab === 'private_knowledge' ? 'text-white' : 'text-amber-400 group-hover:text-amber-300'}`}></i>
+                  <span className="truncate">Internes Wissen</span>
+                </div>
+                {knowledge.filter(k => k.isPrivate).length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    activeTab === 'private_knowledge' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {knowledge.filter(k => k.isPrivate).length}
+                  </span>
+                )}
+              </button>
 
-            <Link 
-              href="/agent"
-              onClick={() => setMobileMenuOpen(false)}
-              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-ticket text-violet-400"></i>
-              <span>Agenten-Portal</span>
-            </Link>
+              <button
+                onClick={() => { setActiveTab('solutions'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'solutions' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-circle-check text-sm w-4 shrink-0 ${activeTab === 'solutions' ? 'text-white' : 'text-emerald-400 group-hover:text-emerald-300'}`}></i>
+                  <span className="truncate">Gelöste Lösungen</span>
+                </div>
+                {solutions.length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    activeTab === 'solutions' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {solutions.length}
+                  </span>
+                )}
+              </button>
 
-            <button 
-              type="button"
-              onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-              className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-right-from-bracket"></i>
-              <span>{logoutLabel}</span>
-            </button>
+              <button
+                onClick={() => { setActiveTab('import'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'import' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-cloud-arrow-up text-sm w-4 shrink-0 ${activeTab === 'import' ? 'text-white' : 'text-sky-400 group-hover:text-sky-300'}`}></i>
+                  <span className="truncate">KI-Import (Dateien/Web)</span>
+                </div>
+              </button>
+            </div>
 
-            {/* Mobile Admin Navigation Tabs */}
-            <div className="border-t border-slate-800 pt-4 mt-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2 px-1">Navigation:</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={() => { setActiveTab('knowledge'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'knowledge' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-brain shrink-0 w-4"></i>
-                  <span className="truncate">Öffentlich</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('private_knowledge'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'private_knowledge' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-user-lock shrink-0 w-4"></i>
-                  <span className="truncate">Intern</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('solutions'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'solutions' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-circle-check shrink-0 w-4 text-emerald-400"></i>
-                  <span className="truncate">Lösungen</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('import'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'import' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-cloud-arrow-up shrink-0 w-4"></i>
-                  <span className="truncate">KI-Import</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('users'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-users shrink-0 w-4"></i>
-                  <span className="truncate">Benutzer</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('statistics'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'statistics' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-chart-line shrink-0 w-4 text-sky-400"></i>
-                  <span className="truncate">Statistik</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'settings' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-sliders shrink-0 w-4"></i>
-                  <span className="truncate">Settings</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('chats'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'chats' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-comments shrink-0 w-4 text-sky-400"></i>
-                  <span className="truncate">Chats</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('flagged'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'flagged' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-flag shrink-0 w-4"></i>
-                  <span className="truncate">Geflaggt</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('abusive'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'abusive' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-triangle-exclamation shrink-0 w-4"></i>
-                  <span className="truncate">Missbrauch</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('update'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'update' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-brands fa-github shrink-0 w-4"></i>
-                  <span className="truncate">Update</span>
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('export'); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'export' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
-                >
-                  <i className="fa-solid fa-file-export shrink-0 w-4 text-emerald-400"></i>
-                  <span className="truncate">Daten-Export</span>
-                </button>
-              </div>
+            {/* Kategorie 2: BENUTZER & ANALYSE */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+                Benutzer & Analyse
+              </span>
+
+              <button
+                onClick={() => { setActiveTab('users'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'users' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-users text-sm w-4 shrink-0 ${activeTab === 'users' ? 'text-white' : 'text-indigo-400 group-hover:text-indigo-300'}`}></i>
+                  <span className="truncate">Benutzerverwaltung</span>
+                </div>
+                {usersList.length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    activeTab === 'users' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {usersList.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('statistics'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'statistics' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-chart-line text-sm w-4 shrink-0 ${activeTab === 'statistics' ? 'text-white' : 'text-sky-400 group-hover:text-sky-300'}`}></i>
+                  <span className="truncate">Statistiken & Insights</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('chats'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'chats' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-comments text-sm w-4 shrink-0 ${activeTab === 'chats' ? 'text-white' : 'text-cyan-400 group-hover:text-cyan-300'}`}></i>
+                  <span className="truncate">Chat-Protokolle</span>
+                </div>
+                {chatsList.length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    activeTab === 'chats' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {chatsList.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Kategorie 3: MODERATION & SICHERHEIT */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+                Moderation & Sicherheit
+              </span>
+
+              <button
+                onClick={() => { setActiveTab('flagged'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'flagged' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-flag text-sm w-4 shrink-0 ${activeTab === 'flagged' ? 'text-white' : 'text-amber-400 group-hover:text-amber-300'}`}></i>
+                  <span className="truncate">Geflaggte Antworten</span>
+                </div>
+                {flaggedMessages.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {flaggedMessages.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('abusive'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'abusive' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-triangle-exclamation text-sm w-4 shrink-0 ${activeTab === 'abusive' ? 'text-white' : 'text-rose-400 group-hover:text-rose-300'}`}></i>
+                  <span className="truncate">Missbrauchserkennung</span>
+                </div>
+                {abusiveChats.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    {abusiveChats.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Kategorie 4: SYSTEM & DATEN */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+                System & Daten
+              </span>
+
+              <button
+                onClick={() => { setActiveTab('export'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'export' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-file-export text-sm w-4 shrink-0 ${activeTab === 'export' ? 'text-white' : 'text-emerald-400 group-hover:text-emerald-300'}`}></i>
+                  <span className="truncate">Daten-Export (JSON)</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'settings' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-sliders text-sm w-4 shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`}></i>
+                  <span className="truncate">System-Einstellungen</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('update'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'update' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-brands fa-github text-sm w-4 shrink-0 ${activeTab === 'update' ? 'text-white' : 'text-violet-400 group-hover:text-violet-300'}`}></i>
+                  <span className="truncate">GitHub-Update</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Mobile-only Navigation Links */}
+            <div className="md:hidden border-t border-slate-800 pt-3 space-y-1">
+              <Link
+                href="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-2 px-3 rounded-xl font-semibold text-xs text-slate-300 hover:text-white bg-slate-950/60 border border-slate-800 flex items-center gap-2"
+              >
+                <i className="fa-solid fa-comments text-sky-400"></i>
+                <span>Zum Chat-Frontend</span>
+              </Link>
+              <Link
+                href="/agent"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-2 px-3 rounded-xl font-semibold text-xs text-slate-300 hover:text-white bg-slate-950/60 border border-slate-800 flex items-center gap-2"
+              >
+                <i className="fa-solid fa-ticket text-violet-400"></i>
+                <span>Zum Agenten-Portal</span>
+              </Link>
             </div>
 
           </div>
+
+          {/* Sidebar Footer */}
+          <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-[10px] text-slate-500 text-center font-medium">
+            Schul-Support KI • v1.0
+          </div>
+        </aside>
+
+        {/* Backdrop for Mobile Drawer */}
+        {mobileMenuOpen && (
+          <div 
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-30"
+          />
         )}
-      </header>
 
-      {/* Mobile Horizontal Quick-Tab Scrollbar */}
-      <div className="md:hidden flex bg-slate-900 border-b border-slate-800 px-3 py-2 overflow-x-auto gap-1.5 no-scrollbar shrink-0 shadow-inner">
-        <button 
-          onClick={() => setActiveTab('knowledge')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'knowledge' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-brain text-[10px]"></i>
-          <span>Wissen</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('private_knowledge')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'private_knowledge' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-user-lock text-[10px]"></i>
-          <span>Intern</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('solutions')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'solutions' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-circle-check text-[10px] text-emerald-400"></i>
-          <span>Lösungen</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('import')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'import' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-cloud-arrow-up text-[10px]"></i>
-          <span>Import</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('users')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'users' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-users text-[10px]"></i>
-          <span>Benutzer</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('statistics')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'statistics' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-chart-line text-[10px] text-sky-400"></i>
-          <span>Statistik</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('settings')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'settings' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-sliders text-[10px]"></i>
-          <span>Settings</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('chats')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'chats' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-comments text-[10px] text-sky-400"></i>
-          <span>Chats</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('flagged')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'flagged' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-flag text-[10px]"></i>
-          <span>Geflaggt</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('abusive')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'abusive' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
-          <span>Missbrauch</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('update')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'update' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-brands fa-github text-[10px]"></i>
-          <span>Update</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('export')}
-          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'export' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
-        >
-          <i className="fa-solid fa-file-export text-[10px] text-emerald-400"></i>
-          <span>Export</span>
-        </button>
-      </div>
-
-      {/* Tabs - Hidden on mobile, visible on desktop */}
-      <div className="hidden md:flex bg-slate-900 border-b border-slate-800 px-6 overflow-x-auto gap-4 no-scrollbar shrink-0">
-        
-        {/* Hauptmenü: Wissen */}
-        <div className="flex items-center gap-1 border-r border-slate-800/80 pr-4 my-2">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pl-2 mr-2">Wissen:</span>
-          <button 
-            onClick={() => setActiveTab('knowledge')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'knowledge' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-brain"></i>
-            <span>Öffentlich</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('private_knowledge')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'private_knowledge' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-user-lock"></i>
-            <span>Intern</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('solutions')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'solutions' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-            title="Lösungen aus geschlossenen Tickets verwalten"
-          >
-            <i className="fa-solid fa-circle-check text-emerald-400"></i>
-            <span>Lösungen</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('import')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'import' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-cloud-arrow-up"></i>
-            <span>KI-Import</span>
-          </button>
-        </div>
-
-        {/* Hauptmenü: Benutzer */}
-        <div className="flex items-center gap-1 border-r border-slate-800/80 pr-4 my-2">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pl-2 mr-2">Benutzer:</span>
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'users' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-users"></i>
-            <span>Benutzerverwaltung</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('statistics')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'statistics' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-chart-line text-sky-400"></i>
-            <span>Statistik</span>
-          </button>
-        </div>
-
-        {/* System & Sonstiges */}
-        <div className="flex items-center gap-1 my-2">
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'settings' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-sliders"></i>
-            <span>Einstellungen</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('chats')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'chats' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-            title="Alle gespeicherten Chats durchsuchen und verwalten"
-          >
-            <i className="fa-solid fa-comments text-sky-400"></i>
-            <span>Chats</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('flagged')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'flagged' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-flag"></i>
-            <span>Geflaggte Antworten</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('abusive')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'abusive' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-solid fa-triangle-exclamation"></i>
-            <span>Missbrauchsmeldungen</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('update')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'update' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-          >
-            <i className="fa-brands fa-github"></i>
-            <span>System-Update</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('export')}
-            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'export' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
-            title="Daten-Export als JSON (Tickets, Chats, Nachrichten & Wissen)"
-          >
-            <i className="fa-solid fa-file-export text-emerald-400"></i>
-            <span>Daten-Export</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 overflow-y-auto">
+        {/* Content Container */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 min-w-0 bg-slate-950/30">
         
         {/* Tab 1: Wissensdatenbank */}
         {activeTab === 'knowledge' && (
@@ -4642,6 +4603,7 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* KI-Qualitätsanalyse Modal Overlay */}
       {qualityAnalysisModal && (
