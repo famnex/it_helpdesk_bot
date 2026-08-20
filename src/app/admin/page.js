@@ -209,8 +209,25 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'update'
+  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'update', 'export'
   const router = useRouter();
+
+  // Export States
+  const [exportPreset, setExportPreset] = useState('30d');
+  const [exportSinceDate, setExportSinceDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [exportUntilDate, setExportUntilDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [exportIncludeTickets, setExportIncludeTickets] = useState(true);
+  const [exportIncludeChats, setExportIncludeChats] = useState(true);
+  const [exportIncludeKnowledge, setExportIncludeKnowledge] = useState(true);
+  const [exportIncludeUsers, setExportIncludeUsers] = useState(false);
+  const [isExportLoading, setIsExportLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportPreview, setExportPreview] = useState(null);
+  const [exportCopySuccess, setExportCopySuccess] = useState(false);
 
   // Solutions (Saved closed solutions) States
   const [solutions, setSolutions] = useState([]);
@@ -441,8 +458,106 @@ export default function AdminDashboardPage() {
       loadStatistics();
     } else if (activeTab === 'chats') {
       loadChats();
+    } else if (activeTab === 'export') {
+      if (!exportPreview) {
+        handleLoadExportPreview();
+      }
     }
   }, [activeTab]);
+
+  const setExportDatePreset = (preset) => {
+    setExportPreset(preset);
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    setExportUntilDate(todayStr);
+
+    if (preset === '7d') {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      setExportSinceDate(d.toISOString().split('T')[0]);
+    } else if (preset === '30d') {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      setExportSinceDate(d.toISOString().split('T')[0]);
+    } else if (preset === 'month') {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1);
+      setExportSinceDate(d.toISOString().split('T')[0]);
+    } else if (preset === 'year') {
+      const d = new Date(today.getFullYear(), 0, 1);
+      setExportSinceDate(d.toISOString().split('T')[0]);
+    } else if (preset === 'all') {
+      setExportSinceDate('');
+      setExportUntilDate('');
+    }
+  };
+
+  const handleLoadExportPreview = async (overrideSince = null, overrideUntil = null) => {
+    setIsExportLoading(true);
+    try {
+      const s = overrideSince !== null ? overrideSince : exportSinceDate;
+      const u = overrideUntil !== null ? overrideUntil : exportUntilDate;
+      const params = new URLSearchParams({
+        since: s,
+        until: u,
+        includeTickets: exportIncludeTickets.toString(),
+        includeChats: exportIncludeChats.toString(),
+        includeKnowledge: exportIncludeKnowledge.toString(),
+        includeUsers: exportIncludeUsers.toString()
+      });
+
+      const res = await fetch(`/api/admin/export?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setExportPreview(data);
+      } else {
+        const data = await res.json();
+        console.error('Fehler bei Export-Vorschau:', data.error);
+      }
+    } catch (err) {
+      console.error('Fehler bei Export-Vorschau:', err);
+    } finally {
+      setIsExportLoading(false);
+    }
+  };
+
+  const handleDownloadExportJson = async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams({
+        since: exportSinceDate,
+        until: exportUntilDate,
+        includeTickets: exportIncludeTickets.toString(),
+        includeChats: exportIncludeChats.toString(),
+        includeKnowledge: exportIncludeKnowledge.toString(),
+        includeUsers: exportIncludeUsers.toString(),
+        format: 'download'
+      });
+
+      const url = `/api/admin/export?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Fehler beim Herunterladen des Exports');
+      }
+
+      const blob = await res.blob();
+      const filename = `helpdesk_export_${exportSinceDate || 'all'}_bis_${exportUntilDate || new Date().toISOString().split('T')[0]}.json`;
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Fehler beim Download:', err);
+      alert('Fehler beim Herunterladen der Export-Datei: ' + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const loadUsers = async () => {
     setUsersLoading(true);
@@ -1563,6 +1678,13 @@ export default function AdminDashboardPage() {
                   <i className="fa-brands fa-github shrink-0 w-4"></i>
                   <span className="truncate">Update</span>
                 </button>
+                <button 
+                  onClick={() => { setActiveTab('export'); setMobileMenuOpen(false); }}
+                  className={`py-2.5 px-3 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 justify-start ${activeTab === 'export' ? 'bg-violet-600 text-white' : 'bg-slate-950/40 text-slate-400 hover:text-slate-200'}`}
+                >
+                  <i className="fa-solid fa-file-export shrink-0 w-4 text-emerald-400"></i>
+                  <span className="truncate">Daten-Export</span>
+                </button>
               </div>
             </div>
 
@@ -1648,6 +1770,13 @@ export default function AdminDashboardPage() {
         >
           <i className="fa-brands fa-github text-[10px]"></i>
           <span>Update</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('export')}
+          className={`py-1.5 px-3 rounded-lg font-semibold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${activeTab === 'export' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-950/60 text-slate-400 border border-slate-800/80'}`}
+        >
+          <i className="fa-solid fa-file-export text-[10px] text-emerald-400"></i>
+          <span>Export</span>
         </button>
       </div>
 
@@ -1744,6 +1873,14 @@ export default function AdminDashboardPage() {
           >
             <i className="fa-brands fa-github"></i>
             <span>System-Update</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('export')}
+            className={`py-2 px-3.5 rounded-xl font-semibold text-xs transition-all uppercase tracking-wider flex items-center gap-1.5 ${activeTab === 'export' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'}`}
+            title="Daten-Export als JSON (Tickets, Chats, Nachrichten & Wissen)"
+          >
+            <i className="fa-solid fa-file-export text-emerald-400"></i>
+            <span>Daten-Export</span>
           </button>
         </div>
       </div>
@@ -2874,112 +3011,322 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Tab 1c: Gespeicherte Lösungen */}
-        {activeTab === 'solutions' && (
-          <div className="space-y-6">
-            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl flex justify-between items-center gap-4">
+        {/* Tab 5: Daten-Export (JSON) */}
+        {activeTab === 'export' && (
+          <div className="space-y-6 max-w-4xl mx-auto animate-fade-in">
+            {/* Header Info Box */}
+            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h3 className="text-sm font-bold text-white mb-1">Gespeicherte Lösungen</h3>
-                <p className="text-xs text-slate-400">Hier sind alle Problemlösungen aufgeführt, die beim Schließen von IT-Tickets erfasst wurden. Nutze die "Vergessen"-Schaltfläche, um Einträge aus der Datenbank zu entfernen.</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <i className="fa-solid fa-file-export text-sm"></i>
+                  </div>
+                  <h3 className="text-base font-bold text-white">Helpdesk Daten-Export (JSON)</h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Exportiere alle Support-Tickets, Chat-Verläufe, Benutzer- und Agenten-Nachrichten, Bewertungen und Wissenseinträge seit einem frei wählbaren Datum als strukturierte JSON-Datei.
+                </p>
               </div>
             </div>
 
-            {/* Suche für Lösungen */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-2xl">
-              <div className="flex-1 w-full sm:max-w-md relative">
-                <i className="fa-solid fa-magnifying-glass text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
-                <input 
-                  type="text" 
-                  value={solutionsSearch}
-                  onChange={(e) => setSolutionsSearch(e.target.value)}
-                  placeholder="Lösungen durchsuchen (Betreff oder Text)..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500"
-                />
+            {/* Filter & Datums-Einstellungen */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-6 shadow-lg">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+                <i className="fa-solid fa-calendar-days text-violet-400"></i>
+                <span>1. Zeitraum festlegen</span>
+              </h4>
+
+              {/* Zeitraum Schnell-Filter */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-slate-400 block">Schnellauswahl:</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDatePreset('7d');
+                      const d = new Date();
+                      d.setDate(d.getDate() - 7);
+                      handleLoadExportPreview(d.toISOString().split('T')[0], new Date().toISOString().split('T')[0]);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      exportPreset === '7d' 
+                        ? 'bg-violet-600 border-violet-500 text-white shadow-sm' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    Letzte 7 Tage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDatePreset('30d');
+                      const d = new Date();
+                      d.setDate(d.getDate() - 30);
+                      handleLoadExportPreview(d.toISOString().split('T')[0], new Date().toISOString().split('T')[0]);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      exportPreset === '30d' 
+                        ? 'bg-violet-600 border-violet-500 text-white shadow-sm' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    Letzte 30 Tage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDatePreset('month');
+                      const today = new Date();
+                      const d = new Date(today.getFullYear(), today.getMonth(), 1);
+                      handleLoadExportPreview(d.toISOString().split('T')[0], today.toISOString().split('T')[0]);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      exportPreset === 'month' 
+                        ? 'bg-violet-600 border-violet-500 text-white shadow-sm' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    Dieser Monat
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDatePreset('year');
+                      const today = new Date();
+                      const d = new Date(today.getFullYear(), 0, 1);
+                      handleLoadExportPreview(d.toISOString().split('T')[0], today.toISOString().split('T')[0]);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      exportPreset === 'year' 
+                        ? 'bg-violet-600 border-violet-500 text-white shadow-sm' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    Dieses Jahr
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDatePreset('all');
+                      handleLoadExportPreview('', '');
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      exportPreset === 'all' 
+                        ? 'bg-violet-600 border-violet-500 text-white shadow-sm' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    Gesamter Verlauf (Alles)
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {solutionsLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              {/* Datums-Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                    <span>Exportieren ab Datum (Seit wann?):</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Beginn (00:00 Uhr)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={exportSinceDate}
+                    onChange={(e) => {
+                      setExportSinceDate(e.target.value);
+                      setExportPreset('custom');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                    <span>Bis Datum (Optional):</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Ende (23:59 Uhr)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={exportUntilDate}
+                    onChange={(e) => {
+                      setExportUntilDate(e.target.value);
+                      setExportPreset('custom');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
               </div>
-            ) : solutions.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
-                Keine gespeicherten Ticket-Lösungen vorhanden.
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {solutions
-                  .filter(s => {
-                    const term = solutionsSearch.toLowerCase();
-                    return s.title.toLowerCase().includes(term) || s.solution.toLowerCase().includes(term) || s.id.toLowerCase().includes(term);
-                  })
-                  .map(sol => (
-                    <div key={sol.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/30 hover:bg-slate-850/10 transition-all select-none animate-fade-in">
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleForgetSolution(sol.id)}
-                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-[10px] px-2.5 py-1 rounded-xl transition-all"
-                          title="Lösung vergessen (Löschen)"
-                        >
-                          <i className="fa-solid fa-eraser mr-1"></i>
-                          <span>Vergessen</span>
-                        </button>
-                      </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase font-mono">
-                            {sol.id}
-                          </span>
-                          <span className="text-[10px] font-semibold text-slate-500">
-                            Geschlossen: {sol.updatedAt ? new Date(sol.updatedAt).toLocaleDateString('de-DE') : 'Unbekannt'}
-                          </span>
-                        </div>
+              {/* 2. Inhalte auswählen */}
+              <div className="space-y-3 pt-3 border-t border-slate-800">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <i className="fa-solid fa-list-check text-sky-400"></i>
+                  <span>2. Zu exportierende Inhalte wählen</span>
+                </h4>
 
-                        <h4 className="text-sm font-bold text-white pr-16">{sol.title}</h4>
-
-                        {sol.solutionContext ? (
-                          <div className="space-y-1">
-                            <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider">Problem-Kontext (KI-Zusammenfassung):</div>
-                            <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans italic">
-                              {sol.solutionContext}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="pt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateSolutionContext(sol.id)}
-                              disabled={generatingContextId === sol.id}
-                              className="bg-sky-950/30 hover:bg-sky-900 border border-sky-500/20 text-sky-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-40"
-                            >
-                              {generatingContextId === sol.id ? (
-                                <>
-                                  <i className="fa-solid fa-circle-notch animate-spin mr-1.5"></i>
-                                  <span>Zusammenfassung wird erstellt...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i>
-                                  <span>KI-Zusammenfassung generieren</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        )}
-
-                        <div className="space-y-1">
-                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Erfasste Problemlösung:</div>
-                          <p className="text-xs text-slate-350 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{sol.solution}</p>
-                        </div>
-                        
-                        <div className="text-[9px] text-slate-500">
-                          Erstellt durch: <span className="font-mono text-slate-400">{sol.creatorEmail}</span>
-                        </div>
-                      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+                  <label className="flex items-center gap-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeTickets}
+                      onChange={(e) => setExportIncludeTickets(e.target.checked)}
+                      className="rounded bg-slate-900 border-slate-700 text-violet-600 focus:ring-violet-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-white block">Tickets & Nachrichten</span>
+                      <span className="text-[10px] text-slate-500">Status, Lösungen, Bewertungen</span>
                     </div>
-                  ))
-                }
+                  </label>
+
+                  <label className="flex items-center gap-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeChats}
+                      onChange={(e) => setExportIncludeChats(e.target.checked)}
+                      className="rounded bg-slate-900 border-slate-700 text-violet-600 focus:ring-violet-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-white block">Live-Chats & Bot</span>
+                      <span className="text-[10px] text-slate-500">Gesamter Chat-Verlauf</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeKnowledge}
+                      onChange={(e) => setExportIncludeKnowledge(e.target.checked)}
+                      className="rounded bg-slate-900 border-slate-700 text-violet-600 focus:ring-violet-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-white block">Wissensdatenbank</span>
+                      <span className="text-[10px] text-slate-500">Artikel & Kategorien</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800 hover:border-slate-700 cursor-pointer transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeUsers}
+                      onChange={(e) => setExportIncludeUsers(e.target.checked)}
+                      className="rounded bg-slate-900 border-slate-700 text-violet-600 focus:ring-violet-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-white block">Benutzer-Liste</span>
+                      <span className="text-[10px] text-slate-500">Admins, Agenten, Rollen</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 3. Export & Download Actions */}
+              <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleLoadExportPreview()}
+                  disabled={isExportLoading}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {isExportLoading ? (
+                    <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                  ) : (
+                    <i className="fa-solid fa-magnifying-glass text-xs text-sky-400"></i>
+                  )}
+                  <span>Daten-Vorschau analysieren</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadExportJson}
+                  disabled={isExporting}
+                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isExporting ? (
+                    <>
+                      <i className="fa-solid fa-circle-notch fa-spin text-sm"></i>
+                      <span>JSON-Export wird erstellt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-file-arrow-down text-sm"></i>
+                      <span>JSON-Datei jetzt herunterladen</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Live Preview Box */}
+            {exportPreview && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <i className="fa-solid fa-chart-pie text-emerald-400"></i>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gefundene Datensätze im gewählten Zeitraum</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {exportPreview.exportMetadata?.filter?.since || 'alle'} bis {exportPreview.exportMetadata?.filter?.until || 'heute'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-violet-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalTickets || 0}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Tickets</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-violet-300 block font-mono">{exportPreview.exportMetadata?.statistics?.totalTicketMessages || 0}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Ticket-Nachrichten</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-sky-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalChats || 0}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Live-Chats</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-sky-300 block font-mono">{exportPreview.exportMetadata?.statistics?.totalChatMessages || 0}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Chat-Nachrichten</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-amber-400 block font-mono">
+                      {exportPreview.exportMetadata?.statistics?.averageRating ? `${exportPreview.exportMetadata.statistics.averageRating} ★` : '-'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">Ø Bewertung ({exportPreview.exportMetadata?.statistics?.ratedTicketsCount || 0})</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-lg font-bold text-emerald-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalKnowledgeEntries || 0}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Wissenseinträge</span>
+                  </div>
+                </div>
+
+                {/* JSON Preview Schnipsel */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">JSON-Struktur Vorschau:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(exportPreview, null, 2));
+                        setExportCopySuccess(true);
+                        setTimeout(() => setExportCopySuccess(false), 2000);
+                      }}
+                      className="text-[10px] font-bold text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      {exportCopySuccess ? (
+                        <>
+                          <i className="fa-solid fa-check text-emerald-400"></i>
+                          <span className="text-emerald-400">Kopiert!</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-copy"></i>
+                          <span>JSON kopieren</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[10px] font-mono text-slate-300 max-h-60 overflow-y-auto overflow-x-auto whitespace-pre no-scrollbar">
+                    {JSON.stringify(exportPreview, null, 2)}
+                  </pre>
+                </div>
               </div>
             )}
           </div>
