@@ -111,7 +111,8 @@ Regeln für die Abfrage:
       systemInstruction: { parts: [{ text: systemInstruction }] }
     };
 
-    return callGemini(chatModel, payload);
+    const rawResultText = await callGemini(chatModel, payload);
+    return { text: rawResultText || "", usedKnowledgeIds: [] };
   }
   
   // 1. Wissensdatenbank auslesen
@@ -1031,10 +1032,10 @@ FRÜHERE KONVERSATIONEN DES BENUTZERS:
 ${chatsOverview}
 
 REGELN FÜR DIE WAHRSCHEINLICHKEITS-BERECHNUNG (similarityScore):
-- 0.85 - 1.00: Nahezu identisch oder direkte Konkretisierung (z. B. "Ich kann mich nicht anmelden" vs. "Ich habe Probleme mit meinem Passwort" -> beides betrifft Zugangsdaten/Login; "WLAN geht nicht" vs. "Drucker im WLAN offline").
+- 0.85 - 1.00: Nahezu identisch oder direkte Konkretisierung desselben Anliegens (z. B. "Ich kann mich nicht anmelden" vs. "Ich habe Probleme mit meinem Passwort" -> beides betrifft Zugangsdaten/Login desselben Accounts; "WLAN geht nicht" vs. "WLAN im selben Raum gestört").
 - 0.50 - 0.84: Stark verwandter IT-Bereich für denselben Nutzer.
 - 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
-- 0.00 - 0.49: Komplett unterschiedliche Themen ohne erkennbaren Zusammenhang.
+- WICHTIGE AUSNAHME (SCORE = 0.00): Wenn in den Anfragen unterschiedliche Personennamen oder Schülernamen genannt werden (z. B. "Marvin Cramer" vs. "Theo Hebeler"), handelt es sich um völlig unterschiedliche Personen und Fälle. Der similarityScore MUSS in diesem Fall zwingend 0.00 sein!
 
 AUFTRAG:
 Bestimme für die am besten passende frühere Konversation den similarityScore und das konkrete Thema als prägnante Substantivgruppe / Nominalphrase (z. B. "Passwort-Rücksetzung Schul-PC", "WLAN-Verbindung im Raum 204", "Drucker druckt nicht", "Moodle-Kurs Freischaltung").

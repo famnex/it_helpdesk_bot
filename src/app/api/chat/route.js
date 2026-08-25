@@ -125,7 +125,7 @@ export async function POST(request) {
       var skipBot = !!body.skipBot || !!body.skip_bot;
     }
 
-    if (!text && !relativePath) {
+    if ((!text || !text.trim()) && !relativePath) {
       return NextResponse.json({ error: 'Nachrichtentext oder Foto fehlt.' }, { status: 400 });
     }
 
@@ -303,8 +303,27 @@ export async function POST(request) {
           `).run(ticket.id);
         }
 
-        // Sobald das Ticket existiert / übergeben ist, bleibt der Bot komplett stumm (keine automatischen Füllnachrichten)
+        // Sobald das Ticket existiert / übergeben ist, bleibt der Bot grundsätzlich stumm,
+        // beantwortet aber typische Orientierungsfragen (z. B. "Wie mache ich das jetzt mit dem Ticket", "Wo melde ich mich an")
         let botAck = null;
+        const orientationPatterns = [
+          /wie mache ich das.*ticket/i,
+          /wo (melde|muss) ich mich.*an/i,
+          /wo logge ich mich.*ein/i,
+          /was (muss|soll) ich (jetzt )?tun/i,
+          /wie geht es (jetzt )?weiter/i,
+          /wann meldet sich.*(it|jemand|admin)/i
+        ];
+
+        const textCheck = (text || '').trim().toLowerCase();
+        if (orientationPatterns.some(p => p.test(textCheck))) {
+          botAck = "Dein Support-Ticket wurde direkt an unser IT-Team übermittelt. Du musst dich nirgendwo extra anmelden oder etwas tun – ein Mitarbeiter prüft dein Anliegen und du wirst per E-Mail bzw. hier im Chat benachrichtigt, sobald es Neuigkeiten gibt.";
+          db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'bot\', ?)').run(chatId, botAck);
+          if (ticket) {
+            db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'IT-Support-Bot\', \'bot\', ?)')
+              .run(ticket.id, botAck);
+          }
+        }
 
         if (ticket) {
           if (ticket.assigned_agent_id) {
@@ -335,7 +354,7 @@ export async function POST(request) {
         return NextResponse.json({
           text: botAck,
           isHandedOver: true,
-          isSilent: true,
+          isSilent: !botAck,
           imageUrl: cleanRelativePath
         });
       }
@@ -588,9 +607,14 @@ export async function POST(request) {
         targetChatId: targetChatId,
         imageUrl: cleanRelativePath
       });
-    } else if (pendingTargetId && (textLower.startsWith('nein') || textLower.includes('nein_neues_thema'))) {
+    } else if (pendingTargetId && (textLower.startsWith('nein') || textLower.includes('nein_neues_thema') || textLower === 'nein?' || textLower.includes('nein'))) {
+      const originalQuery = chat ? chat.pending_merge_info : null;
       db.prepare('UPDATE chats SET pending_merge_target_id = NULL, pending_merge_info = NULL WHERE id = ?').run(chatId);
-    } else if (!isSystemEvent && !pendingTargetId) {
+      if (originalQuery && textLower.length <= 15) {
+        db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)')
+          .run(chatId, `(Neues Anliegen): ${originalQuery}`);
+      }
+    } else if (!isSystemEvent && !pendingTargetId && !isAgentOnBehalf && (!chat || chat.isAgentOnBehalf !== 1)) {
       const msgCountRes = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE chat_id = ?').get(chatId);
       const currentMsgCount = msgCountRes ? msgCountRes.count : 0;
 
@@ -741,100 +765,110 @@ export async function POST(request) {
       ticketCreated = true;
       aiResponse = aiResponse.replace('[TICKET_CREATED]', '').trim();
       
+      // Ticket-Erstellung:
       if (isAgentOnBehalfMode) {
+        // Im On-Behalf-Modus wird das Ticket NICHT automatisch unter der E-Mail des Agenten angelegt,
+        // sondern über das Bestätigungs-Formular im Modal (Frontend)
+        ticketCreated = true;
         try {
           extractedData = await extractAgentBehalfDetails(chatHistory);
         } catch (err) {
           console.error('Fehler bei extractAgentBehalfDetails:', err);
         }
       } else {
-        try {
-          proposedTitle = await generateTicketTitle(chatHistory);
-        } catch (err) {
-          console.error('Fehler bei der proposedTitle-Generierung:', err);
-        }
-      }
+        const userEmailForTicket = email || (chat ? chat.userEmail : null);
 
-      // Falls der Nutzer angemeldet ist, Ticket SOFORT direkt in der DB anlegen!
-      if (user && user.email) {
-        try {
-          const finalTitle = proposedTitle || 'Support-Anfrage über Chat-Assistent';
-          const existingTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(chatId);
-          if (!existingTicket) {
-            // Eindeutige Ticket-ID (TK-XXXX) generieren
-            let newTicketId;
-            let isUnique = false;
-            const checkStmt = db.prepare('SELECT id FROM tickets WHERE id = ?');
-            while (!isUnique) {
-              newTicketId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
-              if (!checkStmt.get(newTicketId)) isUnique = true;
-            }
-
-            // Automatische Agenten-Zuweisung prüfen
-            const potentialAgents = db.prepare(`
-              SELECT id, email, name, responsibilities 
-              FROM users 
-              WHERE (role = 'agent' OR role = 'admin') 
-                AND responsibilities IS NOT NULL 
-                AND responsibilities != ''
-            `).all();
-
-            let matchedAgentId = null;
-            let matchedAgent = null;
-            if (potentialAgents.length > 0) {
-              try {
-                const chatHistoryMsgs = db.prepare(`
-                  SELECT sender, text FROM chat_messages 
-                  WHERE chat_id = ? 
-                  ORDER BY created_at ASC
-                `).all(chatId);
-                matchedAgentId = await determineAgentAssignment(finalTitle, chatHistoryMsgs, potentialAgents);
-                if (matchedAgentId) {
-                  matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
-                }
-              } catch (assignErr) {
-                console.error('Fehler bei automatischer Ticket-Zuweisung im Bot:', assignErr);
-              }
-            }
-
-            const ticketStatus = matchedAgent ? 'assigned' : 'open';
-            const assignedId = matchedAgent ? matchedAgent.id : null;
-
-            db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, assigned_agent_id, is_authenticated_creator) VALUES (?, ?, ?, ?, ?, ?, 1)')
-              .run(newTicketId, finalTitle, user.email, chatId, ticketStatus, assignedId);
-            
-            autoTicketId = newTicketId;
-            db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
-
-            db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-              .run(newTicketId, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
-
-            if (matchedAgent) {
-              db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
-                .run(newTicketId, `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
-              try {
-                await sendAssignmentNotification(matchedAgent.email, newTicketId, finalTitle);
-              } catch (mailErr) {
-                console.error('Fehler beim Senden der Zuweisungs-Mail aus Chat:', mailErr);
-              }
-            } else {
-              try {
-                const allAgents = db.prepare("SELECT email FROM users WHERE role = 'agent' OR role = 'admin'").all();
-                const agentEmails = allAgents.map(a => a.email);
-                if (agentEmails.length > 0) {
-                  await sendUnassignedTicketNotification(agentEmails, newTicketId, finalTitle);
-                }
-              } catch (mailErr) {}
-            }
-
-            try {
-              await sendTicketCreatedNotification(user.email, newTicketId, finalTitle);
-            } catch (mailErr) {}
-          } else {
-            autoTicketId = existingTicket.id;
+        if (userEmailForTicket) {
+          ticketCreated = true;
+          try {
+            proposedTitle = await generateTicketTitle(chatHistory);
+          } catch (err) {
+            console.error('Fehler bei der proposedTitle-Generierung:', err);
           }
-        } catch (dbErr) {
-          console.error('Fehler bei automatischer DB-Ticket-Erstellung:', dbErr);
+
+          try {
+            const finalTitle = proposedTitle || 'Support-Anfrage über Chat-Assistent';
+            const existingTicket = db.prepare('SELECT id FROM tickets WHERE chat_id = ?').get(chatId);
+            if (!existingTicket) {
+              // Eindeutige Ticket-ID (TK-XXXX) generieren
+              let newTicketId;
+              let isUnique = false;
+              const checkStmt = db.prepare('SELECT id FROM tickets WHERE id = ?');
+              while (!isUnique) {
+                newTicketId = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+                if (!checkStmt.get(newTicketId)) isUnique = true;
+              }
+
+              // Automatische Agenten-Zuweisung prüfen
+              const potentialAgents = db.prepare(`
+                SELECT id, email, name, responsibilities 
+                FROM users 
+                WHERE (role = 'agent' OR role = 'admin') 
+                  AND responsibilities IS NOT NULL 
+                  AND responsibilities != ''
+              `).all();
+
+              let matchedAgentId = null;
+              let matchedAgent = null;
+              if (potentialAgents.length > 0) {
+                try {
+                  const chatHistoryMsgs = db.prepare(`
+                    SELECT sender, text FROM chat_messages 
+                    WHERE chat_id = ? 
+                    ORDER BY created_at ASC
+                  `).all(chatId);
+                  matchedAgentId = await determineAgentAssignment(finalTitle, chatHistoryMsgs, potentialAgents);
+                  if (matchedAgentId) {
+                    matchedAgent = potentialAgents.find(a => a.id === matchedAgentId);
+                  }
+                } catch (assignErr) {
+                  console.error('Fehler bei automatischer Ticket-Zuweisung im Bot:', assignErr);
+                }
+              }
+
+              const ticketStatus = matchedAgent ? 'assigned' : 'open';
+              const assignedId = matchedAgent ? matchedAgent.id : null;
+
+              db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, assigned_agent_id, is_authenticated_creator) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                .run(newTicketId, finalTitle, userEmailForTicket, chatId, ticketStatus, assignedId, user ? 1 : 0);
+              
+              autoTicketId = newTicketId;
+              db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
+
+              db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+                .run(newTicketId, `[Ticket aus Chat #${chatId}]: ${finalTitle}`);
+
+              if (matchedAgent) {
+                db.prepare('INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text) VALUES (?, \'system\', \'system\', ?)')
+                  .run(newTicketId, `Ticket wurde automatisch ${matchedAgent.email} zugewiesen.`);
+                try {
+                  await sendAssignmentNotification(matchedAgent.email, newTicketId, finalTitle);
+                } catch (mailErr) {
+                  console.error('Fehler beim Senden der Zuweisungs-Mail aus Chat:', mailErr);
+                }
+              } else {
+                try {
+                  const allAgents = db.prepare("SELECT email FROM users WHERE role = 'agent' OR role = 'admin'").all();
+                  const agentEmails = allAgents.map(a => a.email);
+                  if (agentEmails.length > 0) {
+                    await sendUnassignedTicketNotification(agentEmails, newTicketId, finalTitle);
+                  }
+                } catch (mailErr) {}
+              }
+
+              try {
+                await sendTicketCreatedNotification(userEmailForTicket, newTicketId, finalTitle);
+              } catch (mailErr) {}
+            } else {
+              autoTicketId = existingTicket.id;
+            }
+          } catch (dbErr) {
+            console.error('Fehler bei automatischer DB-Ticket-Erstellung:', dbErr);
+          }
+        } else {
+          // Anonymer Nutzer ohne E-Mail: Keine Ticket-Erstellung in DB möglich -> Nach E-Mail fragen
+          ticketCreated = false;
+          aiResponse = "Damit ich ein Support-Ticket für dich erstellen und an unser IT-Team übergeben kann, benötige ich bitte noch deine E-Mail-Adresse (z. B. deine schulische oder private E-Mail). Wie lautet deine E-Mail-Adresse?";
         }
       }
     }
