@@ -101,7 +101,9 @@ export default function AgentDashboardPage() {
         const data = await res.json();
         
         // Append bot message
-        setBehalfMessages(prev => [...prev, { sender: 'bot', text: data.text }]);
+        if (data.text) {
+          setBehalfMessages(prev => [...prev, { sender: 'bot', text: data.text }]);
+        }
         
         // If ticket extraction is triggered
         if (data.ticketCreated && data.extractedData) {
@@ -114,9 +116,13 @@ export default function AgentDashboardPage() {
           setBehalfFormAttempts(ext.attempts || '');
           setShowBehalfForm(true); // Switch to review form view
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setBehalfMessages(prev => [...prev, { sender: 'bot', text: `Fehler beim Generieren der Antwort: ${errData.error || 'Serverfehler'}` }]);
       }
     } catch (err) {
       console.error('Fehler bei On-Behalf Chat:', err);
+      setBehalfMessages(prev => [...prev, { sender: 'bot', text: 'Verbindungsfehler beim Senden der Nachricht.' }]);
     } finally {
       setIsBehalfTyping(false);
     }

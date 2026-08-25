@@ -614,65 +614,24 @@ export async function POST(request) {
         db.prepare('INSERT INTO chat_messages (chat_id, sender, text) VALUES (?, \'user\', ?)')
           .run(chatId, `(Neues Anliegen): ${originalQuery}`);
       }
-    } else if (!isSystemEvent && !pendingTargetId && !isAgentOnBehalf && (!chat || chat.isAgentOnBehalf !== 1)) {
+    } else if (!isSystemEvent && !pendingTargetId && !isAgentOnBehalf && (!chat || chat.isAgentOnBehalf !== 1) && user && user.email) {
       const msgCountRes = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE chat_id = ?').get(chatId);
       const currentMsgCount = msgCountRes ? msgCountRes.count : 0;
 
-      if (currentMsgCount <= 2) {
-        const trace = reconstructIdentityTrace(chatId);
-        const userEmails = new Set();
-        const userSessions = new Set();
-        const userIps = new Set();
-
-        if (email && email.trim()) userEmails.add(email.trim().toLowerCase());
-        if (userSessionId && userSessionId.trim()) userSessions.add(userSessionId.trim());
-        if (userIp && userIp.trim()) userIps.add(userIp.trim());
-
-        if (trace && trace.linkedIdentities) {
-          trace.linkedIdentities.forEach(ident => {
-            if (ident.email && ident.email.trim()) userEmails.add(ident.email.trim().toLowerCase());
-          });
-        }
-        if (trace && trace.primaryDetails) {
-          if (trace.primaryDetails.userEmail) userEmails.add(trace.primaryDetails.userEmail.trim().toLowerCase());
-          if (trace.primaryDetails.userSessionId) userSessions.add(trace.primaryDetails.userSessionId.trim());
-          if (trace.primaryDetails.userIp) userIps.add(trace.primaryDetails.userIp.trim());
-        }
-
-        const emailList = Array.from(userEmails);
-        const sessionList = Array.from(userSessions);
-        const ipList = Array.from(userIps);
-
-        let candidateChats = [];
-        if (emailList.length > 0 || sessionList.length > 0 || ipList.length > 0) {
-          const sqlWhere = [];
-          const params = [chatId];
-
-          if (emailList.length > 0) {
-            sqlWhere.push(`LOWER(c.user_email) IN (${emailList.map(() => '?').join(',')})`);
-            params.push(...emailList);
-          }
-          if (sessionList.length > 0) {
-            sqlWhere.push(`c.user_session_id IN (${sessionList.map(() => '?').join(',')})`);
-            params.push(...sessionList);
-          }
-          if (ipList.length > 0) {
-            sqlWhere.push(`c.user_ip IN (${ipList.map(() => '?').join(',')})`);
-            params.push(...ipList);
-          }
-
-          candidateChats = db.prepare(`
-            SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
-                   (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
-            FROM chats c
-            LEFT JOIN tickets t ON (t.chat_id = c.id OR (c.user_email IS NOT NULL AND LOWER(t.creator_email) = LOWER(c.user_email)))
-            WHERE c.id != ? 
-              AND c.is_merged = 0 
-              AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_id = c.id AND sender = 'user' AND LENGTH(TRIM(text)) > 2)
-              AND (${sqlWhere.join(' OR ')})
-            ORDER BY c.created_at DESC LIMIT 10
-          `).all(...params);
-        }
+      // Themendopplungs-Prüfung AUSSCHLIESSLICH für angemeldete Benutzer mit verifizierter E-Mail ausführen (niemals für anonyme Nutzer!)
+      if (currentMsgCount <= 2 && user && user.email) {
+        const candidateChats = db.prepare(`
+          SELECT c.id, c.category, c.created_at as createdAt, t.id as ticketId, t.title as ticketTitle,
+                 (SELECT text FROM chat_messages WHERE chat_id = c.id AND sender = 'user' ORDER BY created_at ASC LIMIT 1) as snippet
+          FROM chats c
+          LEFT JOIN tickets t ON (t.chat_id = c.id OR (c.user_email IS NOT NULL AND LOWER(t.creator_email) = LOWER(c.user_email)))
+          WHERE c.id != ? 
+            AND c.is_merged = 0 
+            AND c.is_agent_on_behalf = 0
+            AND LOWER(c.user_email) = LOWER(?)
+            AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_id = c.id AND sender = 'user' AND LENGTH(TRIM(text)) > 2)
+          ORDER BY c.created_at DESC LIMIT 10
+        `).all(chatId, user.email);
 
         if (candidateChats.length > 0) {
           const candidateData = candidateChats.map(c => ({
