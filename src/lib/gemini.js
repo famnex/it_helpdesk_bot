@@ -112,7 +112,7 @@ Regeln für die Abfrage:
     };
 
     const rawResultText = await callGemini(chatModel, payload);
-    return { text: rawResultText || "", usedKnowledgeIds: [] };
+    return { text: rawResultText || "", usedKnowledgeIds: null };
   }
   
   // 1. Wissensdatenbank auslesen

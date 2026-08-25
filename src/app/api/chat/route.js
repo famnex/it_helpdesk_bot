@@ -893,8 +893,12 @@ export async function POST(request) {
     }
 
     // 6. Botnachricht speichern
+    const finalBaseKnowledge = Array.isArray(usedKnowledgeIds) 
+      ? (usedKnowledgeIds.length > 0 ? usedKnowledgeIds.join(',') : null) 
+      : (usedKnowledgeIds || null);
+
     const insertResult = db.prepare('INSERT INTO chat_messages (chat_id, sender, text, base_knowledge) VALUES (?, ?, ?, ?)')
-      .run(chatId, 'bot', aiResponse, usedKnowledgeIds);
+      .run(chatId, 'bot', aiResponse, finalBaseKnowledge);
     const botMessageId = insertResult.lastInsertRowid;
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Botnachricht dort spiegeln
