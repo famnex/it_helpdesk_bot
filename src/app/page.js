@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
 import { renderMarkdownWithLinks } from '@/lib/formatting';
+import UserNavMenu from '@/components/UserNavMenu';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -946,40 +947,17 @@ export default function CustomerChatPage() {
         </button>
  
         {/* Desktop Menu - nur auf md: und größer */}
-        <div className="hidden md:flex items-center gap-4 text-sm">
+        <div className="hidden md:flex items-center gap-3 text-sm">
+          <Link 
+            href="/knowledge"
+            className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-book-open text-sky-400"></i>
+            <span>Wissensdatenbank</span>
+          </Link>
+
           {user ? (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-300">
-                <i className="fa-solid fa-user text-slate-400 mr-1.5"></i>
-                {user.email}
-              </span>
-              <Link 
-                href="/knowledge"
-                className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-book-open text-sky-400"></i>
-                <span>Wissensdatenbank</span>
-              </Link>
-              <Link 
-                href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
-                className="bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg transition-colors shadow flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-ticket"></i>
-                <span>
-                  {user.role === 'customer' 
-                    ? `Meine Tickets (${activeTickets.length} offen)` 
-                    : 'Portal öffnen'}
-                </span>
-              </Link>
-              <button 
-                type="button"
-                onClick={handleLogout}
-                className="bg-red-950/30 hover:bg-red-900/50 border border-red-500/30 text-red-400 text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-right-from-bracket"></i>
-                <span>Abmelden</span>
-              </button>
-            </div>
+            <UserNavMenu user={user} currentView="chat" onLogout={handleLogout} />
           ) : (
             <div className="flex items-center gap-3">
               {/* Magic Link Form */}
@@ -1004,16 +982,6 @@ export default function CustomerChatPage() {
               <div className="w-px h-6 bg-slate-800"></div>
               
               <Link 
-                href="/knowledge"
-                className="bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 font-medium text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-book-open text-sky-400"></i>
-                <span>Wissensdatenbank</span>
-              </Link>
- 
-              <div className="w-px h-6 bg-slate-800"></div>
-              
-              <Link 
                 href="/login"
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium text-xs px-4 py-2 rounded-xl transition-all"
               >
@@ -1027,46 +995,81 @@ export default function CustomerChatPage() {
         {/* Mobile Menu Dropdown */}
         {mobileMenuOpen && (
           <div className="md:hidden absolute top-14 left-0 right-0 bg-slate-900 border-b border-slate-800 p-4 shadow-2xl flex flex-col gap-3 animate-fade-in z-35">
-            {user ? (
-              <div className="flex flex-col gap-2.5">
-                <div className="text-xs text-slate-400 font-medium px-2 py-1 flex items-center gap-2 bg-slate-950/50 rounded-lg">
-                  <i className="fa-solid fa-user text-slate-500"></i>
-                  <span className="truncate">{user.email}</span>
-                </div>
-                
-                <Link 
-                  href="/knowledge"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <i className="fa-solid fa-book-open text-sky-400"></i>
-                  <span>Wissensdatenbank</span>
-                </Link>
+            <Link 
+              href="/knowledge"
+              onClick={() => setMobileMenuOpen(false)}
+              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-book-open text-sky-400"></i>
+              <span>Wissensdatenbank</span>
+            </Link>
 
-                <Link 
-                  href={user.role === 'customer' ? '/tickets' : `/${user.role}`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <i className="fa-solid fa-ticket"></i>
-                  <span>
-                    {user.role === 'customer' 
-                      ? `Meine Tickets (${activeTickets.length} offen)` 
-                      : 'Portal öffnen'}
-                  </span>
-                </Link>
+            {user ? (
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-800">
+                <div className="text-xs text-slate-300 font-semibold px-2 py-1.5 flex items-center gap-2 bg-slate-950/70 rounded-lg">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-slate-700" />
+                  ) : (
+                    <i className="fa-solid fa-user text-sky-400"></i>
+                  )}
+                  <span className="truncate">{user.name || user.email}</span>
+                </div>
+
+                {user.role === 'customer' && (
+                  <Link 
+                    href="/tickets"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-ticket text-sky-400"></i>
+                    <span>Meine Tickets ({activeTickets.length} offen)</span>
+                  </Link>
+                )}
+
+                {(user.role === 'agent' || user.role === 'admin') && (
+                  <Link 
+                    href="/agent"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-ticket text-violet-400"></i>
+                    <span>Agenten-Portal</span>
+                  </Link>
+                )}
+
+                {user.role === 'admin' && (
+                  <Link 
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-gears text-purple-400"></i>
+                    <span>Admin-Bereich</span>
+                  </Link>
+                )}
+
+                {(user.role === 'agent' || user.role === 'admin') && (
+                  <Link 
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-id-badge text-emerald-400"></i>
+                    <span>Mein Profil</span>
+                  </Link>
+                )}
 
                 <button 
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-                  className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2 mt-1"
                 >
                   <i className="fa-solid fa-right-from-bracket"></i>
                   <span>Abmelden</span>
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 pt-2 border-t border-slate-800">
                 {/* Magic Link Form */}
                 <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
@@ -1076,7 +1079,7 @@ export default function CustomerChatPage() {
                       value={magicEmail}
                       onChange={(e) => setMagicEmail(e.target.value)}
                       placeholder="Deine E-Mail..."
-                      className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-655 px-2 py-1.5 focus:outline-none focus:ring-0 flex-1 min-w-0"
+                      className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-500 px-2 py-1.5 focus:outline-none focus:ring-0 flex-1 min-w-0"
                       required
                     />
                     <button 
@@ -1089,25 +1092,14 @@ export default function CustomerChatPage() {
                   </div>
                 </form>
 
-                <div className="flex gap-2">
-                  <Link 
-                    href="/knowledge"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <i className="fa-solid fa-book-open text-sky-400"></i>
-                    <span>Wissen</span>
-                  </Link>
-
-                  <Link 
-                    href="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <i className="fa-solid fa-user-shield text-violet-400"></i>
-                    <span>Mitarbeiter</span>
-                  </Link>
-                </div>
+                <Link 
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-user-shield"></i>
+                  <span>Mitarbeiter-Login</span>
+                </Link>
               </div>
             )}
           </div>

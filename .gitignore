@@ -40,6 +40,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local data / exports
+data/
+*.db
+*.sqlite
+helpdesk_export_*.json
+scratch/
+
 # SQLite Database
 /database.db
 /database.db-journal

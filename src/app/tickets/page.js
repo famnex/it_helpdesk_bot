@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import UserNavMenu from '@/components/UserNavMenu';
 
 export default function CustomerTicketsPage() {
   const [tickets, setTickets] = useState([]);
@@ -102,24 +103,14 @@ export default function CustomerTicketsPage() {
         </div>
         
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400 hidden sm:inline">
-            <i className="fa-regular fa-envelope mr-1.5 text-slate-500"></i>
-            {user?.email}
-          </span>
-          <a 
-            href="/helpdesk"
+          <Link 
+            href="/"
             className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
           >
-            <i className="fa-solid fa-plus text-xs"></i>
-            <span>Neues Ticket</span>
-          </a>
-          <button 
-            onClick={handleLogout}
-            className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-right-from-bracket"></i>
-            <span>{logoutLabel}</span>
-          </button>
+            <i className="fa-solid fa-comments text-xs"></i>
+            <span>Zum Chat-Assistenten</span>
+          </Link>
+          <UserNavMenu user={user} currentView="tickets" onLogout={handleLogout} />
         </div>
       </header>
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
 import { renderMarkdownWithLinks } from '@/lib/formatting';
+import UserNavMenu from '@/components/UserNavMenu';
 
 const safeParseMarkdown = (content) => {
   if (!content) return '';
@@ -1515,47 +1516,9 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Top Quick Links & User */}
-        <div className="flex items-center gap-2 sm:gap-3 text-xs">
-          <Link
-            href="/"
-            className="hidden sm:flex bg-slate-850 hover:bg-slate-800 text-slate-350 hover:text-white border border-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all items-center gap-1.5"
-            title="Zum Chat-Frontend wechseln"
-          >
-            <i className="fa-solid fa-comments text-sky-400"></i>
-            <span>Chat-Frontend</span>
-          </Link>
-
-          <Link 
-            href="/agent"
-            className="hidden sm:flex bg-slate-850 hover:bg-slate-800 text-slate-350 hover:text-white border border-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all items-center gap-1.5"
-            title="Zum Agenten-Portal wechseln"
-          >
-            <i className="fa-solid fa-ticket text-violet-400"></i>
-            <span>Agenten-Portal</span>
-          </Link>
-
-          <Link 
-            href="/profile"
-            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-slate-350 hover:border-violet-500/50"
-            title="Profil bearbeiten"
-          >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-violet-500/30" />
-            ) : (
-              <i className="fa-solid fa-user-shield text-violet-400"></i>
-            )}
-            <span className="font-semibold hidden md:inline">{user?.name || user?.email}</span>
-          </Link>
-
-          <button 
-            onClick={handleLogout}
-            className="text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold cursor-pointer"
-            title="Abmelden"
-          >
-            <i className="fa-solid fa-right-from-bracket"></i>
-            <span className="hidden md:inline">{logoutLabel}</span>
-          </button>
+        {/* User Navigation Menu */}
+        <div className="flex items-center gap-3">
+          <UserNavMenu user={user} currentView="admin" onLogout={handleLogout} />
         </div>
       </header>
 

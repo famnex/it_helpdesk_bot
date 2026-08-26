@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import UserNavMenu from '@/components/UserNavMenu';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
@@ -138,14 +139,8 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div>
-          <Link
-            href="/agent"
-            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-arrow-left"></i>
-            Agenten-Portal
-          </Link>
+        <div className="flex items-center gap-3">
+          <UserNavMenu user={profile} currentView="profile" />
         </div>
       </header>
 

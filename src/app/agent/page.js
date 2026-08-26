@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
+import UserNavMenu from '@/components/UserNavMenu';
 
 const parseUtcDate = (dateStr) => {
   if (!dateStr) return new Date();
@@ -470,103 +471,10 @@ export default function AgentDashboardPage() {
           </div>
         </div>
 
-        {/* Hamburger-Button für mobile Navigation */}
-        <button 
-          type="button" 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden text-slate-400 hover:text-white p-2 rounded-xl border border-slate-800 bg-slate-950/60 focus:outline-none transition-colors"
-        >
-          <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-base`}></i>
-        </button>
-
-        {/* Desktop-Menu */}
-        <div className="hidden md:flex items-center gap-4 text-sm">
-          <Link 
-            href="/profile"
-            className="flex items-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-all text-xs text-slate-350 hover:border-violet-500/50"
-            title="Profil bearbeiten"
-          >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-violet-500/30" />
-            ) : (
-              <i className="fa-solid fa-user-tie text-violet-400"></i>
-            )}
-            <span className="font-semibold">{user?.name || user?.email} ({user?.role === 'admin' ? 'Admin' : 'Agent'})</span>
-          </Link>
-
-          <Link
-            href="/"
-            className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-comments text-sky-400"></i>
-            <span>Zum Chat-Frontend</span>
-          </Link>
-
-          {user?.role === 'admin' && (
-            <Link 
-              href="/admin"
-              className="bg-slate-850 hover:bg-slate-800 text-slate-350 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1"
-            >
-              <i className="fa-solid fa-gears text-violet-400"></i>
-              <span>Admin-Bereich</span>
-            </Link>
-          )}
-
-          <button 
-            onClick={handleLogout}
-            className="text-xs text-red-400 hover:bg-red-950/30 border border-red-500/20 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-semibold"
-          >
-            <i className="fa-solid fa-right-from-bracket"></i>
-            <span>{logoutLabel}</span>
-          </button>
+        {/* User Navigation Menu */}
+        <div className="flex items-center gap-3">
+          <UserNavMenu user={user} currentView="agent" onLogout={handleLogout} />
         </div>
-
-        {/* Mobile Menu Dropdown */}
-        {mobileMenuOpen && (
-          <div className="md:hidden absolute top-[72px] left-0 right-0 bg-slate-900 border-b border-slate-800 p-5 shadow-2xl flex flex-col gap-3 animate-fade-in z-30">
-            <Link 
-              href="/profile"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl transition-all text-xs text-slate-300 font-semibold"
-            >
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-violet-500/30" />
-              ) : (
-                <i className="fa-solid fa-user-tie text-violet-400"></i>
-              )}
-              <span>Profil: {user?.name || user?.email}</span>
-            </Link>
-
-            <Link
-              href="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-comments text-sky-400"></i>
-              <span>Zum Chat-Frontend</span>
-            </Link>
-
-            {user?.role === 'admin' && (
-              <Link 
-                href="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                <i className="fa-solid fa-gears text-violet-400"></i>
-                <span>Admin-Bereich</span>
-              </Link>
-            )}
-
-            <button 
-              type="button"
-              onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-              className="bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-right-from-bracket"></i>
-              <span>{logoutLabel}</span>
-            </button>
-          </div>
-        )}
       </header>
 
       {/* Main Dashboard */}

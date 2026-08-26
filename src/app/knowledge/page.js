@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
+import UserNavMenu from '@/components/UserNavMenu';
 
 export default function PublicKnowledgePage() {
   const [chunks, setChunks] = useState([]);
@@ -10,9 +11,17 @@ export default function PublicKnowledgePage() {
   const [selectedCategory, setSelectedCategory] = useState('Alle');
   const [isLoading, setIsLoading] = useState(true);
   const [activeModalChunk, setActiveModalChunk] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     loadKnowledge();
+    // Prüfen ob Benutzer angemeldet ist
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) setUser(data.user);
+      })
+      .catch(() => {});
   }, [search]);
 
   const loadKnowledge = async () => {
@@ -37,22 +46,25 @@ export default function PublicKnowledgePage() {
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
-          <a href="/helpdesk" className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
+          <Link href="/" className="bg-sky-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
             <i className="fa-solid fa-graduation-cap text-xl"></i>
-          </a>
+          </Link>
           <div>
             <h1 className="text-base font-bold text-white">Campus IT-Wissensdatenbank</h1>
             <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Selbsthilfe-Portal</p>
           </div>
         </div>
         
-        <a 
-          href="/helpdesk"
-          className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
-        >
-          <i className="fa-solid fa-comments"></i>
-          <span>Zum Chat-Assistenten</span>
-        </a>
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-comments"></i>
+            <span>Zum Chat-Assistenten</span>
+          </Link>
+          {user && <UserNavMenu user={user} currentView="knowledge" />}
+        </div>
       </header>
 
       {/* Main Container */}
