@@ -10,6 +10,7 @@ import {
 } from '@/lib/gemini';
 import { queueTicketNotification } from '@/lib/notifications';
 import { sendAssignmentNotification, sendUnassignedTicketNotification, sendTicketCreatedNotification } from '@/lib/mailer';
+import { checkIpBanned, recordAbuseViolation } from '@/lib/abuse';
 import fs from 'fs';
 import path from 'path';
 
@@ -21,9 +22,23 @@ export async function GET(request) {
   const chatId = searchParams.get('chatId');
 
   const user = await getSessionUser();
+  const isStaff = user && (user.role === 'agent' || user.role === 'admin');
+
+  // IP-Adresse extrahieren
+  const xForwardedFor = request.headers.get('x-forwarded-for');
+  let userIp = '';
+  if (xForwardedFor) {
+    userIp = xForwardedFor.split(',')[0].trim();
+  } else {
+    userIp = request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || request.ip || '127.0.0.1';
+  }
+
+  const banStatus = isStaff ? { isBanned: false, bannedUntil: null } : checkIpBanned(userIp);
 
   try {
     if (chatId) {
+      const chat = db.prepare('SELECT id, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
+
       // Verlauf eines bestimmten Chats laden
       const messages = db.prepare(`
         SELECT id, sender, text, image_url as imageUrl, is_flagged as isFlagged, created_at as createdAt 
@@ -41,7 +56,12 @@ export async function GET(request) {
         return m;
       });
       
-      return NextResponse.json({ messages: messagesWithPrefix });
+      return NextResponse.json({ 
+        messages: messagesWithPrefix,
+        isAbusive: chat ? chat.isAbusive === 1 : false,
+        isIpBanned: banStatus.isBanned,
+        bannedUntil: banStatus.bannedUntil
+      });
     }
 
     if (user && user.email) {
@@ -53,10 +73,18 @@ export async function GET(request) {
         ORDER BY created_at DESC
       `).all(user.email);
       
-      return NextResponse.json({ chats: userChats });
+      return NextResponse.json({ 
+        chats: userChats,
+        isIpBanned: banStatus.isBanned,
+        bannedUntil: banStatus.bannedUntil
+      });
     }
 
-    return NextResponse.json({ messages: [] });
+    return NextResponse.json({ 
+      messages: [],
+      isIpBanned: banStatus.isBanned,
+      bannedUntil: banStatus.bannedUntil
+    });
   } catch (err) {
     console.error('Fehler beim Laden des Chats:', err);
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
@@ -142,17 +170,63 @@ export async function POST(request) {
     // Persistente Session ID aus Header extrahieren
     const userSessionId = request.headers.get('x-user-session-id') || '';
 
+    const isStaff = user && (user.role === 'agent' || user.role === 'admin');
+
+    // IP-Sperre prüfen (nur für reguläre Chatnutzer, niemals für Agenten/Admins)
+    if (!isStaff) {
+      const banStatus = checkIpBanned(userIp);
+      if (banStatus.isBanned) {
+        return NextResponse.json({
+          error: 'Deine IP-Adresse ist für Chateingaben gesperrt.',
+          isIpBanned: true,
+          bannedUntil: banStatus.bannedUntil
+        }, { status: 403 });
+      }
+    }
+
+function extractEmailFromText(str) {
+  if (!str || typeof str !== 'string') return null;
+  const match = str.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function extractEmailFromHistory(messages) {
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = messages[i]?.text || '';
+    const email = extractEmailFromText(text);
+    if (email) return email;
+  }
+  return null;
+}
+
+    // E-Mail aus aktuellem Nachrichtentext extrahieren, falls vorhanden
+    const incomingEmail = extractEmailFromText(text);
+
     // 1. Sicherstellen, dass der Chat existiert
-    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf FROM chats WHERE id = ?').get(chatId);
+    let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
+    const resolvedEmail = email || incomingEmail || (chat ? chat.userEmail : null);
+
     if (!chat) {
       db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(chatId, email, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId);
-      chat = { id: chatId, ticketCreated: 0, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0 };
+        .run(chatId, resolvedEmail, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId);
+      chat = { id: chatId, ticketCreated: 0, userEmail: resolvedEmail, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0, isAbusive: 0 };
     } else {
-      // Immer versuchen, E-Mail, Name, IP und Session-ID des angemeldeten Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
+      // Wenn der Chat bereits wegen Missbrauchs beendet wurde, keine weiteren Nachrichten annehmen!
+      if (!isStaff && chat.isAbusive === 1) {
+        return NextResponse.json({
+          error: 'Dieses Gespräch wurde wegen eines Richtlinienverstoßes beendet und kann nicht fortgeführt werden.',
+          isAbusive: true
+        }, { status: 403 });
+      }
+
+      // Immer versuchen, E-Mail, Name, IP und Session-ID des Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
       if (chat.isAgentOnBehalf !== 1) {
         db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ?, customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(email || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, chatId);
+          .run(resolvedEmail || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, chatId);
+        if (resolvedEmail) {
+          chat.userEmail = resolvedEmail;
+        }
       }
     }
 
@@ -426,9 +500,15 @@ export async function POST(request) {
           console.error('Fehler bei extractAgentBehalfDetails:', err);
         }
       } else {
-        const userEmailForTicket = email || (chat ? chat.userEmail : null);
+        let userEmailForTicket = email || (chat ? chat.userEmail : null) || incomingEmail || extractEmailFromHistory(chatHistory);
 
         if (userEmailForTicket) {
+          // Sicherstellen, dass die E-Mail im Chat gespeichert ist
+          if (chat && !chat.userEmail) {
+            db.prepare('UPDATE chats SET user_email = ? WHERE id = ?').run(userEmailForTicket, chatId);
+            chat.userEmail = userEmailForTicket;
+          }
+
           ticketCreated = true;
           try {
             proposedTitle = await generateTicketTitle(chatHistory);
@@ -509,6 +589,11 @@ export async function POST(request) {
               try {
                 await sendTicketCreatedNotification(userEmailForTicket, newTicketId, finalTitle);
               } catch (mailErr) {}
+
+              // Falls Gemini keine Antwort formuliert hat, Bestätigungstext setzen
+              if (!aiResponse || !aiResponse.trim()) {
+                aiResponse = `Ich habe dein Support-Ticket #${newTicketId} erfolgreich für dich angelegt. Unser IT-Team kümmert sich zeitnah darum.`;
+              }
             } else {
               autoTicketId = existingTicket.id;
             }
@@ -523,18 +608,41 @@ export async function POST(request) {
       }
     }
 
-    // Auf Missbrauch (Beleidigung) prüfen
+    // Auf Missbrauch (Beleidigung / Trolling) prüfen
     let isAbusive = false;
+    let isIpBanned = false;
+    let bannedUntil = null;
+    let isWarning = false;
+
     if (aiResponse.includes('[CHAT_ABUSE_DETECTED]')) {
       isAbusive = true;
       aiResponse = aiResponse.replace('[CHAT_ABUSE_DETECTED]', '').trim();
+      
       try {
         db.prepare(`
           UPDATE chats 
           SET is_abusive = 1, abusive_flagged_at = CURRENT_TIMESTAMP 
           WHERE id = ?
         `).run(chatId);
-        console.log(`Chat ${chatId} wurde als missbräuchlich markiert.`);
+
+        // 2-Stufen-Modell anwenden: 1. Verstoß = Verwarnung, 2. Verstoß (innerhalb 24h) = 24h-IP-Sperre
+        const abuseResult = recordAbuseViolation({
+          ip: userIp,
+          sessionId: userSessionId,
+          userEmail: email,
+          reason: 'Trolling / Richtlinienverstoß im Chat'
+        });
+
+        if (abuseResult.action === 'banned') {
+          isIpBanned = true;
+          bannedUntil = abuseResult.bannedUntil;
+          aiResponse += "\n\n🚫 **Sperre aktiviert:** Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde deine IP-Adresse für **24 Stunden** für alle Chateingaben gesperrt.";
+        } else {
+          isWarning = true;
+          aiResponse += "\n\n⚠️ **Verwarnung:** Deine Nachricht verstößt gegen die Nutzungsrichtlinien unseres IT-Support-Systems. Dieses Gespräch wird hiermit beendet. Bei einem weiteren Verstoß wird deine IP-Adresse für 24 Stunden für Chateingaben gesperrt.";
+        }
+
+        console.log(`Chat ${chatId} (${userIp}) als missbräuchlich eingestuft: ${abuseResult.action} (Verstoß #${abuseResult.warningCount})`);
 
         // E-Mail-Benachrichtigung an alle Admins senden
         try {
@@ -545,28 +653,34 @@ export async function POST(request) {
             const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
             const link = `${host}/admin`;
 
-            const subject = `⚠️ Systemwarnung: Missbrauch im Chat-Bot erkannt (${chatId})`;
-            const text = `Hallo,\n\nder KI-Bot hat soeben im Chat "${chatId}" missbräuchliches, beleidigendes oder unangemessenes Verhalten erkannt.\n\nDer betroffene Chat wurde gesperrt und zur Überprüfung freigegeben.\n\nNutzer-Name: ${chat ? chat.userName || 'Gast' : 'Gast'}\nNutzer-E-Mail: ${email || 'Keine (nicht angemeldet)'}\nIP-Adresse: ${userIp || 'Unbekannt'}\nSitzungs-ID: ${userSessionId || 'Unbekannt'}\n\nBitte prüfen Sie den Fall im Admin-Backend:\n${link}`;
+            const subject = isIpBanned 
+              ? `🚫 Systemwarnung: 24h IP-Sperre verhängt für ${userIp} (${chatId})` 
+              : `⚠️ Systemwarnung: Verwarnung wegen Missbrauch im Chat-Bot (${chatId})`;
+
+            const text = `Hallo,\n\nder KI-Bot hat soeben im Chat "${chatId}" missbräuchliches Verhalten erkannt.\n\nStatus: ${isIpBanned ? '24-STUNDEN IP-SPERRE AKTIVIERT' : '1. VERWARNUNG AUSGESPROCHEN'}\n\nNutzer-Name: ${chat ? chat.userName || 'Gast' : 'Gast'}\nNutzer-E-Mail: ${email || 'Keine (nicht angemeldet)'}\nIP-Adresse: ${userIp || 'Unbekannt'}\nSitzungs-ID: ${userSessionId || 'Unbekannt'}\n\nDetails im Admin-Backend:\n${link}`;
+            
             const html = `
               <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; background-color: #fef2f2;">
                 <h2 style="color: #dc2626; margin-top: 0; display: flex; items-center: center; gap: 8px;">
-                  <span>⚠️</span> Missbrauch im Chat-Bot erkannt
+                  <span>${isIpBanned ? '🚫' : '⚠️'}</span> ${isIpBanned ? '24h IP-Sperre verhängt' : 'Verwarnung wegen Missbrauch'}
                 </h2>
                 <p>Hallo Admin-Team,</p>
-                <p>der KI-Bot hat soeben im Chat <strong style="font-family: monospace;">${chatId}</strong> missbräuchliches, beleidigendes oder unangemessenes Verhalten erkannt und das Gespräch beendet.</p>
+                <p>im Chat <strong style="font-family: monospace;">${chatId}</strong> wurde missbräuchliches Verhalten erkannt. Das Gespräch wurde sofort beendet.</p>
                 
                 <div style="background-color: #ffffff; border: 1px solid #fca5a5; border-radius: 8px; padding: 15px; margin: 20px 0; font-size: 13px;">
-                  <strong style="color: #991b1b; display: block; margin-bottom: 8px;">Details zum Vorfall:</strong>
+                  <strong style="color: #991b1b; display: block; margin-bottom: 8px;">Details zur Maßnahme:</strong>
                   <table style="width: 100%; font-size: 13px; color: #374151;">
-                    <tr><td style="font-weight: bold; width: 120px; padding: 4px 0;">Nutzer-Name:</td><td>${chat ? chat.userName || 'Gast' : 'Gast'}</td></tr>
+                    <tr><td style="font-weight: bold; width: 140px; padding: 4px 0;">Maßnahme:</td><td style="font-weight: bold; color: ${isIpBanned ? '#dc2626' : '#d97706'};">${isIpBanned ? '24h IP-Sperre aktiv' : '1. Verwarnung erteilt'}</td></tr>
+                    <tr><td style="font-weight: bold; padding: 4px 0;">Nutzer-Name:</td><td>${chat ? chat.userName || 'Gast' : 'Gast'}</td></tr>
                     <tr><td style="font-weight: bold; padding: 4px 0;">Nutzer-E-Mail:</td><td>${email || 'Keine (nicht angemeldet)'}</td></tr>
-                    <tr><td style="font-weight: bold; padding: 4px 0;">IP-Adresse:</td><td style="font-family: monospace;">${userIp || 'Unbekannt'}</td></tr>
+                    <tr><td style="font-weight: bold; padding: 4px 0;">IP-Adresse:</td><td style="font-family: monospace; font-weight: bold;">${userIp || 'Unbekannt'}</td></tr>
                     <tr><td style="font-weight: bold; padding: 4px 0;">Sitzungs-ID:</td><td style="font-family: monospace;">${userSessionId || 'Unbekannt'}</td></tr>
+                    ${bannedUntil ? `<tr><td style="font-weight: bold; padding: 4px 0;">Gesperrt bis:</td><td>${new Date(bannedUntil).toLocaleString('de-DE')} Uhr</td></tr>` : ''}
                   </table>
                 </div>
                 
                 <p style="margin: 30px 0; text-align: center;">
-                  <a href="${link}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Admin-Backend aufrufen</a>
+                  <a href="${link}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Im Admin-Backend verwalten</a>
                 </p>
               </div>
             `;
@@ -614,6 +728,9 @@ export async function POST(request) {
       isAgentOnBehalf: isAgentOnBehalfMode,
       botMessageId,
       isAbusive,
+      isWarning,
+      isIpBanned,
+      bannedUntil,
       imageUrl: cleanRelativePath
     });
 

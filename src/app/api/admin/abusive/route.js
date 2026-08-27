@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { reconstructIdentityTrace } from '@/lib/identityTrace';
+import { checkIpBanned } from '@/lib/abuse';
 
 export async function GET() {
   const user = await getSessionUser();
@@ -38,11 +39,13 @@ export async function GET() {
       });
 
       const identityTrace = reconstructIdentityTrace(chat.id);
+      const ipBanInfo = chat.userIp ? checkIpBanned(chat.userIp) : { isBanned: false, bannedUntil: null };
 
       return {
         ...chat,
         messages: messagesWithPrefix,
-        identityTrace
+        identityTrace,
+        ipBanInfo
       };
     });
 

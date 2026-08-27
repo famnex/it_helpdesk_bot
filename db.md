@@ -164,6 +164,23 @@ Systemweite Einstellungen als Key-Value Store.
 
 ---
 
+### 1.9 `ip_bans`
+Speichert IP-Sperren und Verwarnungen bei Richtlinienverstößen (2-Stufen-Modell: 1. Verwarnung, 2. 24h-IP-Sperre).
+
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Eindeutige Eintrags-ID |
+| `ip` | TEXT | NOT NULL | Betroffene IP-Adresse |
+| `session_id` | TEXT | NULL | Assoziierte Browser-Sitzungs-ID |
+| `user_email` | TEXT | NULL | Assoziierte E-Mail-Adresse (falls bekannt) |
+| `warning_count` | INTEGER | DEFAULT 1 | Anzahl der registrierten Verstöße (1 = Verwarnung, >=2 = Sperre) |
+| `banned_until` | DATETIME | NULL | Ablaufzeitpunkt der IP-Sperre (NULL bei reiner Verwarnung) |
+| `reason` | TEXT | NULL | Begründung / Art des Verstoßes |
+| `last_violation_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt des letzten registrierten Verstoßes |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Erstellungszeitpunkt |
+
+---
+
 ## 2. Historie der Datenbank-Migrationen
 
 - **ticket_messages Rolle 'admin' hinzugefügt**: Check-Constraint erweitert für `sender_role IN ('customer', 'agent', 'admin', 'system')`.
@@ -177,3 +194,4 @@ Systemweite Einstellungen als Key-Value Store.
 - **Tabelle `knowledge_attachments` erstellt**: Für Dateianhänge an Wissenseinträgen.
 - **Spalte `image_url` zu `ticket_messages` hinzugefügt**: Für Datei- und Bildanhänge bei Ticketantworten von Agenten und Kunden.
 - **Nachträgliche Chat-Missbrauchsklassifizierung & Identitäts-Spur**: Manuelle Einstufung von Chats als missbräuchlich im Adminbereich inklusive mehrstufiger Rekonstruktion digitaler Identitätsspuren (`src/lib/identityTrace.js`) über `user_session_id`, `user_ip`, `users`-Tabelle und `tickets`.
+- **Tabelle `ip_bans` erstellt**: Zweistufiges Missbrauchs- und Sperrsystem für den Chat (1. Verstoß: Verwarnung und Gesprächsabbruch, 2. Verstoß: automatische 24-Stunden-IP-Sperre) inklusive Admin-Verwaltung.

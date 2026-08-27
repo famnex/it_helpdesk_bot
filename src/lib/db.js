@@ -89,10 +89,39 @@ db.exec(`
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS ip_bans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip TEXT NOT NULL,
+      session_id TEXT,
+      user_email TEXT,
+      warning_count INTEGER DEFAULT 1,
+      banned_until DATETIME,
+      reason TEXT,
+      last_violation_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migration für bestehende Datenbanken: Spalten hinzufügen, falls nicht vorhanden
 try {
+  // Tabelle ip_bans nachträglich anlegen, falls sie noch nicht existiert
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ip_bans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        session_id TEXT,
+        user_email TEXT,
+        warning_count INTEGER DEFAULT 1,
+        banned_until DATETIME,
+        reason TEXT,
+        last_violation_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_ip_bans_ip ON ip_bans(ip);
+    CREATE INDEX IF NOT EXISTS idx_ip_bans_banned_until ON ip_bans(banned_until);
+  `);
+
   // Tabelle knowledge_attachments nachträglich anlegen, falls sie noch nicht existiert
   db.exec(`
     CREATE TABLE IF NOT EXISTS knowledge_attachments (

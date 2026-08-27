@@ -57,6 +57,11 @@ export default function CustomerChatPage() {
   const [directTicketTexts, setDirectTicketTexts] = useState([]); // Array to store description messages
   const [directTicketPhotos, setDirectTicketPhotos] = useState([]); // Array to store uploaded photo objects/paths
 
+  // Missbrauch & Sperren States
+  const [isChatAborted, setIsChatAborted] = useState(false);
+  const [isIpBanned, setIsIpBanned] = useState(false);
+  const [bannedUntil, setBannedUntil] = useState(null);
+
   const handleAcceptConsent = () => {
     localStorage.setItem('it_helpdesk_bot_consent', 'true');
     setShowConsentModal(false);
@@ -238,6 +243,13 @@ export default function CustomerChatPage() {
     fetch(`/api/chat?chatId=${activeChatId}`)
       .then(res => res.json())
       .then(data => {
+        if (data.isIpBanned) {
+          setIsIpBanned(true);
+          setBannedUntil(data.bannedUntil);
+        }
+        if (data.isAbusive) {
+          setIsChatAborted(true);
+        }
         if (data.messages && data.messages.length > 0) {
           setMessages(data.messages);
           const numericIds = data.messages.map(m => typeof m.id === 'number' ? m.id : 0);
@@ -552,10 +564,40 @@ export default function CustomerChatPage() {
         },
         body: formData
       });
- 
+
+      if (res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        if (errData.isIpBanned) {
+          setIsIpBanned(true);
+          setBannedUntil(errData.bannedUntil);
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: `🚫 **Zugriff gesperrt:** Deine IP-Adresse ist für Chateingaben gesperrt${errData.bannedUntil ? ` (bis ${new Date(errData.bannedUntil).toLocaleString('de-DE')} Uhr)` : ''}. Für dringende Notfälle wende dich bitte an das IT-Büro.`
+          }]);
+        } else if (errData.isAbusive) {
+          setIsChatAborted(true);
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: '⛔ Dieses Gespräch wurde wegen eines Richtlinienverstoßes beendet und kann nicht fortgeführt werden. Bitte starte einen neuen Chat für sachliche IT-Anfragen.'
+          }]);
+        } else {
+          setMessages(prev => [...prev, { sender: 'bot', text: errData.error || 'Zugriff verweigert.' }]);
+        }
+        setIsTyping(false);
+        return;
+      }
+
       if (!res.ok) throw new Error('API-Fehler');
- 
+
       const data = await res.json();
+
+      if (data.isIpBanned) {
+        setIsIpBanned(true);
+        setBannedUntil(data.bannedUntil);
+      }
+      if (data.isAbusive) {
+        setIsChatAborted(true);
+      }
       
       // Falls ein Bild hochgeladen wurde, die temporäre blob-URL in den Nachrichten durch die permanente Server-URL ersetzen
       if (data.imageUrl) {
@@ -621,6 +663,15 @@ export default function CustomerChatPage() {
       setMessages(prev => [...prev, { sender: 'bot', text: 'Entschuldigung, meine Serververbindung klemmt gerade.' }]);
       setIsTyping(false);
     }
+  };
+
+  const handleStartNewChat = () => {
+    const newChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
+    setChatId(newChatId);
+    sessionStorage.setItem('support_chat_id', newChatId);
+    setIsChatAborted(false);
+    setMessages([{ sender: 'bot', text: getGreetingText(user) }]);
+    setInputValue('');
   };
  
   const sendSystemEventToBot = async (eventText) => {
@@ -1407,98 +1458,140 @@ export default function CustomerChatPage() {
         {/* Input Area (Fest am unteren Bildschirmrand fixiert) */}
         <div className="p-2 sm:p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-20 shadow-lg flex flex-col gap-1.5 sm:gap-3 w-full">
           
-          {/* Chatbot Deactivation Toggle */}
-          <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-2 border-b border-slate-800/60 pb-1.5 sm:pb-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isChatbotDisabled}
-                onChange={(e) => handleChatbotToggle(e.target.checked)}
-                className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500"
-              />
-              <div className="flex flex-col">
-                <span className="text-[11px] sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
-                <span className="text-[9px] sm:text-[10px] text-slate-500 hidden sm:inline">
-                  Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
-                </span>
+          {isIpBanned ? (
+            <div className="max-w-4xl mx-auto w-full bg-red-950/70 border border-red-500/40 rounded-2xl p-4 text-center space-y-2 animate-fade-in shadow-xl">
+              <div className="flex items-center justify-center gap-2 text-red-400 font-bold text-sm">
+                <i className="fa-solid fa-ban text-base"></i>
+                <span>Chateingaben für deine IP-Adresse gesperrt</span>
               </div>
-            </label>
-            {isChatbotDisabled && (
-              <button
-                type="button"
-                onClick={submitDirectTicket}
-                disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim())}
-                className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <i className="fa-solid fa-paper-plane"></i>
-                <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
-              </button>
-            )}
-          </div>
-
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-1.5 sm:p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
-            
-            {/* Foto-Vorschau */}
-            {photoPreview && (
-              <div className="flex items-center gap-2.5 p-1.5 border-b border-slate-900 pb-1.5 mb-1.5 animate-fade-in">
-                <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
-                  <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" />
-                  <button 
-                    type="button" 
-                    onClick={handleDiscardPhoto}
-                    className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] transition-colors cursor-pointer"
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
+              <p className="text-xs text-red-200/90 leading-relaxed max-w-xl mx-auto">
+                Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde deine IP-Adresse für 24 Stunden für alle Chateingaben gesperrt
+                {bannedUntil ? ` (gesperrt bis ${new Date(bannedUntil).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr am ${new Date(bannedUntil).toLocaleDateString('de-DE')})` : ''}.
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Bei dringenden IT-Notfällen wende dich bitte persönlich an das IT-Büro oder nutze die Wissensdatenbank.
+              </p>
+            </div>
+          ) : isChatAborted ? (
+            <div className="max-w-4xl mx-auto w-full bg-amber-950/60 border border-amber-500/40 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in shadow-xl">
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                  <i className="fa-solid fa-triangle-exclamation"></i>
                 </div>
                 <div>
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Foto gewählt</p>
-                  <p className="text-[11px] text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
+                  <h4 className="text-xs font-bold text-amber-300">Gespräch beendet</h4>
+                  <p className="text-[11px] text-slate-300">
+                    Dieses Gespräch wurde wegen eines Richtlinienverstoßes beendet. Du kannst ein neues Gespräch für sachliche IT-Anfragen starten.
+                  </p>
                 </div>
               </div>
-            )}
-
-            <div className="flex items-end gap-2 sm:gap-3">
-              {/* Foto anhängen Button */}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 sm:p-3 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shadow-md cursor-pointer"
-                title="Foto anhängen"
+                onClick={handleStartNewChat}
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5 cursor-pointer w-full sm:w-auto justify-center"
               >
-                <i className="fa-solid fa-paperclip text-xs sm:text-sm"></i>
-              </button>
-              
-              <input 
-                type="file"
-                ref={fileInputRef}
-                onChange={handlePhotoSelect}
-                accept="image/*"
-                className="hidden"
-              />
-
-              <textarea 
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder={isChatbotDisabled ? "Problem beschreiben oder Foto hochladen..." : "Problem beschreiben oder Foto hochladen..."}
-                rows="1"
-                className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-28 min-h-[36px] sm:min-h-[40px] py-1.5 px-1 text-xs sm:text-sm text-slate-200 placeholder-slate-600 outline-none"
-              />
-              <button 
-                type="submit"
-                disabled={(!inputValue.trim() && !selectedPhoto) || isTyping}
-                className="p-2 sm:p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md cursor-pointer"
-              >
-                <i className="fa-solid fa-paper-plane text-xs sm:text-sm"></i>
+                <i className="fa-solid fa-rotate-right"></i>
+                <span>Neuen Chat starten</span>
               </button>
             </div>
-          </form>
+          ) : (
+            <>
+              {/* Chatbot Deactivation Toggle */}
+              <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-2 border-b border-slate-800/60 pb-1.5 sm:pb-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isChatbotDisabled}
+                    onChange={(e) => handleChatbotToggle(e.target.checked)}
+                    className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 hidden sm:inline">
+                      Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
+                    </span>
+                  </div>
+                </label>
+                {isChatbotDisabled && (
+                  <button
+                    type="button"
+                    onClick={submitDirectTicket}
+                    disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim())}
+                    className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <i className="fa-solid fa-paper-plane"></i>
+                    <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-1.5 sm:p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
+                
+                {/* Foto-Vorschau */}
+                {photoPreview && (
+                  <div className="flex items-center gap-2.5 p-1.5 border-b border-slate-900 pb-1.5 mb-1.5 animate-fade-in">
+                    <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
+                      <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" />
+                      <button 
+                        type="button" 
+                        onClick={handleDiscardPhoto}
+                        className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] transition-colors cursor-pointer"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Foto gewählt</p>
+                      <p className="text-[11px] text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2 sm:gap-3">
+                  {/* Foto anhängen Button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isChatAborted || isIpBanned}
+                    className="p-2 sm:p-3 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shadow-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Foto anhängen"
+                  >
+                    <i className="fa-solid fa-paperclip text-xs sm:text-sm"></i>
+                  </button>
+                  
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoSelect}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  <textarea 
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    disabled={isChatAborted || isIpBanned}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder={isChatbotDisabled ? "Problem beschreiben oder Foto hochladen..." : "Problem beschreiben oder Foto hochladen..."}
+                    rows="1"
+                    className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-28 min-h-[36px] sm:min-h-[40px] py-1.5 px-1 text-xs sm:text-sm text-slate-200 placeholder-slate-600 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={(!inputValue.trim() && !selectedPhoto) || isTyping || isChatAborted || isIpBanned}
+                    className="p-2 sm:p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md cursor-pointer"
+                  >
+                    <i className="fa-solid fa-paper-plane text-xs sm:text-sm"></i>
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
         </div>
  
       </main>

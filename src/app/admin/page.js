@@ -314,6 +314,15 @@ export default function AdminDashboardPage() {
   const [abusiveChats, setAbusiveChats] = useState([]);
   const [isAbusiveLoading, setIsAbusiveLoading] = useState(false);
 
+  // IP-Sperren & Verwarnungen States
+  const [ipBans, setIpBans] = useState([]);
+  const [ipBansStats, setIpBansStats] = useState({ total: 0, activeBans: 0, warnings: 0 });
+  const [isBansLoading, setIsBansLoading] = useState(false);
+  const [newBanIp, setNewBanIp] = useState('');
+  const [newBanHours, setNewBanHours] = useState('24');
+  const [newBanReason, setNewBanReason] = useState('');
+  const [isCreatingBan, setIsCreatingBan] = useState(false);
+
   // Update States
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateLogs, setUpdateLogs] = useState(null);
@@ -453,6 +462,7 @@ export default function AdminDashboardPage() {
       loadFlaggedMessages();
     } else if (activeTab === 'abusive') {
       loadAbusiveChats();
+      loadIpBans();
     } else if (activeTab === 'solutions') {
       loadSolutions();
     } else if (activeTab === 'statistics') {
@@ -621,6 +631,90 @@ export default function AdminDashboardPage() {
       console.error('Fehler beim Laden missbräuchlicher Chats:', e);
     } finally {
       setIsAbusiveLoading(false);
+    }
+  };
+
+  const loadIpBans = async () => {
+    setIsBansLoading(true);
+    try {
+      const res = await fetch('/api/admin/bans');
+      if (res.ok) {
+        const data = await res.json();
+        setIpBans(data.bans || []);
+        if (data.stats) setIpBansStats(data.stats);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der IP-Sperren:', e);
+    } finally {
+      setIsBansLoading(false);
+    }
+  };
+
+  const handleCreateBan = async (e) => {
+    e.preventDefault();
+    if (!newBanIp.trim()) return;
+    setIsCreatingBan(true);
+    try {
+      const res = await fetch('/api/admin/bans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip: newBanIp.trim(),
+          hours: newBanHours,
+          reason: newBanReason.trim() || 'Manuelle Sperre durch Administrator'
+        })
+      });
+      if (res.ok) {
+        setNewBanIp('');
+        setNewBanReason('');
+        loadIpBans();
+        loadAbusiveChats();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Fehler beim Erstellen der IP-Sperre.');
+      }
+    } catch (e) {
+      console.error('Fehler beim Erstellen der IP-Sperre:', e);
+    } finally {
+      setIsCreatingBan(false);
+    }
+  };
+
+  const handleLiftBan = async (ip) => {
+    if (!ip) return;
+    try {
+      const res = await fetch('/api/admin/bans', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      if (res.ok) {
+        loadIpBans();
+        loadAbusiveChats();
+      }
+    } catch (e) {
+      console.error('Fehler beim Aufheben der Sperre:', e);
+    }
+  };
+
+  const handleQuickBan = async (ip, hours = 24) => {
+    if (!ip) return;
+    try {
+      const res = await fetch('/api/admin/bans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip,
+          hours,
+          reason: `24h-Sperre wegen Missbrauchsmeldung`
+        })
+      });
+      if (res.ok) {
+        loadIpBans();
+        loadAbusiveChats();
+      }
+    } catch (e) {
+      console.error('Fehler beim Setzen der Schnellsperre:', e);
     }
   };
 
@@ -4410,159 +4504,364 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Tab 7: Missbrauchsmeldungen */}
+        {/* Tab 7: Missbrauchsmeldungen & IP-Sperren */}
         {activeTab === 'abusive' && (
           <div className="space-y-6">
-            <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
-              <h3 className="text-sm font-bold text-white mb-1">Missbrauchsmeldungen (Chat-Sperren / Beleidigungen)</h3>
-              <p className="text-xs text-slate-400">Hier werden Konversationen gelistet, bei denen der KI-Bot beleidigendes, unangemessenes oder schikanöses Verhalten des Nutzers erkannt hat.</p>
+            {/* Header & KPI Summary */}
+            <div className="bg-slate-900/60 p-5 border border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
+              <div>
+                <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+                  <span className="text-red-400">🛡️</span> Missbrauchsschutz & IP-Sperren
+                </h3>
+                <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                  2-Stufen-Schutz: Bei 1. Verstoß wird das Gespräch beendet und eine formelle Verwarnung registriert. Bei einem 2. Verstoß innerhalb von 24h wird die IP-Adresse automatisch für 24 Stunden für Chateingaben gesperrt (Agenten- und Adminzugang bleiben unberührt).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gesperrte Chats</span>
+                  <span className="text-sm font-bold text-white">{abusiveChats.length}</span>
+                </div>
+                <div className="bg-red-950/40 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">Aktive IP-Sperren</span>
+                  <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans}</span>
+                </div>
+                <div className="bg-amber-950/40 border border-amber-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Verwarnungen</span>
+                  <span className="text-sm font-bold text-amber-300">{ipBansStats.warnings}</span>
+                </div>
+              </div>
             </div>
 
-            {isAbusiveLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+            {/* Manuelle IP-Sperre & Sperren-Verwaltung */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-ban text-red-400 text-xs"></i>
+                    <span>IP-Sperren & Verwarnungen verwalten</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Hier können Sie IP-Adressen manuell sperren, bestehende Sperren vorzeitig aufheben oder Verwarnungen löschen.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadIpBans}
+                  disabled={isBansLoading}
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <i className={`fa-solid fa-rotate-right text-[11px] ${isBansLoading ? 'animate-spin' : ''}`}></i>
+                  <span>Aktualisieren</span>
+                </button>
               </div>
-            ) : abusiveChats.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
-                Keine Missbrauchsmeldungen vorhanden.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {abusiveChats.map((chat) => (
-                  <div key={chat.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
-                    {/* Header */}
-                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-col gap-2">
-                      <div className="flex flex-wrap justify-between items-center gap-2">
-                        <div className="flex items-center gap-3 text-xs flex-wrap">
-                          <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
-                            {chat.id}
-                          </span>
-                          <span className="text-slate-400">
-                            Erkannt: <strong className="text-slate-200">{parseUtcDate(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
-                          </span>
-                          <span className="text-slate-400">
-                            Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
-                          </span>
-                          <span className="text-slate-400">
-                            Nutzer-E-Mail: <strong className="text-white">{chat.userEmail || 'Keine (nicht angemeldet)'}</strong>
-                          </span>
-                          {chat.userIp && (
-                            <span className="text-slate-400">
-                              IP: <strong className="text-slate-200 font-mono">{chat.userIp}</strong>
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleResolveAbusive(chat.id)}
-                          className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
-                        >
-                          <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
-                          Als gelöst markieren (Meldung löschen)
-                        </button>
-                      </div>
 
-                      {/* IP und Session-ID Infos + rekonstruierte Anmeldungen */}
-                      <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-850/60 text-[10px] text-slate-500">
-                        {chat.userSessionId && (
-                          <div>
-                            Sitzungs-ID: <span className="font-mono text-slate-400">{chat.userSessionId}</span>
-                          </div>
-                        )}
-                        {chat.identityTrace ? (
-                          <div className="bg-red-950/45 border border-red-900/40 text-red-200 p-3 rounded-xl flex flex-col gap-2 animate-fade-in mt-1">
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-mask text-[14px] text-red-400"></i>
-                                <strong className="text-red-400 font-bold text-xs">Identitäts-Spur rekonstruiert:</strong>
-                              </div>
-                              {chat.identityTrace.confidenceScore && (
-                                <span className={`text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                  chat.identityTrace.confidenceScore === 'high' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
-                                  chat.identityTrace.confidenceScore === 'medium' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                                  'bg-slate-800 text-slate-400 border-slate-700'
-                                }`}>
-                                  Treffer: {chat.identityTrace.confidenceScore.toUpperCase()}
+              {/* Formular für manuelle Sperre */}
+              <form onSubmit={handleCreateBan} className="bg-slate-950/60 p-4 border border-slate-800/80 rounded-xl flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">IP-Adresse</label>
+                  <input
+                    type="text"
+                    value={newBanIp}
+                    onChange={(e) => setNewBanIp(e.target.value)}
+                    placeholder="z. B. 10.37.74.212 oder 104.28.225.121"
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-mono focus:border-red-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div className="w-[140px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dauer</label>
+                  <select
+                    value={newBanHours}
+                    onChange={(e) => setNewBanHours(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
+                  >
+                    <option value="24">24 Stunden</option>
+                    <option value="48">48 Stunden</option>
+                    <option value="168">7 Tage</option>
+                    <option value="720">30 Tage</option>
+                    <option value="8760">1 Jahr</option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[220px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Begründung (optional)</label>
+                  <input
+                    type="text"
+                    value={newBanReason}
+                    onChange={(e) => setNewBanReason(e.target.value)}
+                    placeholder="z. B. Wiederholtes Trolling / Beleidigung"
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isCreatingBan || !newBanIp.trim()}
+                  className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-lock text-[11px]"></i>
+                  <span>{isCreatingBan ? 'Sperre...' : 'IP jetzt sperren'}</span>
+                </button>
+              </form>
+
+              {/* Tabelle / Liste der aktiven IP-Sperren & Verwarnungen */}
+              {isBansLoading ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : ipBans.length === 0 ? (
+                <p className="text-center py-4 text-xs text-slate-500">Aktuell sind keine IP-Sperren oder Verwarnungen registriert.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                        <th className="py-2.5 px-3">IP-Adresse</th>
+                        <th className="py-2.5 px-3">Status / Stufe</th>
+                        <th className="py-2.5 px-3">Gesperrt bis</th>
+                        <th className="py-2.5 px-3">Letzter Verstoß</th>
+                        <th className="py-2.5 px-3">Grund / Details</th>
+                        <th className="py-2.5 px-3 text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {ipBans.map((ban) => {
+                        const isBanActive = ban.isActiveBan === 1;
+                        const isWarningOnly = !isBanActive && ban.warningCount > 0;
+                        
+                        return (
+                          <tr key={ban.id} className="hover:bg-slate-850/40 transition-colors">
+                            <td className="py-2.5 px-3 font-mono font-bold text-white">
+                              {ban.ip}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {isBanActive ? (
+                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🚫</span> 24h-Sperre aktiv
+                                </span>
+                              ) : isWarningOnly ? (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>⚠️</span> 1. Verwarnung
+                                </span>
+                              ) : (
+                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px]">
+                                  Abgelaufen
                                 </span>
                               )}
-                            </div>
-                            
-                            <p className="text-[11px] text-slate-300 leading-relaxed">
-                              {chat.identityTrace.summary}
-                            </p>
-
-                            {chat.identityTrace.linkedIdentities && chat.identityTrace.linkedIdentities.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-0.5">
-                                {chat.identityTrace.linkedIdentities.map((identity, idIdx) => (
-                                  <span key={idIdx} className="bg-red-900/40 border border-red-500/30 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white flex items-center gap-1.5">
-                                    <i className="fa-solid fa-user text-[9px] text-red-300"></i>
-                                    <span>{identity.name} ({identity.email})</span>
-                                    <span className="text-[8px] bg-red-950/60 px-1 py-0.2 rounded font-mono text-red-200">{identity.role}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {chat.identityTrace.linkedTickets && chat.identityTrace.linkedTickets.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-1 pt-1 border-t border-red-900/30">
-                                <span className="text-[9px] text-slate-400 font-bold">Tickets:</span>
-                                {chat.identityTrace.linkedTickets.map((t) => (
-                                  <span key={t.id} className="text-[9px] text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded">
-                                    #{t.id}: {t.title}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : chat.linkedIdentities && chat.linkedIdentities.length > 0 ? (
-                          <div className="bg-red-950/45 border border-red-900/40 text-red-200 p-2.5 rounded-xl flex items-start gap-2 animate-fade-in mt-1">
-                            <i className="fa-solid fa-mask text-[12px] text-red-400 mt-0.5"></i>
-                            <div>
-                              <strong className="text-red-400 block font-bold">Identitäts-Spur rekonstruiert:</strong>
-                              <span className="leading-relaxed">
-                                Über dieselbe Browser-Sitzung wurden früher folgende Anmeldungen vorgenommen:
-                              </span>
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                {chat.linkedIdentities.map((identity, idIdx) => (
-                                  <span key={idIdx} className="bg-red-900/40 border border-red-500/20 px-2 py-0.5 rounded text-[9px] font-semibold text-white">
-                                    {identity.name ? `${identity.name} (${identity.email})` : identity.email}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Chatverlauf Context */}
-                    <div className="p-5 space-y-4 bg-slate-900/25">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vollständiger Chatverlauf:</p>
-                      <div className="space-y-3 max-w-3xl border-l-2 border-red-500/20 pl-4 py-1">
-                        {chat.messages.map((ctxMsg, ctxIdx) => {
-                          const isUser = ctxMsg.sender === 'user';
-                          
-                          return (
-                            <div key={ctxIdx} className="space-y-1">
-                              <div className="flex items-center gap-2 text-[10px] font-bold">
-                                <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
-                                  {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-300">
+                              {ban.bannedUntil ? (
+                                <span className="text-red-300 font-mono text-[11px]">
+                                  {parseUtcDate(ban.bannedUntil).toLocaleString('de-DE')} Uhr
                                 </span>
-                                <span className="text-slate-600 font-normal">
-                                  {parseUtcDate(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
-                                {ctxMsg.text}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                              {parseUtcDate(ban.lastViolationAt).toLocaleString('de-DE')} Uhr
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-350 max-w-xs truncate text-[11px]" title={ban.reason || ''}>
+                              {ban.reason || 'Keine Angabe'}
+                              {ban.userEmail && <span className="text-slate-500 block text-[10px]">E-Mail: {ban.userEmail}</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                              {!isBanActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickBan(ban.ip, 24)}
+                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all"
+                                  title="Jetzt für 24h sperren"
+                                >
+                                  + 24h sperren
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleLiftBan(ban.ip)}
+                                className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all"
+                                title="Sperre / Verwarnung aufheben"
+                              >
+                                <i className="fa-solid fa-unlock mr-1 text-[9px]"></i>
+                                Aufheben
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Missbrauchsmeldungen Liste */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-comments text-violet-400 text-xs"></i>
+                  <span>Gemeldete Chatverläufe ({abusiveChats.length})</span>
+                </h4>
               </div>
-            )}
+
+              {isAbusiveLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : abusiveChats.length === 0 ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500 text-xs">
+                  Keine gemeldeten Missbrauchsfälle vorhanden.
+                </div>
+              ) : (
+                abusiveChats.map((chat) => {
+                  const isIpCurrentlyBanned = chat.ipBanInfo?.isBanned;
+
+                  return (
+                    <div key={chat.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
+                      {/* Header */}
+                      <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-col gap-2">
+                        <div className="flex flex-wrap justify-between items-center gap-2">
+                          <div className="flex items-center gap-3 text-xs flex-wrap">
+                            <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
+                              {chat.id}
+                            </span>
+                            <span className="text-slate-400">
+                              Erkannt: <strong className="text-slate-200">{parseUtcDate(chat.flaggedAt).toLocaleString('de-DE')} Uhr</strong>
+                            </span>
+                            <span className="text-slate-400">
+                              Nutzer-Name: <strong className="text-white">{chat.userName || 'Gast'}</strong>
+                            </span>
+                            <span className="text-slate-400">
+                              Nutzer-E-Mail: <strong className="text-white">{chat.userEmail || 'Keine (nicht angemeldet)'}</strong>
+                            </span>
+                            {chat.userIp && (
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                IP: <strong className="text-slate-200 font-mono">{chat.userIp}</strong>
+                                {isIpCurrentlyBanned ? (
+                                  <span className="bg-red-500/20 text-red-300 border border-red-500/30 text-[9px] px-1.5 py-0.2 rounded font-semibold">
+                                    🚫 Gesperrt
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {chat.userIp && (
+                              isIpCurrentlyBanned ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLiftBan(chat.userIp)}
+                                  className="bg-emerald-950/50 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all"
+                                >
+                                  <i className="fa-solid fa-unlock mr-1.5"></i>
+                                  IP entsperren
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickBan(chat.userIp, 24)}
+                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all"
+                                >
+                                  <i className="fa-solid fa-ban mr-1.5"></i>
+                                  IP für 24h sperren
+                                </button>
+                              )
+                            )}
+                            <button
+                              onClick={() => handleResolveAbusive(chat.id)}
+                              className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                            >
+                              <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
+                              Als gelöst markieren (Meldung löschen)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* IP und Session-ID Infos + rekonstruierte Anmeldungen */}
+                        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-850/60 text-[10px] text-slate-500">
+                          {chat.userSessionId && (
+                            <div>
+                              Sitzungs-ID: <span className="font-mono text-slate-400">{chat.userSessionId}</span>
+                            </div>
+                          )}
+                          {chat.identityTrace ? (
+                            <div className="bg-red-950/45 border border-red-900/40 text-red-200 p-3 rounded-xl flex flex-col gap-2 animate-fade-in mt-1">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <i className="fa-solid fa-mask text-[14px] text-red-400"></i>
+                                  <strong className="text-red-400 font-bold text-xs">Identitäts-Spur rekonstruiert:</strong>
+                                </div>
+                                {chat.identityTrace.confidenceScore && (
+                                  <span className={`text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                    chat.identityTrace.confidenceScore === 'high' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
+                                    chat.identityTrace.confidenceScore === 'medium' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                                    'bg-slate-800 text-slate-400 border-slate-700'
+                                  }`}>
+                                    Treffer: {chat.identityTrace.confidenceScore.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                {chat.identityTrace.summary}
+                              </p>
+
+                              {chat.identityTrace.linkedIdentities && chat.identityTrace.linkedIdentities.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-0.5">
+                                  {chat.identityTrace.linkedIdentities.map((identity, idIdx) => (
+                                    <span key={idIdx} className="bg-red-900/40 border border-red-500/30 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white flex items-center gap-1.5">
+                                      <i className="fa-solid fa-user text-[9px] text-red-300"></i>
+                                      <span>{identity.name} ({identity.email})</span>
+                                      <span className="text-[8px] bg-red-950/60 px-1 py-0.2 rounded font-mono text-red-200">{identity.role}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {chat.identityTrace.linkedTickets && chat.identityTrace.linkedTickets.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-1 pt-1 border-t border-red-900/30">
+                                  <span className="text-[9px] text-slate-400 font-bold">Tickets:</span>
+                                  {chat.identityTrace.linkedTickets.map((t) => (
+                                    <span key={t.id} className="text-[9px] text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded">
+                                      #{t.id}: {t.title}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Chatverlauf Context */}
+                      <div className="p-5 space-y-4 bg-slate-900/25">
+                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vollständiger Chatverlauf:</p>
+                        <div className="space-y-3 max-w-3xl border-l-2 border-red-500/20 pl-4 py-1">
+                          {chat.messages.map((ctxMsg, ctxIdx) => {
+                            const isUser = ctxMsg.sender === 'user';
+                            
+                            return (
+                              <div key={ctxIdx} className="space-y-1">
+                                <div className="flex items-center gap-2 text-[10px] font-bold">
+                                  <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
+                                    {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
+                                  </span>
+                                  <span className="text-slate-600 font-normal">
+                                    {parseUtcDate(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
+                                  {ctxMsg.text}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
       </main>
