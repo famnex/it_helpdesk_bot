@@ -177,7 +177,8 @@ export async function POST(request) {
       const banStatus = checkIpBanned(userIp);
       if (banStatus.isBanned) {
         return NextResponse.json({
-          error: 'Deine IP-Adresse ist für Chateingaben gesperrt.',
+          error: 'Diese IP-Adresse ist für Chateingaben gesperrt.',
+          message: 'Die IP-Adresse dieses Geräts ist für 24 Stunden für Chateingaben gesperrt. Falls du an einem gemeinsam genutzten Schul-PC sitzt, nutze bitte ein anderes Gerät (z. B. Smartphone oder Tablet).',
           isIpBanned: true,
           bannedUntil: banStatus.bannedUntil
         }, { status: 403 });
@@ -636,10 +637,10 @@ function extractEmailFromHistory(messages) {
         if (abuseResult.action === 'banned') {
           isIpBanned = true;
           bannedUntil = abuseResult.bannedUntil;
-          aiResponse += "\n\n🚫 **Sperre aktiviert:** Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde deine IP-Adresse für **24 Stunden** für alle Chateingaben gesperrt.";
+          aiResponse += "\n\n🚫 **IP-Sperre aktiviert:** Aufgrund wiederholter Richtlinienverstöße wurde die aktuelle **IP-Adresse für 24 Stunden für alle Chateingaben gesperrt**.\n\n💡 *Hinweis:* Die Sperre ist an die IP-Adresse dieses Geräts bzw. Netzwerks gebunden. Falls du an einem gemeinsam genutzten Schul-PC sitzt und die Sperre nicht selbst verursacht hast, nutze für Support-Anfragen bitte ein **anderes Gerät** (z. B. dein Smartphone oder Tablet).";
         } else {
           isWarning = true;
-          aiResponse += "\n\n⚠️ **Verwarnung:** Deine Nachricht verstößt gegen die Nutzungsrichtlinien unseres IT-Support-Systems. Dieses Gespräch wird hiermit beendet. Bei einem weiteren Verstoß wird deine IP-Adresse für 24 Stunden für Chateingaben gesperrt.";
+          aiResponse += "\n\n⚠️ **Verwarnung:** Deine Nachricht verstößt gegen die Nutzungsrichtlinien unseres IT-Support-Systems. Dieses Gespräch wird hiermit beendet. Bei einem weiteren Verstoß wird die IP-Adresse für 24 Stunden für Chateingaben gesperrt.";
         }
 
         console.log(`Chat ${chatId} (${userIp}) als missbräuchlich eingestuft: ${abuseResult.action} (Verstoß #${abuseResult.warningCount})`);

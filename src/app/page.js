@@ -572,7 +572,7 @@ export default function CustomerChatPage() {
           setBannedUntil(errData.bannedUntil);
           setMessages(prev => [...prev, {
             sender: 'bot',
-            text: `🚫 **Zugriff gesperrt:** Deine IP-Adresse ist für Chateingaben gesperrt${errData.bannedUntil ? ` (bis ${new Date(errData.bannedUntil).toLocaleString('de-DE')} Uhr)` : ''}. Für dringende Notfälle wende dich bitte an das IT-Büro.`
+            text: `🚫 **IP-Adresse gesperrt:** Chateingaben von dieser IP-Adresse sind für 24 Stunden gesperrt${errData.bannedUntil ? ` (bis ${new Date(errData.bannedUntil).toLocaleString('de-DE')} Uhr)` : ''}.\n\n💡 **Hinweis für Schul-PCs:** Die Sperre ist an die IP-Adresse dieses Computers gebunden. Falls ein vorheriger Nutzer diesen PC gesperrt hat, kannst du für Support-Anfragen einfach ein **anderes Gerät** (z. B. dein Smartphone oder Tablet) nutzen.`
           }]);
         } else if (errData.isAbusive) {
           setIsChatAborted(true);
@@ -1459,18 +1459,27 @@ export default function CustomerChatPage() {
         <div className="p-2 sm:p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-20 shadow-lg flex flex-col gap-1.5 sm:gap-3 w-full">
           
           {isIpBanned ? (
-            <div className="max-w-4xl mx-auto w-full bg-red-950/70 border border-red-500/40 rounded-2xl p-4 text-center space-y-2 animate-fade-in shadow-xl">
+            <div className="max-w-4xl mx-auto w-full bg-red-950/70 border border-red-500/40 rounded-2xl p-4 text-center space-y-3 animate-fade-in shadow-xl">
               <div className="flex items-center justify-center gap-2 text-red-400 font-bold text-sm">
                 <i className="fa-solid fa-ban text-base"></i>
-                <span>Chateingaben für deine IP-Adresse gesperrt</span>
+                <span>IP-Adresse für Chateingaben gesperrt</span>
               </div>
               <p className="text-xs text-red-200/90 leading-relaxed max-w-xl mx-auto">
-                Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde deine IP-Adresse für 24 Stunden für alle Chateingaben gesperrt
+                Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde die IP-Adresse dieses Geräts für 24 Stunden für alle Chateingaben gesperrt
                 {bannedUntil ? ` (gesperrt bis ${new Date(bannedUntil).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr am ${new Date(bannedUntil).toLocaleDateString('de-DE')})` : ''}.
               </p>
-              <p className="text-[11px] text-slate-400">
-                Bei dringenden IT-Notfällen wende dich bitte persönlich an das IT-Büro oder nutze die Wissensdatenbank.
-              </p>
+              
+              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-[11px] text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
+                <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <i className="fa-solid fa-desktop text-[10px]"></i>
+                </div>
+                <div>
+                  <strong className="text-slate-200 block font-semibold mb-0.5">Sitzt du an einem gemeinsam genutzten Schul-PC?</strong>
+                  <span className="leading-relaxed">
+                    Die Sperre ist an die IP-Adresse dieses Computers gebunden. Wenn ein vorheriger Nutzer die Sperre ausgelöst hat, kannst du für Support-Hilfe einfach ein <strong>anderes Gerät</strong> (z. B. dein eigenes Smartphone oder Tablet) nutzen.
+                  </span>
+                </div>
+              </div>
             </div>
           ) : isChatAborted ? (
             <div className="max-w-4xl mx-auto w-full bg-amber-950/60 border border-amber-500/40 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in shadow-xl">
