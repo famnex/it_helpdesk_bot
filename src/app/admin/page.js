@@ -5301,7 +5301,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-left">
                       <span className="text-xs font-semibold text-slate-200 block">Kompromittierte IPs blockieren</span>
-                      <span className="text-[11px] text-slate-500 block">Bekannte Botnets, Malware-Hosts & Scanning-Server</span>
+                      <span className="text-[11px] text-slate-500 block">Bekannte Botnets, Malware-Hosts & auffällige Server (oft auch geteilte VPN-IPs)</span>
                     </div>
                   </label>
                 </div>

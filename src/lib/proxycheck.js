@@ -281,9 +281,9 @@ function evaluateSecurityRules(isProxy, proxyType, riskScore, details, config) {
   if (isProxy && typeUpper.includes('COMPROMISED') && config.blockCompromised !== false) {
     return {
       allowed: false,
-      category: 'Verdächtig',
+      category: 'Kompromittierte IP',
       reason: 'compromised',
-      message: 'Ihre IP-Adresse wurde als auffällig oder kompromittiert eingestuft. Der Zugang zum Chat ist blockiert.',
+      message: 'Ihre IP-Adresse wurde als auffällig oder kompromittiert eingestuft. Falls Sie mit einem VPN oder Proxy verbunden sind, kann dies die Ursache sein. Bitte deaktivieren Sie den Dienst.',
       details
     };
   }
@@ -294,7 +294,7 @@ function evaluateSecurityRules(isProxy, proxyType, riskScore, details, config) {
       allowed: false,
       category: 'Proxy/VPN',
       reason: 'proxy_vpn',
-      message: 'Der Zugriff über anonymisierende Netzwerk-Dienste ist für dieses Support-System nicht gestattet.',
+      message: 'Der Zugriff über anonymisierende Netzwerk-Dienste (wie VPN oder Proxy) ist für dieses Support-System nicht gestattet.',
       details
     };
   }
@@ -306,7 +306,7 @@ function evaluateSecurityRules(isProxy, proxyType, riskScore, details, config) {
       allowed: false,
       category: 'Risiko-IP',
       reason: 'risk_score',
-      message: 'Ihre IP-Adresse wurde als sicherheitskritisch eingestuft. Der Zugang zum Chat ist blockiert.',
+      message: 'Ihre IP-Adresse wurde als sicherheitskritisch eingestuft. Falls Sie mit einem VPN verbunden sind, kann dies der Grund sein. Bitte trennen Sie das VPN und versuchen Sie es erneut.',
       details
     };
   }

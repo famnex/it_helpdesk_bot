@@ -1520,8 +1520,10 @@ export default function CustomerChatPage() {
                       'Bitte deaktiviere deinen Proxy-Server in den Systemeinstellungen und lade die Seite neu.'
                     ) : securityCategory === 'TOR' ? (
                       'Der Support-Chat ist über das TOR-Netzwerk nicht verfügbar. Bitte nutze einen Standard-Browser mit regulärer Internetverbindung.'
+                    ) : (securityCategory === 'Kompromittierte IP' || securityCategory === 'Verdächtig' || securityCategory === 'Risiko-IP') ? (
+                      'Diese IP-Adresse wurde als auffällig eingestuft. Wenn du mit einem VPN oder Proxy verbunden bist, ist dies oft der Grund – bitte deaktiviere den Dienst. Andernfalls nutze bitte das reguläre Schul-WLAN oder dein Mobilfunknetz.'
                     ) : (
-                      'Bitte greife über eine reguläre Internetverbindung oder das Schul-WLAN auf das Support-System zu.'
+                      'Falls du ein VPN oder einen Proxy nutzt, deaktiviere diesen bitte oder greife über das reguläre Schul-WLAN auf das Support-System zu.'
                     )}
                   </span>
                 </div>
