@@ -210,7 +210,7 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'update', 'export'
+  const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'proxycheck', 'update', 'export'
   const router = useRouter();
 
   // Export States
@@ -294,6 +294,19 @@ export default function AdminDashboardPage() {
   const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '', logoutRedirectUrl: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
   const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
+  const [proxycheckConfig, setProxycheckConfig] = useState({
+    enabled: false,
+    apiKey: '',
+    blockVpn: true,
+    blockTor: true,
+    blockProxy: true,
+    blockCompromised: true,
+    minRiskScore: 67,
+    whitelistedIps: ''
+  });
+  const [testProxycheckLoading, setTestProxycheckLoading] = useState(false);
+  const [testProxycheckResult, setTestProxycheckResult] = useState(null);
+  const [showProxycheckKey, setShowProxycheckKey] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
@@ -462,6 +475,7 @@ export default function AdminDashboardPage() {
       loadFlaggedMessages();
     } else if (activeTab === 'abusive') {
       loadAbusiveChats();
+    } else if (activeTab === 'bans') {
       loadIpBans();
     } else if (activeTab === 'solutions') {
       loadSolutions();
@@ -1245,7 +1259,13 @@ export default function AdminDashboardPage() {
         if (config.idp_config) setIdpConfig(config.idp_config);
         if (config.github_config) setGithubConfig(config.github_config);
         if (config.gemini_config) setGeminiConfig(config.gemini_config);
+        if (config.proxycheck_config) setProxycheckConfig(config.proxycheck_config);
       }
+
+      // Moderations- und Sperren-Zähler für Sidebar-Badges im Hintergrund laden
+      loadFlaggedMessages().catch(() => {});
+      loadAbusiveChats().catch(() => {});
+      loadIpBans().catch(() => {});
     } catch (err) {
       console.error('Fehler beim Laden der Admin-Daten:', err);
     } finally {
@@ -1477,6 +1497,28 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleTestProxycheck = async () => {
+    setTestProxycheckLoading(true);
+    setTestProxycheckResult(null);
+
+    try {
+      const res = await fetch('/api/admin/settings/test-proxycheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: proxycheckConfig.apiKey
+        })
+      });
+
+      const data = await res.json();
+      setTestProxycheckResult(data);
+    } catch (err) {
+      setTestProxycheckResult({ success: false, error: 'Verbindungsfehler beim Testen von ProxyCheck.io' });
+    } finally {
+      setTestProxycheckLoading(false);
+    }
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setSettingsSuccess(false);
@@ -1490,7 +1532,8 @@ export default function AdminDashboardPage() {
           smtp_config: smtpConfig,
           idp_config: idpConfig,
           github_config: githubConfig,
-          gemini_config: geminiConfig
+          gemini_config: geminiConfig,
+          proxycheck_config: proxycheckConfig
         })
       });
 
@@ -1815,6 +1858,50 @@ export default function AdminDashboardPage() {
                     {abusiveChats.length}
                   </span>
                 )}
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('bans'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'bans' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-ban text-sm w-4 shrink-0 ${activeTab === 'bans' ? 'text-white' : 'text-red-400 group-hover:text-red-300'}`}></i>
+                  <span className="truncate">IP-Sperren</span>
+                </div>
+                {ipBansStats.activeBans > 0 ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                    {ipBansStats.activeBans}
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-slate-950 text-slate-500 border border-slate-800">
+                    {ipBans.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('proxycheck'); setMobileMenuOpen(false); }}
+                className={`w-full py-2.5 px-3 rounded-xl font-semibold text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                  activeTab === 'proxycheck' 
+                    ? 'bg-violet-600 text-white shadow-md shadow-violet-950/50' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <i className={`fa-solid fa-shield-halved text-sm w-4 shrink-0 ${activeTab === 'proxycheck' ? 'text-white' : 'text-emerald-400 group-hover:text-emerald-300'}`}></i>
+                  <span className="truncate">ProxyCheck.io</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
+                  proxycheckConfig.enabled 
+                    ? (activeTab === 'proxycheck' ? 'bg-white/20 text-white border-white/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30')
+                    : (activeTab === 'proxycheck' ? 'bg-white/10 text-white/70 border-white/20' : 'bg-slate-950 text-slate-500 border-slate-800')
+                }`}>
+                  {proxycheckConfig.enabled ? 'Aktiv' : 'Aus'}
+                </span>
               </button>
             </div>
 
@@ -4504,17 +4591,17 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Tab 7: Missbrauchsmeldungen & IP-Sperren */}
+        {/* Tab 7: Missbrauchsmeldungen (Gemeldete Chatverläufe) */}
         {activeTab === 'abusive' && (
           <div className="space-y-6">
             {/* Header & KPI Summary */}
             <div className="bg-slate-900/60 p-5 border border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
               <div>
                 <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-                  <span className="text-red-400">🛡️</span> Missbrauchsschutz & IP-Sperren
+                  <span className="text-rose-400">🚨</span> Missbrauchserkennung & gemeldete Chats
                 </h3>
                 <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-                  2-Stufen-Schutz: Bei 1. Verstoß wird das Gespräch beendet und eine formelle Verwarnung registriert. Bei einem 2. Verstoß innerhalb von 24h wird die IP-Adresse automatisch für 24 Stunden für Chateingaben gesperrt (Agenten- und Adminzugang bleiben unberührt).
+                  Hier finden Sie alle abgebrochenen Gespräche, erkannte Beleidigungen/Trolling und automatisch rekonstruierte digitale Identitätsspuren.
                 </p>
               </div>
 
@@ -4523,174 +4610,19 @@ export default function AdminDashboardPage() {
                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gesperrte Chats</span>
                   <span className="text-sm font-bold text-white">{abusiveChats.length}</span>
                 </div>
-                <div className="bg-red-950/40 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">Aktive IP-Sperren</span>
-                  <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans}</span>
-                </div>
-                <div className="bg-amber-950/40 border border-amber-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Verwarnungen</span>
-                  <span className="text-sm font-bold text-amber-300">{ipBansStats.warnings}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Manuelle IP-Sperre & Sperren-Verwaltung */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
-                <div>
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <i className="fa-solid fa-ban text-red-400 text-xs"></i>
-                    <span>IP-Sperren & Verwarnungen verwalten</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-400">Hier können Sie IP-Adressen manuell sperren, bestehende Sperren vorzeitig aufheben oder Verwarnungen löschen.</p>
-                </div>
                 <button
                   type="button"
-                  onClick={loadIpBans}
-                  disabled={isBansLoading}
-                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  onClick={() => setActiveTab('bans')}
+                  className="bg-red-950/40 hover:bg-red-900/50 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner transition-colors cursor-pointer"
+                  title="Zur IP-Sperren-Verwaltung wechseln"
                 >
-                  <i className={`fa-solid fa-rotate-right text-[11px] ${isBansLoading ? 'animate-spin' : ''}`}></i>
-                  <span>Aktualisieren</span>
+                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block flex items-center gap-1 justify-center">
+                    <span>IP-Sperren</span>
+                    <i className="fa-solid fa-arrow-right text-[9px]"></i>
+                  </span>
+                  <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans} aktiv</span>
                 </button>
               </div>
-
-              {/* Formular für manuelle Sperre */}
-              <form onSubmit={handleCreateBan} className="bg-slate-950/60 p-4 border border-slate-800/80 rounded-xl flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">IP-Adresse</label>
-                  <input
-                    type="text"
-                    value={newBanIp}
-                    onChange={(e) => setNewBanIp(e.target.value)}
-                    placeholder="z. B. 10.37.74.212 oder 104.28.225.121"
-                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-mono focus:border-red-500 focus:outline-none"
-                    required
-                  />
-                </div>
-                <div className="w-[140px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dauer</label>
-                  <select
-                    value={newBanHours}
-                    onChange={(e) => setNewBanHours(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
-                  >
-                    <option value="24">24 Stunden</option>
-                    <option value="48">48 Stunden</option>
-                    <option value="168">7 Tage</option>
-                    <option value="720">30 Tage</option>
-                    <option value="8760">1 Jahr</option>
-                  </select>
-                </div>
-                <div className="flex-1 min-w-[220px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Begründung (optional)</label>
-                  <input
-                    type="text"
-                    value={newBanReason}
-                    onChange={(e) => setNewBanReason(e.target.value)}
-                    placeholder="z. B. Wiederholtes Trolling / Beleidigung"
-                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isCreatingBan || !newBanIp.trim()}
-                  className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <i className="fa-solid fa-lock text-[11px]"></i>
-                  <span>{isCreatingBan ? 'Sperre...' : 'IP jetzt sperren'}</span>
-                </button>
-              </form>
-
-              {/* Tabelle / Liste der aktiven IP-Sperren & Verwarnungen */}
-              {isBansLoading ? (
-                <div className="flex justify-center py-6">
-                  <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              ) : ipBans.length === 0 ? (
-                <p className="text-center py-4 text-xs text-slate-500">Aktuell sind keine IP-Sperren oder Verwarnungen registriert.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
-                        <th className="py-2.5 px-3">IP-Adresse</th>
-                        <th className="py-2.5 px-3">Status / Stufe</th>
-                        <th className="py-2.5 px-3">Gesperrt bis</th>
-                        <th className="py-2.5 px-3">Letzter Verstoß</th>
-                        <th className="py-2.5 px-3">Grund / Details</th>
-                        <th className="py-2.5 px-3 text-right">Aktion</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {ipBans.map((ban) => {
-                        const isBanActive = ban.isActiveBan === 1;
-                        const isWarningOnly = !isBanActive && ban.warningCount > 0;
-                        
-                        return (
-                          <tr key={ban.id} className="hover:bg-slate-850/40 transition-colors">
-                            <td className="py-2.5 px-3 font-mono font-bold text-white">
-                              {ban.ip}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {isBanActive ? (
-                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                  <span>🚫</span> 24h-Sperre aktiv
-                                </span>
-                              ) : isWarningOnly ? (
-                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                  <span>⚠️</span> 1. Verwarnung
-                                </span>
-                              ) : (
-                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px]">
-                                  Abgelaufen
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-300">
-                              {ban.bannedUntil ? (
-                                <span className="text-red-300 font-mono text-[11px]">
-                                  {parseUtcDate(ban.bannedUntil).toLocaleString('de-DE')} Uhr
-                                </span>
-                              ) : (
-                                <span className="text-slate-500">—</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-400 text-[11px]">
-                              {parseUtcDate(ban.lastViolationAt).toLocaleString('de-DE')} Uhr
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-350 max-w-xs truncate text-[11px]" title={ban.reason || ''}>
-                              {ban.reason || 'Keine Angabe'}
-                              {ban.userEmail && <span className="text-slate-500 block text-[10px]">E-Mail: {ban.userEmail}</span>}
-                            </td>
-                            <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
-                              {!isBanActive && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickBan(ban.ip, 24)}
-                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all"
-                                  title="Jetzt für 24h sperren"
-                                >
-                                  + 24h sperren
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleLiftBan(ban.ip)}
-                                className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all"
-                                title="Sperre / Verwarnung aufheben"
-                              >
-                                <i className="fa-solid fa-unlock mr-1 text-[9px]"></i>
-                                Aufheben
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
 
             {/* Missbrauchsmeldungen Liste */}
@@ -4863,6 +4795,437 @@ export default function AdminDashboardPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Tab 8: IP-Sperren & Verwarnungen */}
+        {activeTab === 'bans' && (
+          <div className="space-y-6">
+            {/* Header & KPI Summary */}
+            <div className="bg-slate-900/60 p-5 border border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
+              <div>
+                <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+                  <i className="fa-solid fa-ban text-red-400"></i>
+                  <span>IP-Sperren & Verwarnungen verwalten</span>
+                </h3>
+                <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                  2-Stufen-Schutz für den Chat: Bei einem 1. Missbrauchs-Verstoß wird das Gespräch beendet und eine formelle Verwarnung registriert. Bei einem 2. Verstoß innerhalb von 24h wird die IP-Adresse automatisch für 24 Stunden für Chateingaben gesperrt (Agenten- und Adminzugang bleiben immer unberührt).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                <div className="bg-red-950/40 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">Aktive IP-Sperren</span>
+                  <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans}</span>
+                </div>
+                <div className="bg-amber-950/40 border border-amber-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Verwarnungen</span>
+                  <span className="text-sm font-bold text-amber-300">{ipBansStats.warnings}</span>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center shadow-inner">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gesamt Einträge</span>
+                  <span className="text-sm font-bold text-white">{ipBans.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Manuelle IP-Sperre verhängen */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-lock text-red-400 text-xs"></i>
+                    <span>Manuelle IP-Sperre verhängen</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Hier können Sie eine beliebige IP-Adresse sofort und gezielt für einen definierten Zeitraum für den Chat sperren.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadIpBans}
+                  disabled={isBansLoading}
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className={`fa-solid fa-rotate-right text-[11px] ${isBansLoading ? 'animate-spin' : ''}`}></i>
+                  <span>Aktualisieren</span>
+                </button>
+              </div>
+
+              {/* Formular für manuelle Sperre */}
+              <form onSubmit={handleCreateBan} className="bg-slate-950/60 p-4 border border-slate-800/80 rounded-xl flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">IP-Adresse</label>
+                  <input
+                    type="text"
+                    value={newBanIp}
+                    onChange={(e) => setNewBanIp(e.target.value)}
+                    placeholder="z. B. 10.37.74.212 oder 104.28.225.121"
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-mono focus:border-red-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div className="w-[140px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dauer</label>
+                  <select
+                    value={newBanHours}
+                    onChange={(e) => setNewBanHours(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
+                  >
+                    <option value="24">24 Stunden</option>
+                    <option value="48">48 Stunden</option>
+                    <option value="168">7 Tage</option>
+                    <option value="720">30 Tage</option>
+                    <option value="8760">1 Jahr</option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[220px]">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Begründung (optional)</label>
+                  <input
+                    type="text"
+                    value={newBanReason}
+                    onChange={(e) => setNewBanReason(e.target.value)}
+                    placeholder="z. B. Wiederholtes Trolling / Beleidigung"
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isCreatingBan || !newBanIp.trim()}
+                  className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <i className="fa-solid fa-lock text-[11px]"></i>
+                  <span>{isCreatingBan ? 'Sperre...' : 'IP jetzt sperren'}</span>
+                </button>
+              </form>
+
+              {/* Tabelle / Liste der aktiven IP-Sperren & Verwarnungen */}
+              {isBansLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : ipBans.length === 0 ? (
+                <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-8 text-center text-slate-500 text-xs">
+                  Aktuell sind keine IP-Sperren oder Verwarnungen registriert.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                        <th className="py-2.5 px-3">IP-Adresse</th>
+                        <th className="py-2.5 px-3">Status / Stufe</th>
+                        <th className="py-2.5 px-3">Gesperrt bis</th>
+                        <th className="py-2.5 px-3">Letzter Verstoß</th>
+                        <th className="py-2.5 px-3">Grund / Details</th>
+                        <th className="py-2.5 px-3 text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {ipBans.map((ban) => {
+                        const isBanActive = ban.isActiveBan === 1;
+                        const isWarningOnly = !isBanActive && ban.warningCount > 0;
+                        
+                        return (
+                          <tr key={ban.id} className="hover:bg-slate-850/40 transition-colors">
+                            <td className="py-2.5 px-3 font-mono font-bold text-white">
+                              {ban.ip}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {isBanActive ? (
+                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🚫</span> 24h-Sperre aktiv
+                                </span>
+                              ) : isWarningOnly ? (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>⚠️</span> 1. Verwarnung
+                                </span>
+                              ) : (
+                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px]">
+                                  Abgelaufen
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-300">
+                              {ban.bannedUntil ? (
+                                <span className="text-red-300 font-mono text-[11px]">
+                                  {parseUtcDate(ban.bannedUntil).toLocaleString('de-DE')} Uhr
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                              {parseUtcDate(ban.lastViolationAt).toLocaleString('de-DE')} Uhr
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-350 max-w-xs truncate text-[11px]" title={ban.reason || ''}>
+                              {ban.reason || 'Keine Angabe'}
+                              {ban.userEmail && <span className="text-slate-500 block text-[10px]">E-Mail: {ban.userEmail}</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                              {!isBanActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickBan(ban.ip, 24)}
+                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                  title="Jetzt für 24h sperren"
+                                >
+                                  + 24h sperren
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleLiftBan(ban.ip)}
+                                className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                title="Sperre / Verwarnung aufheben"
+                              >
+                                <i className="fa-solid fa-unlock mr-1 text-[9px]"></i>
+                                Aufheben
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 9: ProxyCheck.io IP-Sicherheit */}
+        {activeTab === 'proxycheck' && (
+          <form onSubmit={handleSaveSettings} className="space-y-6 max-w-4xl mx-auto">
+            {settingsSuccess && (
+              <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex items-center gap-2 shadow-lg animate-fade-in">
+                <i className="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+                <span>ProxyCheck.io Einstellungen erfolgreich gespeichert!</span>
+              </div>
+            )}
+
+            {settingsError && (
+              <div className="bg-red-950 border border-red-500 text-red-200 text-xs p-3 rounded-xl flex items-center gap-2 shadow-lg animate-fade-in">
+                <i className="fa-solid fa-circle-xmark text-red-400 text-base"></i>
+                <span>{settingsError}</span>
+              </div>
+            )}
+
+            {/* ProxyCheck.io IP-Sicherheitskonfiguration */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-shield-halved text-emerald-400 text-lg"></i>
+                    <span>ProxyCheck.io IP-Sicherheit & Anonymisierungs-Schutz</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Schützt den Schul-Chat vor unerwünschten Zugriffen über VPNs, TOR-Netzwerke, Proxies und auffällige IP-Adressen.
+                  </p>
+                </div>
+                <span className={`text-[11px] font-bold px-3 py-1 rounded-full border shrink-0 ${proxycheckConfig.enabled ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                  {proxycheckConfig.enabled ? '● Schutz aktiv' : '○ Deaktiviert'}
+                </span>
+              </div>
+
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2.5 text-xs text-slate-300">
+                <p className="font-semibold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-circle-info text-sky-400"></i>
+                  <span>Funktionsweise & Intelligentes Kontingent-Management:</span>
+                </p>
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-400 text-xs leading-relaxed">
+                  <li><strong>30-Tage-Cache:</strong> Jede geprüfte IP-Adresse wird für 30 Tage in der lokalen Datenbank (<code>proxycheck_cache</code>) gespeichert. Dadurch verbraucht jeder Nutzer maximal 1 einzige API-Abfrage pro Monat.</li>
+                  <li><strong>Staff-Bypass:</strong> Support-Agenten und Administratoren sind automatisch vom Filter ausgenommen (kein Aussperren bei VPN-Nutzung von zu Hause).</li>
+                  <li><strong>Schulnetz-Bypass:</strong> Lokale und private IP-Adressen (z. B. <code>10.x.x.x</code>, <code>192.168.x.x</code>, <code>172.16-31.x.x</code>) werden ohne externen API-Call sofort durchgelassen.</li>
+                </ul>
+              </div>
+
+              {/* Master Toggle */}
+              <div className="flex items-center justify-between p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <div>
+                  <strong className="text-xs sm:text-sm text-white block">ProxyCheck.io Sicherheitsprüfung aktivieren</strong>
+                  <span className="text-xs text-slate-400">Blockiert Chatzugriffe von anonymisierenden Diensten basierend auf den gewählten Filterregeln.</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={proxycheckConfig.enabled || false}
+                    onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {/* API Key & Test Button */}
+              <div className="space-y-3">
+                <label className="text-[11px] text-slate-400 font-bold block uppercase tracking-wider">ProxyCheck.io API Key</label>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="relative flex-1">
+                    <input 
+                      type={showProxycheckKey ? 'text' : 'password'}
+                      value={proxycheckConfig.apiKey || ''}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, apiKey: e.target.value })}
+                      placeholder="z. B. 123456-abcdef-789012-ghijkl"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-mono pr-9 focus:outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowProxycheckKey(!showProxycheckKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs cursor-pointer"
+                      title={showProxycheckKey ? 'Verbergen' : 'Anzeigen'}
+                    >
+                      <i className={`fa-solid ${showProxycheckKey ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestProxycheck}
+                    disabled={testProxycheckLoading}
+                    className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shrink-0 disabled:opacity-40 cursor-pointer"
+                  >
+                    {testProxycheckLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Prüfe...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-vial-circle-check text-xs"></i>
+                        <span>Verbindung & Kontingent testen</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Test Result Feedback */}
+                {testProxycheckResult && (
+                  <div className={`p-4 rounded-xl border text-xs flex items-start gap-3 animate-fade-in ${testProxycheckResult.success ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200' : 'bg-red-950/40 border-red-500/30 text-red-200'}`}>
+                    <i className={`fa-solid text-base mt-0.5 shrink-0 ${testProxycheckResult.success ? 'fa-circle-check text-emerald-400' : 'fa-circle-xmark text-red-400'}`}></i>
+                    <div className="space-y-1.5 text-left w-full">
+                      {testProxycheckResult.success ? (
+                        <>
+                          <strong className="block text-emerald-300 font-bold text-xs">Verbindung zu ProxyCheck.io erfolgreich!</strong>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 text-xs text-slate-300">
+                            <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif</span>
+                              <strong className="text-white text-xs">{testProxycheckResult.plan}</strong>
+                            </div>
+                            <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Heute verbraucht</span>
+                              <strong className="text-white text-xs">{testProxycheckResult.queriesToday} Abfragen</strong>
+                            </div>
+                            <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Verbleibend</span>
+                              <strong className="text-emerald-300 text-xs">{testProxycheckResult.queriesRemaining} / {testProxycheckResult.dailyLimit}</strong>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <strong className="block text-red-300 font-bold text-xs">Verbindungsprüfung fehlgeschlagen</strong>
+                          <span className="text-xs text-slate-300">{testProxycheckResult.error}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Blocking Rules Toggles */}
+              <div className="space-y-3.5 border-t border-slate-800/80 pt-4">
+                <label className="text-[11px] text-slate-400 font-bold block uppercase tracking-wider">Gesperrte Kategorien & Filterregeln</label>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl cursor-pointer hover:bg-slate-950 transition-colors">
+                    <input 
+                      type="checkbox"
+                      checked={proxycheckConfig.blockVpn !== false}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, blockVpn: e.target.checked })}
+                      className="rounded border-slate-800 text-emerald-600 bg-transparent focus:ring-0 focus:ring-offset-0"
+                    />
+                    <div className="text-left">
+                      <span className="text-xs font-semibold text-slate-200 block">VPN-Dienste blockieren</span>
+                      <span className="text-[11px] text-slate-500 block">z. B. NordVPN, Mullvad, ProtonVPN, Cloudflare WARP</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl cursor-pointer hover:bg-slate-950 transition-colors">
+                    <input 
+                      type="checkbox"
+                      checked={proxycheckConfig.blockTor !== false}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, blockTor: e.target.checked })}
+                      className="rounded border-slate-800 text-emerald-600 bg-transparent focus:ring-0 focus:ring-offset-0"
+                    />
+                    <div className="text-left">
+                      <span className="text-xs font-semibold text-slate-200 block">TOR-Netzwerk blockieren</span>
+                      <span className="text-[11px] text-slate-500 block">Anonyme TOR Exit-Nodes und Onion-Router</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl cursor-pointer hover:bg-slate-950 transition-colors">
+                    <input 
+                      type="checkbox"
+                      checked={proxycheckConfig.blockProxy !== false}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, blockProxy: e.target.checked })}
+                      className="rounded border-slate-800 text-emerald-600 bg-transparent focus:ring-0 focus:ring-offset-0"
+                    />
+                    <div className="text-left">
+                      <span className="text-xs font-semibold text-slate-200 block">Public / SOCKS / HTTP Proxies</span>
+                      <span className="text-[11px] text-slate-500 block">Öffentliche Web-Proxies & SOCKS4/5 Server</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl cursor-pointer hover:bg-slate-950 transition-colors">
+                    <input 
+                      type="checkbox"
+                      checked={proxycheckConfig.blockCompromised !== false}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, blockCompromised: e.target.checked })}
+                      className="rounded border-slate-800 text-emerald-600 bg-transparent focus:ring-0 focus:ring-offset-0"
+                    />
+                    <div className="text-left">
+                      <span className="text-xs font-semibold text-slate-200 block">Kompromittierte IPs blockieren</span>
+                      <span className="text-[11px] text-slate-500 block">Bekannte Botnets, Malware-Hosts & Scanning-Server</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-bold block mb-1">Mindest-Risikobewertung (Risk Score 0–100)</label>
+                    <input 
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={proxycheckConfig.minRiskScore ?? 67}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, minRiskScore: parseInt(e.target.value, 10) || 67 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-[10px] text-slate-500 block mt-1">Standard: 67 (ab 67 gelten IPs als stark verdächtig)</span>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] text-slate-400 font-bold block mb-1">IP-Whitelist (Ausnahmen)</label>
+                    <input 
+                      type="text"
+                      value={proxycheckConfig.whitelistedIps || ''}
+                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, whitelistedIps: e.target.value })}
+                      placeholder="z. B. 192.168.1.50, 10.20.30.40 (kommagetrennt)"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                    <span className="text-[10px] text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-800/80 pt-4 flex justify-end">
+                <button 
+                  type="submit"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  <i className="fa-solid fa-floppy-disk text-xs"></i>
+                  <span>ProxyCheck-Einstellungen speichern</span>
+                </button>
+              </div>
+            </div>
+          </form>
         )}
       </main>
       </div>

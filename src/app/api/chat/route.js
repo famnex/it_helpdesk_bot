@@ -11,6 +11,7 @@ import {
 import { queueTicketNotification } from '@/lib/notifications';
 import { sendAssignmentNotification, sendUnassignedTicketNotification, sendTicketCreatedNotification } from '@/lib/mailer';
 import { checkIpBanned, recordAbuseViolation } from '@/lib/abuse';
+import { checkIpSecurity } from '@/lib/proxycheck';
 import fs from 'fs';
 import path from 'path';
 
@@ -34,6 +35,7 @@ export async function GET(request) {
   }
 
   const banStatus = isStaff ? { isBanned: false, bannedUntil: null } : checkIpBanned(userIp);
+  const securityStatus = isStaff ? { allowed: true } : await checkIpSecurity(userIp);
 
   try {
     if (chatId) {
@@ -60,7 +62,11 @@ export async function GET(request) {
         messages: messagesWithPrefix,
         isAbusive: chat ? chat.isAbusive === 1 : false,
         isIpBanned: banStatus.isBanned,
-        bannedUntil: banStatus.bannedUntil
+        bannedUntil: banStatus.bannedUntil,
+        isSecurityBlocked: !securityStatus.allowed,
+        securityCategory: securityStatus.category || null,
+        securityReason: securityStatus.reason || null,
+        securityMessage: securityStatus.message || null
       });
     }
 
@@ -181,6 +187,18 @@ export async function POST(request) {
           message: 'Die IP-Adresse dieses Geräts ist für 24 Stunden für Chateingaben gesperrt. Falls du an einem gemeinsam genutzten Schul-PC sitzt, nutze bitte ein anderes Gerät (z. B. Smartphone oder Tablet).',
           isIpBanned: true,
           bannedUntil: banStatus.bannedUntil
+        }, { status: 403 });
+      }
+
+      // ProxyCheck.io Sicherheitsprüfung (VPN, Proxy, TOR, Risk-IP)
+      const securityStatus = await checkIpSecurity(userIp);
+      if (!securityStatus.allowed) {
+        return NextResponse.json({
+          error: securityStatus.message,
+          isSecurityBlocked: true,
+          securityCategory: securityStatus.category,
+          securityReason: securityStatus.reason,
+          securityMessage: securityStatus.message
         }, { status: 403 });
       }
     }

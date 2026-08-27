@@ -181,6 +181,24 @@ Speichert IP-Sperren und Verwarnungen bei Richtlinienverstößen (2-Stufen-Model
 
 ---
 
+### 1.10 `proxycheck_cache`
+Speichert IP-Prüfergebnisse von ProxyCheck.io für 30 Tage, um externe API-Abfragen zu minimieren.
+
+| Spalte | Typ | Constraints | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| `ip` | TEXT | PRIMARY KEY | Geprüfte IP-Adresse |
+| `is_proxy` | INTEGER | DEFAULT 0 | 1 = VPN, Proxy oder TOR erkannt, 0 = reguläre IP |
+| `proxy_type` | TEXT | NULL | Typ (z. B. `VPN`, `TOR`, `HTTP`, `SOCKS5`, `COMPROMISED`) |
+| `risk_score` | INTEGER | DEFAULT 0 | Risikobewertung von 0 bis 100 |
+| `country` | TEXT | NULL | Name des Herkunftslandes |
+| `isocode` | TEXT | NULL | 2-stelliger Ländercode (z. B. `DE`, `US`) |
+| `provider` | TEXT | NULL | Name des ISP / VPN-Providers / Hosters |
+| `raw_response` | TEXT | NULL | Vollständige JSON-Antwort von ProxyCheck.io |
+| `checked_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der Abfrage |
+| `expires_at` | DATETIME | NOT NULL | Ablaufzeitpunkt des Caches (standardmäßig 30 Tage nach Abfrage) |
+
+---
+
 ## 2. Historie der Datenbank-Migrationen
 
 - **ticket_messages Rolle 'admin' hinzugefügt**: Check-Constraint erweitert für `sender_role IN ('customer', 'agent', 'admin', 'system')`.
@@ -195,3 +213,4 @@ Speichert IP-Sperren und Verwarnungen bei Richtlinienverstößen (2-Stufen-Model
 - **Spalte `image_url` zu `ticket_messages` hinzugefügt**: Für Datei- und Bildanhänge bei Ticketantworten von Agenten und Kunden.
 - **Nachträgliche Chat-Missbrauchsklassifizierung & Identitäts-Spur**: Manuelle Einstufung von Chats als missbräuchlich im Adminbereich inklusive mehrstufiger Rekonstruktion digitaler Identitätsspuren (`src/lib/identityTrace.js`) über `user_session_id`, `user_ip`, `users`-Tabelle und `tickets`.
 - **Tabelle `ip_bans` erstellt**: Zweistufiges Missbrauchs- und Sperrsystem für den Chat (1. Verstoß: Verwarnung und Gesprächsabbruch, 2. Verstoß: automatische 24-Stunden-IP-Sperre) inklusive Admin-Verwaltung.
+- **Tabelle `proxycheck_cache` erstellt**: Intelligentes 30-Tage-Caching für ProxyCheck.io-Prüfergebnisse zur Blockade von VPNs, Proxies, TOR-Knoten und Risiko-IPs bei minimalem Kontingentverbrauch.

@@ -57,10 +57,13 @@ export default function CustomerChatPage() {
   const [directTicketTexts, setDirectTicketTexts] = useState([]); // Array to store description messages
   const [directTicketPhotos, setDirectTicketPhotos] = useState([]); // Array to store uploaded photo objects/paths
 
-  // Missbrauch & Sperren States
+  // Missbrauch, IP-Sperren & ProxyCheck States
   const [isChatAborted, setIsChatAborted] = useState(false);
   const [isIpBanned, setIsIpBanned] = useState(false);
   const [bannedUntil, setBannedUntil] = useState(null);
+  const [isSecurityBlocked, setIsSecurityBlocked] = useState(false);
+  const [securityCategory, setSecurityCategory] = useState(null);
+  const [securityMessage, setSecurityMessage] = useState(null);
 
   const handleAcceptConsent = () => {
     localStorage.setItem('it_helpdesk_bot_consent', 'true');
@@ -246,6 +249,11 @@ export default function CustomerChatPage() {
         if (data.isIpBanned) {
           setIsIpBanned(true);
           setBannedUntil(data.bannedUntil);
+        }
+        if (data.isSecurityBlocked) {
+          setIsSecurityBlocked(true);
+          setSecurityCategory(data.securityCategory);
+          setSecurityMessage(data.securityMessage);
         }
         if (data.isAbusive) {
           setIsChatAborted(true);
@@ -573,6 +581,14 @@ export default function CustomerChatPage() {
           setMessages(prev => [...prev, {
             sender: 'bot',
             text: `🚫 **IP-Adresse gesperrt:** Chateingaben von dieser IP-Adresse sind für 24 Stunden gesperrt${errData.bannedUntil ? ` (bis ${new Date(errData.bannedUntil).toLocaleString('de-DE')} Uhr)` : ''}.\n\n💡 **Hinweis für Schul-PCs:** Die Sperre ist an die IP-Adresse dieses Computers gebunden. Falls ein vorheriger Nutzer diesen PC gesperrt hat, kannst du für Support-Anfragen einfach ein **anderes Gerät** (z. B. dein Smartphone oder Tablet) nutzen.`
+          }]);
+        } else if (errData.isSecurityBlocked) {
+          setIsSecurityBlocked(true);
+          setSecurityCategory(errData.securityCategory);
+          setSecurityMessage(errData.securityMessage);
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: `🛡️ **Sicherheitshinweis (${errData.securityCategory || 'Anonymisierungs-Schutz'}):** ${errData.securityMessage || errData.error}`
           }]);
         } else if (errData.isAbusive) {
           setIsChatAborted(true);
@@ -1477,6 +1493,36 @@ export default function CustomerChatPage() {
                   <strong className="text-slate-200 block font-semibold mb-0.5">Sitzt du an einem gemeinsam genutzten Schul-PC?</strong>
                   <span className="leading-relaxed">
                     Die Sperre ist an die IP-Adresse dieses Computers gebunden. Wenn ein vorheriger Nutzer die Sperre ausgelöst hat, kannst du für Support-Hilfe einfach ein <strong>anderes Gerät</strong> (z. B. dein eigenes Smartphone oder Tablet) nutzen.
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : isSecurityBlocked ? (
+            <div className="max-w-4xl mx-auto w-full bg-slate-900 border border-sky-500/40 rounded-2xl p-4 text-center space-y-3 animate-fade-in shadow-xl">
+              <div className="flex items-center justify-center gap-2 text-sky-400 font-bold text-sm">
+                <i className="fa-solid fa-shield-halved text-base"></i>
+                <span>Sicherheitsprüfung: {securityCategory || 'Anonymisierungs-Schutz'}</span>
+              </div>
+              <p className="text-xs text-slate-200/90 leading-relaxed max-w-xl mx-auto">
+                {securityMessage || 'Der Zugriff über diese Netzwerkverbindung ist aus Sicherheitsgründen blockiert.'}
+              </p>
+              
+              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-[11px] text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
+                <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <i className="fa-solid fa-lightbulb text-[10px]"></i>
+                </div>
+                <div>
+                  <strong className="text-slate-200 block font-semibold mb-0.5">Was kann ich tun?</strong>
+                  <span className="leading-relaxed">
+                    {securityCategory === 'VPN' ? (
+                      'Bitte deaktiviere deinen VPN-Dienst oder Cloudflare WARP und lade die Seite neu, um den IT-Support zu nutzen.'
+                    ) : securityCategory === 'Proxy' ? (
+                      'Bitte deaktiviere deinen Proxy-Server in den Systemeinstellungen und lade die Seite neu.'
+                    ) : securityCategory === 'TOR' ? (
+                      'Der Support-Chat ist über das TOR-Netzwerk nicht verfügbar. Bitte nutze einen Standard-Browser mit regulärer Internetverbindung.'
+                    ) : (
+                      'Bitte greife über eine reguläre Internetverbindung oder das Schul-WLAN auf das Support-System zu.'
+                    )}
                   </span>
                 </div>
               </div>

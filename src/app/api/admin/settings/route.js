@@ -28,6 +28,9 @@ export async function GET() {
       if (r.key === 'gemini_config' && val.apiKey) {
         val.apiKey = '********';
       }
+      if (r.key === 'proxycheck_config' && val.apiKey) {
+        val.apiKey = '********';
+      }
       
       config[r.key] = val;
     });
@@ -49,7 +52,7 @@ export async function POST(request) {
   }
 
   try {
-    const { smtp_config, idp_config, github_config, gemini_config } = await request.json();
+    const { smtp_config, idp_config, github_config, gemini_config, proxycheck_config } = await request.json();
     const saveStmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
 
     if (smtp_config) {
@@ -88,6 +91,17 @@ export async function POST(request) {
         }
       }
       saveStmt.run('gemini_config', JSON.stringify(gemini_config));
+    }
+
+    if (proxycheck_config) {
+      const existingRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('proxycheck_config');
+      if (existingRow) {
+        const existing = JSON.parse(existingRow.value);
+        if (proxycheck_config.apiKey === '********') {
+          proxycheck_config.apiKey = existing.apiKey; // Alten API-Key beibehalten
+        }
+      }
+      saveStmt.run('proxycheck_config', JSON.stringify(proxycheck_config));
     }
 
     return NextResponse.json({ success: true });

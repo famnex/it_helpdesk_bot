@@ -101,6 +101,19 @@ db.exec(`
       last_violation_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS proxycheck_cache (
+      ip TEXT PRIMARY KEY,
+      is_proxy INTEGER DEFAULT 0,
+      proxy_type TEXT,
+      risk_score INTEGER DEFAULT 0,
+      country TEXT,
+      isocode TEXT,
+      provider TEXT,
+      raw_response TEXT,
+      checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL
+  );
 `);
 
 // Migration für bestehende Datenbanken: Spalten hinzufügen, falls nicht vorhanden
@@ -120,6 +133,20 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_ip_bans_ip ON ip_bans(ip);
     CREATE INDEX IF NOT EXISTS idx_ip_bans_banned_until ON ip_bans(banned_until);
+
+    CREATE TABLE IF NOT EXISTS proxycheck_cache (
+        ip TEXT PRIMARY KEY,
+        is_proxy INTEGER DEFAULT 0,
+        proxy_type TEXT,
+        risk_score INTEGER DEFAULT 0,
+        country TEXT,
+        isocode TEXT,
+        provider TEXT,
+        raw_response TEXT,
+        checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_proxycheck_cache_expires ON proxycheck_cache(expires_at);
   `);
 
   // Tabelle knowledge_attachments nachträglich anlegen, falls sie noch nicht existiert
