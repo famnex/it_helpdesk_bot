@@ -11,7 +11,8 @@ export const DEFAULT_PROXYCHECK_CONFIG = {
   blockProxy: true,
   blockCompromised: true,
   minRiskScore: 67,
-  whitelistedIps: ''
+  whitelistedIps: '',
+  whitelistedAsns: 'AS13335, AS54113, AS20940, AS396982, AS714, AS13414, AS36040'
 };
 
 /**
@@ -65,6 +66,59 @@ export function isPrivateOrWhitelistedIp(ip, whitelistedIps = '') {
       .filter(Boolean);
 
     if (allowed.includes(cleanIp)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Prüft, ob eine AS-Nummer (Autonomous System) in der Whitelist enthalten ist.
+ * Unterstützt Formate wie "AS13335", "13335", "AS13335 Cloudflare", etc.
+ */
+export function isAsnWhitelisted(asn = '', provider = '', rawResponse = '', whitelistedAsns = '') {
+  if (!whitelistedAsns || typeof whitelistedAsns !== 'string' || !whitelistedAsns.trim()) {
+    return false;
+  }
+
+  const allowedTokens = whitelistedAsns
+    .split(/[\n,;\s]+/)
+    .map(item => item.trim().toUpperCase())
+    .filter(Boolean);
+
+  if (allowedTokens.length === 0) return false;
+
+  const allowedAsnNumbers = new Set();
+  allowedTokens.forEach(token => {
+    allowedAsnNumbers.add(token);
+    if (token.startsWith('AS')) {
+      allowedAsnNumbers.add(token.substring(2));
+    } else if (/^\d+$/.test(token)) {
+      allowedAsnNumbers.add(`AS${token}`);
+    }
+  });
+
+  // 1. Direktes ASN-Feld prüfen
+  if (asn && typeof asn === 'string') {
+    const cleanAsn = asn.trim().toUpperCase();
+    for (const num of allowedAsnNumbers) {
+      if (cleanAsn === num || cleanAsn.includes(num)) return true;
+    }
+  }
+
+  // 2. Provider / Organisation Feld prüfen
+  if (provider && typeof provider === 'string') {
+    const cleanProvider = provider.trim().toUpperCase();
+    for (const num of allowedAsnNumbers) {
+      if (cleanProvider.includes(num)) return true;
+    }
+  }
+
+  // 3. Raw JSON Response durchsuchen
+  if (rawResponse && typeof rawResponse === 'string') {
+    const cleanRaw = rawResponse.toUpperCase();
+    for (const num of allowedAsnNumbers) {
+      if (cleanRaw.includes(`"ASN":"${num}"`) || cleanRaw.includes(`"ASN":"AS${num}"`) || cleanRaw.includes(num)) return true;
+    }
   }
 
   return false;
@@ -134,7 +188,8 @@ export async function testProxyCheckApiKey(apiKey) {
  *   category?: string,
  *   reason?: string,
  *   message?: string,
- *   details?: { isProxy: boolean, type: string, risk: number, country: string, provider: string, cached: boolean }
+ *   isAsnWhitelisted?: boolean,
+ *   details?: { isProxy: boolean, type: string, risk: number, country: string, provider: string, asn: string, cached: boolean }
  * }>}
  */
 export async function checkIpSecurity(ip) {
@@ -156,20 +211,23 @@ export async function checkIpSecurity(ip) {
   try {
     const cachedRow = db.prepare(`
       SELECT ip, is_proxy as isProxy, proxy_type as proxyType, risk_score as riskScore, 
-             country, isocode, provider, raw_response as rawResponse, expires_at as expiresAt
+             country, isocode, provider, asn, raw_response as rawResponse, expires_at as expiresAt
       FROM proxycheck_cache 
       WHERE ip = ? AND expires_at > CURRENT_TIMESTAMP
     `).get(cleanIp);
 
     if (cachedRow) {
-      return evaluateSecurityRules(cachedRow.isProxy === 1, cachedRow.proxyType, cachedRow.riskScore, {
+      const details = {
         isProxy: cachedRow.isProxy === 1,
         type: cachedRow.proxyType || 'Regular',
         risk: cachedRow.riskScore || 0,
         country: cachedRow.country || 'Unbekannt',
         provider: cachedRow.provider || 'Unbekannt',
+        asn: cachedRow.asn || '',
+        rawResponse: cachedRow.rawResponse || '',
         cached: true
-      }, config);
+      };
+      return evaluateSecurityRules(cachedRow.isProxy === 1, cachedRow.proxyType, cachedRow.riskScore, cachedRow.asn, details, config);
     }
   } catch (cacheErr) {
     console.error('Fehler beim Lesen aus proxycheck_cache:', cacheErr);
@@ -182,6 +240,7 @@ export async function checkIpSecurity(ip) {
   let country = 'Unbekannt';
   let isocode = '';
   let provider = 'Unbekannt';
+  let asn = '';
   let rawJson = '';
 
   try {
@@ -220,21 +279,21 @@ export async function checkIpSecurity(ip) {
     riskScore = parseInt(ipInfo.risk, 10) || 0;
     country = ipInfo.country || 'Unbekannt';
     isocode = ipInfo.isocode || '';
-    provider = ipInfo.provider || ipInfo.organisation || ipInfo.asn || 'Unbekannt';
+    provider = ipInfo.provider || ipInfo.organisation || 'Unbekannt';
+    asn = ipInfo.asn || ipInfo.organisation || '';
 
-    // Im 30-Tage-Cache speichern (User-Vorgabe: 30 Tage)
+    // Im 30-Tage-Cache speichern
     try {
       db.prepare(`
         INSERT OR REPLACE INTO proxycheck_cache (
-          ip, is_proxy, proxy_type, risk_score, country, isocode, provider, raw_response, checked_at, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'))
-      `).run(cleanIp, isProxy ? 1 : 0, proxyType, riskScore, country, isocode, provider, rawJson);
+          ip, is_proxy, proxy_type, risk_score, country, isocode, provider, asn, raw_response, checked_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'))
+      `).run(cleanIp, isProxy ? 1 : 0, proxyType, riskScore, country, isocode, provider, asn, rawJson);
     } catch (insertErr) {
       console.error('Fehler beim Speichern in proxycheck_cache:', insertErr);
     }
   } catch (apiErr) {
     console.error(`[ProxyCheck Fail-Open] Fehler/Timeout bei ProxyCheck.io-Abfrage für ${cleanIp}:`, apiErr.message);
-    // Bei Timeout, Verbindungsabbruch oder API-Fehlern den Chat niemals blockieren (Fail-Open)
     return { allowed: true, checked: false, error: apiErr.message };
   }
 
@@ -244,16 +303,33 @@ export async function checkIpSecurity(ip) {
     risk: riskScore,
     country,
     provider,
+    asn,
+    rawResponse: rawJson,
     cached: false
   };
 
-  return evaluateSecurityRules(isProxy, proxyType, riskScore, details, config);
+  return evaluateSecurityRules(isProxy, proxyType, riskScore, asn, details, config);
 }
 
 /**
  * Wendet die Block-Regeln basierend auf der Konfiguration an.
  */
-function evaluateSecurityRules(isProxy, proxyType, riskScore, details, config) {
+function evaluateSecurityRules(isProxy, proxyType, riskScore, asn, details, config) {
+  // 0. AS-Whitelisting Check (z. B. Apple Private Relay)
+  const isAsnAllowed = isAsnWhitelisted(asn, details?.provider, details?.rawResponse, config.whitelistedAsns);
+  if (isAsnAllowed) {
+    return {
+      allowed: true,
+      checked: true,
+      isAsnWhitelisted: true,
+      category: 'Whitelisted AS',
+      details: {
+        ...details,
+        isAsnWhitelisted: true
+      }
+    };
+  }
+
   const typeUpper = (proxyType || '').toUpperCase();
 
   // 1. VPN Block
@@ -331,26 +407,36 @@ function evaluateSecurityRules(isProxy, proxyType, riskScore, details, config) {
  */
 export function getAllCachedIps() {
   try {
+    const config = getProxyCheckConfig();
     const rows = db.prepare(`
       SELECT ip, is_proxy as isProxy, proxy_type as proxyType, risk_score as riskScore,
-             country, isocode, provider, raw_response as rawResponse, 
+             country, isocode, provider, asn, raw_response as rawResponse, 
              checked_at as checkedAt, expires_at as expiresAt,
              CASE WHEN datetime(expires_at) > datetime('now') THEN 1 ELSE 0 END as isValid
       FROM proxycheck_cache
       ORDER BY checked_at DESC
     `).all();
 
+    const rowsWithStatus = rows.map(r => {
+      const isAsnAllowed = isAsnWhitelisted(r.asn, r.provider, r.rawResponse, config.whitelistedAsns);
+      return {
+        ...r,
+        isAsnWhitelisted: isAsnAllowed
+      };
+    });
+
     const stats = {
-      total: rows.length,
-      proxies: rows.filter(r => r.isProxy === 1).length,
-      clean: rows.filter(r => r.isProxy === 0 && r.riskScore < 50).length,
-      highRisk: rows.filter(r => r.riskScore >= 67).length
+      total: rowsWithStatus.length,
+      proxies: rowsWithStatus.filter(r => r.isProxy === 1).length,
+      clean: rowsWithStatus.filter(r => r.isProxy === 0 && r.riskScore < 50).length,
+      highRisk: rowsWithStatus.filter(r => r.riskScore >= 67).length,
+      asnWhitelisted: rowsWithStatus.filter(r => r.isAsnWhitelisted).length
     };
 
-    return { rows, stats };
+    return { rows: rowsWithStatus, stats };
   } catch (err) {
     console.error('Fehler beim Abrufen der gecachten IPs:', err);
-    return { rows: [], stats: { total: 0, proxies: 0, clean: 0, highRisk: 0 } };
+    return { rows: [], stats: { total: 0, proxies: 0, clean: 0, highRisk: 0, asnWhitelisted: 0 } };
   }
 }
 
@@ -418,6 +504,43 @@ export function addIpToWhitelist(ip) {
     return { success: true, whitelistedIps: updatedWhitelist };
   } catch (err) {
     console.error('Fehler beim Hinzufügen zur Whitelist:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fügt eine AS-Nummer zur Whitelist in den ProxyCheck-Einstellungen hinzu.
+ */
+export function addAsnToWhitelist(asn) {
+  if (!asn || typeof asn !== 'string') return { success: false, error: 'Keine AS-Nummer angegeben.' };
+
+  let cleanAsn = asn.trim().toUpperCase();
+  if (!cleanAsn.startsWith('AS') && /^\d+$/.test(cleanAsn)) {
+    cleanAsn = `AS${cleanAsn}`;
+  }
+
+  try {
+    const config = getProxyCheckConfig();
+    const currentList = (config.whitelistedAsns || '')
+      .split(/[\n,;\s]+/)
+      .map(item => item.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (!currentList.includes(cleanAsn)) {
+      currentList.push(cleanAsn);
+    }
+
+    const updatedWhitelist = currentList.join(', ');
+    config.whitelistedAsns = updatedWhitelist;
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+      'proxycheck_config',
+      JSON.stringify(config)
+    );
+
+    return { success: true, whitelistedAsns: updatedWhitelist, addedAsn: cleanAsn };
+  } catch (err) {
+    console.error('Fehler beim Hinzufügen der AS-Nummer zur Whitelist:', err);
     return { success: false, error: err.message };
   }
 }

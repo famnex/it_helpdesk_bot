@@ -25,7 +25,7 @@ export async function GET(request) {
   const user = await getSessionUser();
   const isStaff = user && (user.role === 'agent' || user.role === 'admin');
 
-  // IP-Adresse extrahieren
+  // IP-Adresse und Device Fingerprint extrahieren
   const xForwardedFor = request.headers.get('x-forwarded-for');
   let userIp = '';
   if (xForwardedFor) {
@@ -34,7 +34,9 @@ export async function GET(request) {
     userIp = request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || request.ip || '127.0.0.1';
   }
 
-  const banStatus = isStaff ? { isBanned: false, bannedUntil: null } : checkIpBanned(userIp);
+  const deviceFingerprint = request.headers.get('x-device-fingerprint') || searchParams.get('fingerprint') || '';
+
+  const banStatus = isStaff ? { isBanned: false, bannedUntil: null } : checkIpBanned(userIp, deviceFingerprint);
   const securityStatus = isStaff ? { allowed: true } : await checkIpSecurity(userIp);
 
   try {
@@ -173,20 +175,26 @@ export async function POST(request) {
       userIp = request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || request.ip || '127.0.0.1';
     }
 
-    // Persistente Session ID aus Header extrahieren
+    // Persistente Session ID & Device Fingerprint aus Header extrahieren
     const userSessionId = request.headers.get('x-user-session-id') || '';
+    const deviceFingerprint = request.headers.get('x-device-fingerprint') || '';
 
     const isStaff = user && (user.role === 'agent' || user.role === 'admin');
 
-    // IP-Sperre prüfen (nur für reguläre Chatnutzer, niemals für Agenten/Admins)
+    // IP- & Fingerprint-Sperre prüfen (nur für reguläre Chatnutzer, niemals für Agenten/Admins)
     if (!isStaff) {
-      const banStatus = checkIpBanned(userIp);
+      const banStatus = checkIpBanned(userIp, deviceFingerprint);
       if (banStatus.isBanned) {
         return NextResponse.json({
-          error: 'Diese IP-Adresse ist für Chateingaben gesperrt.',
-          message: 'Die IP-Adresse dieses Geräts ist für 24 Stunden für Chateingaben gesperrt. Falls du an einem gemeinsam genutzten Schul-PC sitzt, nutze bitte ein anderes Gerät (z. B. Smartphone oder Tablet).',
+          error: banStatus.bannedTarget === 'fingerprint' 
+            ? 'Dieses Gerät ist wegen wiederholter Richtlinienverstöße für Chateingaben gesperrt.' 
+            : 'Diese IP-Adresse ist für Chateingaben gesperrt.',
+          message: banStatus.bannedTarget === 'fingerprint'
+            ? 'Dieses Gerät wurde für 24 Stunden für Chateingaben gesperrt.'
+            : 'Die IP-Adresse dieses Geräts ist für 24 Stunden für Chateingaben gesperrt. Falls du an einem gemeinsam genutzten Schul-PC sitzt, nutze bitte ein anderes Gerät.',
           isIpBanned: true,
-          bannedUntil: banStatus.bannedUntil
+          bannedUntil: banStatus.bannedUntil,
+          bannedTarget: banStatus.bannedTarget || 'ip'
         }, { status: 403 });
       }
 
@@ -203,21 +211,21 @@ export async function POST(request) {
       }
     }
 
-function extractEmailFromText(str) {
-  if (!str || typeof str !== 'string') return null;
-  const match = str.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
-  return match ? match[1].toLowerCase() : null;
-}
+    function extractEmailFromText(str) {
+      if (!str || typeof str !== 'string') return null;
+      const match = str.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      return match ? match[1].toLowerCase() : null;
+    }
 
-function extractEmailFromHistory(messages) {
-  if (!Array.isArray(messages)) return null;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const text = messages[i]?.text || '';
-    const email = extractEmailFromText(text);
-    if (email) return email;
-  }
-  return null;
-}
+    function extractEmailFromHistory(messages) {
+      if (!Array.isArray(messages)) return null;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const text = messages[i]?.text || '';
+        const email = extractEmailFromText(text);
+        if (email) return email;
+      }
+      return null;
+    }
 
     // E-Mail aus aktuellem Nachrichtentext extrahieren, falls vorhanden
     const incomingEmail = extractEmailFromText(text);
@@ -227,8 +235,8 @@ function extractEmailFromHistory(messages) {
     const resolvedEmail = email || incomingEmail || (chat ? chat.userEmail : null);
 
     if (!chat) {
-      db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(chatId, resolvedEmail, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId);
+      db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id, user_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(chatId, resolvedEmail, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId, deviceFingerprint || null);
       chat = { id: chatId, ticketCreated: 0, userEmail: resolvedEmail, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0, isAbusive: 0 };
     } else {
       // Wenn der Chat bereits wegen Missbrauchs beendet wurde, keine weiteren Nachrichten annehmen!
@@ -239,10 +247,10 @@ function extractEmailFromHistory(messages) {
         }, { status: 403 });
       }
 
-      // Immer versuchen, E-Mail, Name, IP und Session-ID des Benutzers zu aktualisieren/ergänzen (außer bei On-Behalf-Chats)
+      // Immer versuchen, E-Mail, Name, IP, Session-ID und Fingerprint des Benutzers zu aktualisieren
       if (chat.isAgentOnBehalf !== 1) {
-        db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ?, customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(resolvedEmail || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, chatId);
+        db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ?, user_fingerprint = COALESCE(?, user_fingerprint), customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(resolvedEmail || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, deviceFingerprint || null, chatId);
         if (resolvedEmail) {
           chat.userEmail = resolvedEmail;
         }

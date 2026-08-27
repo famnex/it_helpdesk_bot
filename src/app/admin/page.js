@@ -302,7 +302,8 @@ export default function AdminDashboardPage() {
     blockProxy: true,
     blockCompromised: true,
     minRiskScore: 67,
-    whitelistedIps: ''
+    whitelistedIps: '',
+    whitelistedAsns: ''
   });
   const [testProxycheckLoading, setTestProxycheckLoading] = useState(false);
   const [testProxycheckResult, setTestProxycheckResult] = useState(null);
@@ -503,6 +504,7 @@ export default function AdminDashboardPage() {
       if (proxycheckCacheFilter === 'proxies' && item.isProxy !== 1) return false;
       if (proxycheckCacheFilter === 'clean' && (item.isProxy === 1 || item.riskScore >= 50)) return false;
       if (proxycheckCacheFilter === 'high_risk' && item.riskScore < 67) return false;
+      if (proxycheckCacheFilter === 'asn_whitelisted' && !item.isAsnWhitelisted) return false;
 
       if (proxycheckCacheSearch) {
         const query = proxycheckCacheSearch.toLowerCase().trim();
@@ -510,7 +512,8 @@ export default function AdminDashboardPage() {
         const providerMatch = (item.provider || '').toLowerCase().includes(query);
         const countryMatch = (item.country || '').toLowerCase().includes(query);
         const typeMatch = (item.proxyType || '').toLowerCase().includes(query);
-        if (!ipMatch && !providerMatch && !countryMatch && !typeMatch) return false;
+        const asnMatch = (item.asn || '').toLowerCase().includes(query);
+        if (!ipMatch && !providerMatch && !countryMatch && !typeMatch && !asnMatch) return false;
       }
 
       return true;
@@ -759,6 +762,45 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleLiftFingerprintBan = async (fingerprint) => {
+    if (!fingerprint) return;
+    try {
+      const res = await fetch('/api/admin/bans', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint })
+      });
+      if (res.ok) {
+        loadIpBans();
+        loadAbusiveChats();
+      }
+    } catch (e) {
+      console.error('Fehler beim Aufheben der Fingerprint-Sperre:', e);
+    }
+  };
+
+  const handleQuickBanFingerprint = async (fingerprint, hours = 24) => {
+    if (!fingerprint) return;
+    try {
+      const res = await fetch('/api/admin/bans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ban_fingerprint',
+          fingerprint,
+          hours,
+          reason: `24h-Geräte-Sperre wegen Missbrauchsmeldung`
+        })
+      });
+      if (res.ok) {
+        loadIpBans();
+        loadAbusiveChats();
+      }
+    } catch (e) {
+      console.error('Fehler beim Setzen der Geräte-Sperre:', e);
+    }
+  };
+
   const loadProxycheckCache = async () => {
     setIsProxycheckCacheLoading(true);
     try {
@@ -836,6 +878,34 @@ export default function AdminDashboardPage() {
         alert(`IP ${ip} wurde erfolgreich zur Whitelist hinzugefügt!`);
       } else {
         alert('Fehler beim Hinzufügen zur Whitelist.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    }
+  };
+
+  const handleTransferToWhitelistAsn = async (asn) => {
+    if (!asn) return;
+    let cleanAsn = asn.trim().toUpperCase();
+    if (!cleanAsn.startsWith('AS') && /^\d+$/.test(cleanAsn)) cleanAsn = `AS${cleanAsn}`;
+    if (!confirm(`Möchtest du die AS-Nummer ${cleanAsn} auf die Whitelist setzen? Alle IPs dieses Autonomen Systems (z. B. Apple Private Relay) werden dann durchgelassen.`)) return;
+    try {
+      const res = await fetch('/api/admin/proxycheck/cache/whitelist-asn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asn: cleanAsn })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProxycheckConfig(prev => ({
+          ...prev,
+          whitelistedAsns: data.whitelistedAsns || (prev.whitelistedAsns ? `${prev.whitelistedAsns}, ${cleanAsn}` : cleanAsn)
+        }));
+        loadProxycheckCache();
+        alert(`AS-Nummer ${cleanAsn} wurde erfolgreich zur Whitelist hinzugefügt!`);
+      } else {
+        alert('Fehler beim Hinzufügen der AS-Nummer zur Whitelist.');
       }
     } catch (e) {
       console.error(e);
@@ -4788,24 +4858,48 @@ export default function AdminDashboardPage() {
                           </div>
                           
                           <div className="flex items-center gap-2 flex-wrap">
+                            {chat.userFingerprint && (
+                              isIpCurrentlyBanned && chat.ipBanInfo?.bannedTarget === 'fingerprint' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLiftFingerprintBan(chat.userFingerprint)}
+                                  className="bg-emerald-950/50 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Geräte-Sperre für dieses Fingerprint aufheben"
+                                >
+                                  <i className="fa-solid fa-mobile-screen"></i>
+                                  <span>Gerät entsperren</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickBanFingerprint(chat.userFingerprint, 24)}
+                                  className="bg-violet-950/60 hover:bg-violet-900/80 text-violet-300 border border-violet-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Nutzer-Gerät per Device Fingerprint für 24h sperren (schützt Private Relay IPs)"
+                                >
+                                  <i className="fa-solid fa-mobile-screen-button"></i>
+                                  <span>Gerät (24h) sperren</span>
+                                </button>
+                              )
+                            )}
                             {chat.userIp && (
-                              isIpCurrentlyBanned ? (
+                              isIpCurrentlyBanned && chat.ipBanInfo?.bannedTarget === 'ip' ? (
                                 <button
                                   type="button"
                                   onClick={() => handleLiftBan(chat.userIp)}
-                                  className="bg-emerald-950/50 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all"
+                                  className="bg-emerald-950/50 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
                                 >
-                                  <i className="fa-solid fa-unlock mr-1.5"></i>
-                                  IP entsperren
+                                  <i className="fa-solid fa-unlock"></i>
+                                  <span>IP entsperren</span>
                                 </button>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleQuickBan(chat.userIp, 24)}
-                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all"
+                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Ganze IP-Adresse sperren"
                                 >
-                                  <i className="fa-solid fa-ban mr-1.5"></i>
-                                  IP für 24h sperren
+                                  <i className="fa-solid fa-ban"></i>
+                                  <span>IP (24h) sperren</span>
                                 </button>
                               )
                             )}
@@ -4819,8 +4913,13 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
 
-                        {/* IP und Session-ID Infos + rekonstruierte Anmeldungen */}
+                        {/* IP, Fingerprint und Session-ID Infos + rekonstruierte Anmeldungen */}
                         <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-850/60 text-[10px] text-slate-500">
+                          {chat.userFingerprint && (
+                            <div>
+                              Device Fingerprint: <span className="font-mono text-violet-300 font-semibold">{chat.userFingerprint}</span>
+                            </div>
+                          )}
                           {chat.userSessionId && (
                             <div>
                               Sitzungs-ID: <span className="font-mono text-slate-400">{chat.userSessionId}</span>
@@ -5021,8 +5120,8 @@ export default function AdminDashboardPage() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
-                        <th className="py-2.5 px-3">IP-Adresse</th>
-                        <th className="py-2.5 px-3">Status / Stufe</th>
+                        <th className="py-2.5 px-3">IP / Device Fingerprint</th>
+                        <th className="py-2.5 px-3">Status / Typ</th>
                         <th className="py-2.5 px-3">Gesperrt bis</th>
                         <th className="py-2.5 px-3">Letzter Verstoß</th>
                         <th className="py-2.5 px-3">Grund / Details</th>
@@ -5033,16 +5132,24 @@ export default function AdminDashboardPage() {
                       {ipBans.map((ban) => {
                         const isBanActive = ban.isActiveBan === 1;
                         const isWarningOnly = !isBanActive && ban.warningCount > 0;
+                        const isFingerprintBan = !!ban.fingerprint;
                         
                         return (
                           <tr key={ban.id} className="hover:bg-slate-850/40 transition-colors">
                             <td className="py-2.5 px-3 font-mono font-bold text-white">
-                              {ban.ip}
+                              <div>{ban.ip && ban.ip !== '0.0.0.0' ? ban.ip : 'Geräte-Sperre'}</div>
+                              {ban.fingerprint && (
+                                <div className="text-[10px] text-violet-300 font-normal">
+                                  <span>📱 {ban.fingerprint}</span>
+                                </div>
+                              )}
                             </td>
                             <td className="py-2.5 px-3">
                               {isBanActive ? (
-                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                  <span>🚫</span> 24h-Sperre aktiv
+                                <span className={`border px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1 ${
+                                  isFingerprintBan ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'bg-red-500/20 text-red-300 border-red-500/40'
+                                }`}>
+                                  <span>{isFingerprintBan ? '📱' : '🚫'}</span> {isFingerprintBan ? 'Geräte-Sperre aktiv' : '24h-IP-Sperre aktiv'}
                                 </span>
                               ) : isWarningOnly ? (
                                 <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
@@ -5072,18 +5179,29 @@ export default function AdminDashboardPage() {
                             </td>
                             <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
                               {!isBanActive && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickBan(ban.ip, 24)}
-                                  className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
-                                  title="Jetzt für 24h sperren"
-                                >
-                                  + 24h sperren
-                                </button>
+                                ban.fingerprint ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickBanFingerprint(ban.fingerprint, 24)}
+                                    className="bg-violet-950/60 hover:bg-violet-900/80 text-violet-300 border border-violet-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                    title="Gerät jetzt für 24h sperren"
+                                  >
+                                    + 24h Gerät
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickBan(ban.ip, 24)}
+                                    className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                    title="IP jetzt für 24h sperren"
+                                  >
+                                    + 24h IP
+                                  </button>
+                                )
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleLiftBan(ban.ip)}
+                                onClick={() => ban.fingerprint ? handleLiftFingerprintBan(ban.fingerprint) : handleLiftBan(ban.ip)}
                                 className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                                 title="Sperre / Verwarnung aufheben"
                               >
@@ -5320,16 +5438,35 @@ export default function AdminDashboardPage() {
                     <span className="text-[10px] text-slate-500 block mt-1">Standard: 67 (ab 67 gelten IPs als stark verdächtig)</span>
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] text-slate-400 font-bold block mb-1">IP-Whitelist (Ausnahmen)</label>
-                    <input 
-                      type="text"
-                      value={proxycheckConfig.whitelistedIps || ''}
-                      onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, whitelistedIps: e.target.value })}
-                      placeholder="z. B. 192.168.1.50, 10.20.30.40 (kommagetrennt)"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
-                    />
-                    <span className="text-[10px] text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
+                  <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-bold block mb-1">IP-Whitelist (Ausnahmen)</label>
+                      <input 
+                        type="text"
+                        value={proxycheckConfig.whitelistedIps || ''}
+                        onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, whitelistedIps: e.target.value })}
+                        placeholder="z. B. 192.168.1.50, 10.20.30.40 (kommagetrennt)"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
+                      />
+                      <span className="text-[10px] text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-sky-400 font-bold block mb-1 flex items-center gap-1.5">
+                        <i className="fa-solid fa-shield-halved text-xs"></i>
+                        <span>AS-Nummern Whitelist (Apple Private Relay / Provider)</span>
+                      </label>
+                      <input 
+                        type="text"
+                        value={proxycheckConfig.whitelistedAsns || ''}
+                        onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, whitelistedAsns: e.target.value })}
+                        placeholder="z. B. AS13335, AS54113, AS20940, AS396982"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                      />
+                      <span className="text-[10px] text-slate-500 block mt-1">
+                        Erlaubt Zugriffe von diesen Autonomen Systemen (AS), selbst bei hohem Risk Score oder aktivem VPN. Perfekt für Apple Private Relay (Cloudflare AS13335, Fastly AS54113).
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5393,7 +5530,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* KPI Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gecachte IPs</span>
                 <span className="text-sm sm:text-base font-bold text-white">{proxycheckCacheStats.total}</span>
@@ -5410,6 +5547,10 @@ export default function AdminDashboardPage() {
                 <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Hohes Risiko (≥67)</span>
                 <span className="text-sm sm:text-base font-bold text-amber-300">{proxycheckCacheStats.highRisk}</span>
               </div>
+              <div className="bg-sky-950/30 border border-sky-500/20 p-3 rounded-xl text-center col-span-2 sm:col-span-1">
+                <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider block">AS Whitelisted</span>
+                <span className="text-sm sm:text-base font-bold text-sky-300">{proxycheckCacheStats.asnWhitelisted || 0}</span>
+              </div>
             </div>
 
             {/* Filter & Search Bar */}
@@ -5420,7 +5561,7 @@ export default function AdminDashboardPage() {
                   type="text"
                   value={proxycheckCacheSearch}
                   onChange={(e) => setProxycheckCacheSearch(e.target.value)}
-                  placeholder="Suche nach IP, Provider, Land oder Typ..."
+                  placeholder="Suche nach IP, ASN (z. B. AS13335), Provider, Land..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                 />
                 {proxycheckCacheSearch && (
@@ -5471,6 +5612,15 @@ export default function AdminDashboardPage() {
                 >
                   Risiko ≥ 67 ({proxycheckCacheStats.highRisk})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setProxycheckCacheFilter('asn_whitelisted')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    proxycheckCacheFilter === 'asn_whitelisted' ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  AS Whitelisted ({proxycheckCacheStats.asnWhitelisted || 0})
+                </button>
               </div>
             </div>
 
@@ -5491,9 +5641,9 @@ export default function AdminDashboardPage() {
                   <thead>
                     <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
                       <th className="py-2.5 px-3">IP-Adresse</th>
-                      <th className="py-2.5 px-3">Erkannter Typ</th>
+                      <th className="py-2.5 px-3">Erkannter Typ / Status</th>
                       <th className="py-2.5 px-3">Risk Score</th>
-                      <th className="py-2.5 px-3">Land / Provider</th>
+                      <th className="py-2.5 px-3">Land / Provider / AS</th>
                       <th className="py-2.5 px-3">Geprüft am</th>
                       <th className="py-2.5 px-3">Gültig bis</th>
                       <th className="py-2.5 px-3 text-right">Aktionen</th>
@@ -5506,47 +5656,54 @@ export default function AdminDashboardPage() {
                       const isVpn = item.proxyType && item.proxyType.toLowerCase().includes('vpn');
                       const isTor = item.proxyType && item.proxyType.toLowerCase().includes('tor');
                       const isProxy = item.isProxy === 1;
+                      const isAsnAllowed = item.isAsnWhitelisted;
 
                       return (
                         <tr key={item.ip} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${isProxy || isHighRisk ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${isAsnAllowed ? 'bg-sky-400' : isProxy || isHighRisk ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
                               <span className="font-mono font-bold text-white">{item.ip}</span>
                             </div>
                           </td>
                           <td className="py-2.5 px-3">
-                            {isTor ? (
-                              <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                <span>🧅</span> TOR Node
-                              </span>
-                            ) : isVpn ? (
-                              <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                <span>🔒</span> VPN
-                              </span>
-                            ) : isProxy ? (
-                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                <span>🌐</span> {item.proxyType || 'Proxy'}
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
-                                <span>🛡️</span> {item.proxyType || 'Regulär'}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isAsnAllowed ? (
+                                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🍎</span> AS Whitelisted
+                                </span>
+                              ) : isTor ? (
+                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🧅</span> TOR Node
+                                </span>
+                              ) : isVpn ? (
+                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🔒</span> VPN
+                                </span>
+                              ) : isProxy ? (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🌐</span> {item.proxyType || 'Proxy'}
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                  <span>🛡️</span> {item.proxyType || 'Regulär'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-1.5">
                               <span className={`font-bold font-mono text-[11px] ${
-                                isHighRisk ? 'text-red-400' : isMediumRisk ? 'text-amber-400' : 'text-emerald-400'
+                                isAsnAllowed ? 'text-sky-300' : isHighRisk ? 'text-red-400' : isMediumRisk ? 'text-amber-400' : 'text-emerald-400'
                               }`}>
                                 {item.riskScore}
                               </span>
                               <span className="text-[10px] text-slate-500">/ 100</span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-300 max-w-[200px] truncate text-[11px]" title={`${item.country || 'Unbekannt'} - ${item.provider || 'Unbekannt'}`}>
+                          <td className="py-2.5 px-3 text-slate-300 max-w-[200px] truncate text-[11px]" title={`${item.country || 'Unbekannt'} - ${item.provider || 'Unbekannt'} ${item.asn ? `(${item.asn})` : ''}`}>
                             <span className="font-semibold text-white block truncate">{item.country || 'Unbekannt'} {item.isocode ? `(${item.isocode})` : ''}</span>
-                            <span className="text-slate-400 text-[10px] block truncate">{item.provider || 'Unbekannt'}</span>
+                            <span className="text-slate-400 text-[10px] block truncate">{item.provider || 'Unbekannt'} {item.asn ? `• ${item.asn}` : ''}</span>
                           </td>
                           <td className="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">
                             {parseUtcDate(item.checkedAt).toLocaleString('de-DE')} Uhr
@@ -5567,8 +5724,19 @@ export default function AdminDashboardPage() {
                               title="IP auf die Whitelist übertragen (wird nie wieder blockiert)"
                             >
                               <i className="fa-solid fa-plus text-[9px]"></i>
-                              <span>Whitelist</span>
+                              <span>IP Whitelist</span>
                             </button>
+                            {item.asn && (
+                              <button
+                                type="button"
+                                onClick={() => handleTransferToWhitelistAsn(item.asn)}
+                                className="bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 border border-sky-500/30 hover:border-sky-500/60 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
+                                title={`AS-Nummer ${item.asn} whitelisten (z. B. für Apple Private Relay)`}
+                              >
+                                <i className="fa-solid fa-shield-halved text-[9px]"></i>
+                                <span>AS Whitelist</span>
+                              </button>
+                            )}
                             {item.rawResponse && (
                               <button
                                 type="button"

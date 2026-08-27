@@ -79,6 +79,7 @@ Speichert Chat-Sitzungen mit dem KI-Bot.
 | `abusive_flagged_at` | DATETIME | NULL | Zeitpunkt der Missbrauchs-Markierung |
 | `user_ip` | TEXT | NULL | IP-Adresse des Benutzers |
 | `user_session_id` | TEXT | NULL | Sitzungs-ID des Browsers |
+| `user_fingerprint` | TEXT | NULL | Eindeutiger Device Fingerprint des Client-Geräts |
 | `category` | TEXT | NULL | Granulare Schul-IT-Kategorie (`Schulportal`, `Moodle`, `WebUntis`, `E-Mail`, `Passwörter`, `Benutzerkonten`, `WLAN`, `Netzwerk`, `Smartboards`, `Beamer`, `Dokumentenkameras`, `Stationäre Computer`, `Laptops & Tablets`, `Drucker`, `Kopierer`, `Office 365`, `Software`, `Raumbuchung`, `Sonstige Hardware`, `Sonstiges`) |
 | `categorized_at` | DATETIME | NULL | Zeitpunkt der automatischen oder manuellen Kategorisierung |
 | `pending_merge_target_id` | TEXT | NULL | ID des Zielchats/Tickets bei Themen-Übereinstimmung |
@@ -165,12 +166,14 @@ Systemweite Einstellungen als Key-Value Store.
 ---
 
 ### 1.9 `ip_bans`
+### 1.10 `ip_bans`
 Speichert IP-Sperren und Verwarnungen bei Richtlinienverstößen (2-Stufen-Modell: 1. Verwarnung, 2. 24h-IP-Sperre).
 
 | Spalte | Typ | Constraints | Beschreibung |
 | :--- | :--- | :--- | :--- |
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Eindeutige Eintrags-ID |
 | `ip` | TEXT | NOT NULL | Betroffene IP-Adresse |
+| `fingerprint` | TEXT | NULL | Eindeutiger Device Fingerprint des Geräts |
 | `session_id` | TEXT | NULL | Assoziierte Browser-Sitzungs-ID |
 | `user_email` | TEXT | NULL | Assoziierte E-Mail-Adresse (falls bekannt) |
 | `warning_count` | INTEGER | DEFAULT 1 | Anzahl der registrierten Verstöße (1 = Verwarnung, >=2 = Sperre) |
@@ -193,6 +196,7 @@ Speichert IP-Prüfergebnisse von ProxyCheck.io für 30 Tage, um externe API-Abfr
 | `country` | TEXT | NULL | Name des Herkunftslandes |
 | `isocode` | TEXT | NULL | 2-stelliger Ländercode (z. B. `DE`, `US`) |
 | `provider` | TEXT | NULL | Name des ISP / VPN-Providers / Hosters |
+| `asn` | TEXT | NULL | Autonome Systemnummer (z. B. `AS13335`, `AS54113`) |
 | `raw_response` | TEXT | NULL | Vollständige JSON-Antwort von ProxyCheck.io |
 | `checked_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | Zeitpunkt der Abfrage |
 | `expires_at` | DATETIME | NOT NULL | Ablaufzeitpunkt des Caches (standardmäßig 30 Tage nach Abfrage) |
@@ -214,3 +218,5 @@ Speichert IP-Prüfergebnisse von ProxyCheck.io für 30 Tage, um externe API-Abfr
 - **Nachträgliche Chat-Missbrauchsklassifizierung & Identitäts-Spur**: Manuelle Einstufung von Chats als missbräuchlich im Adminbereich inklusive mehrstufiger Rekonstruktion digitaler Identitätsspuren (`src/lib/identityTrace.js`) über `user_session_id`, `user_ip`, `users`-Tabelle und `tickets`.
 - **Tabelle `ip_bans` erstellt**: Zweistufiges Missbrauchs- und Sperrsystem für den Chat (1. Verstoß: Verwarnung und Gesprächsabbruch, 2. Verstoß: automatische 24-Stunden-IP-Sperre) inklusive Admin-Verwaltung.
 - **Tabelle `proxycheck_cache` erstellt**: Intelligentes 30-Tage-Caching für ProxyCheck.io-Prüfergebnisse zur Blockade von VPNs, Proxies, TOR-Knoten und Risiko-IPs bei minimalem Kontingentverbrauch.
+- **Spalte `asn` zu `proxycheck_cache` hinzugefügt**: Speichert die Autonome Systemnummer (AS-Nummer) für schnelles Whitelisting von Netzwerken wie Apple Private Relay (Cloudflare, Fastly, Akamai).
+- **Spalten `fingerprint` zu `ip_bans` und `user_fingerprint` zu `chats` hinzugefügt**: Ermöglicht gerätespezifisches Fingerprinting und Sperren missbräuchlicher Nutzer, ohne geteilte IP-Adressen wie Apple Private Relay für andere Nutzer zu blockieren.

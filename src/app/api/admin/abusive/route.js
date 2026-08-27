@@ -13,7 +13,7 @@ export async function GET() {
   try {
     // Holt alle Chats, die als missbräuchlich markiert wurden
     const abusiveChats = db.prepare(`
-      SELECT id, user_email as userEmail, user_name as userName, user_ip as userIp, user_session_id as userSessionId, abusive_flagged_at as flaggedAt
+      SELECT id, user_email as userEmail, user_name as userName, user_ip as userIp, user_session_id as userSessionId, user_fingerprint as userFingerprint, abusive_flagged_at as flaggedAt
       FROM chats
       WHERE is_abusive = 1
       ORDER BY abusive_flagged_at DESC
@@ -39,7 +39,7 @@ export async function GET() {
       });
 
       const identityTrace = reconstructIdentityTrace(chat.id);
-      const ipBanInfo = chat.userIp ? checkIpBanned(chat.userIp) : { isBanned: false, bannedUntil: null };
+      const ipBanInfo = checkIpBanned(chat.userIp, chat.userFingerprint);
 
       return {
         ...chat,

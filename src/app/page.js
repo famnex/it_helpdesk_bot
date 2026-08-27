@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { marked } from 'marked';
 import { renderMarkdownWithLinks } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
+import { getOrCreateDeviceFingerprint } from '@/lib/fingerprint';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -243,7 +244,12 @@ export default function CustomerChatPage() {
     sessionStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
  
     // Chatverlauf laden (für den aktiven Chat)
-    fetch(`/api/chat?chatId=${activeChatId}`)
+    fetch(`/api/chat?chatId=${activeChatId}`, {
+      headers: {
+        'X-User-Session-Id': persistentSessionId,
+        'X-Device-Fingerprint': getOrCreateDeviceFingerprint()
+      }
+    })
       .then(res => res.json())
       .then(data => {
         if (data.isIpBanned) {
@@ -568,7 +574,8 @@ export default function CustomerChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
-          'X-User-Session-Id': persistentSessionId
+          'X-User-Session-Id': persistentSessionId,
+          'X-Device-Fingerprint': getOrCreateDeviceFingerprint()
         },
         body: formData
       });

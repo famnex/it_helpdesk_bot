@@ -110,6 +110,7 @@ db.exec(`
       country TEXT,
       isocode TEXT,
       provider TEXT,
+      asn TEXT,
       raw_response TEXT,
       checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL
@@ -142,12 +143,21 @@ try {
         country TEXT,
         isocode TEXT,
         provider TEXT,
+        asn TEXT,
         raw_response TEXT,
         checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_proxycheck_cache_expires ON proxycheck_cache(expires_at);
   `);
+
+  // Spalte 'asn' zu proxycheck_cache hinzufügen, falls noch nicht vorhanden
+  const tableInfoProxyCheck = db.prepare("PRAGMA table_info(proxycheck_cache)").all();
+  const hasAsn = tableInfoProxyCheck.some(col => col.name === 'asn');
+  if (!hasAsn) {
+    db.exec("ALTER TABLE proxycheck_cache ADD COLUMN asn TEXT;");
+    console.log("Migration: Spalte 'asn' zur Tabelle 'proxycheck_cache' hinzugefügt.");
+  }
 
   // Tabelle knowledge_attachments nachträglich anlegen, falls sie noch nicht existiert
   db.exec(`
@@ -303,6 +313,20 @@ try {
   if (!hasUserSessionId) {
     db.exec("ALTER TABLE chats ADD COLUMN user_session_id TEXT;");
     console.log("Migration: Spalte 'user_session_id' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const hasUserFingerprint = tableInfoChatsAbuse.some(col => col.name === 'user_fingerprint');
+  if (!hasUserFingerprint) {
+    db.exec("ALTER TABLE chats ADD COLUMN user_fingerprint TEXT;");
+    console.log("Migration: Spalte 'user_fingerprint' zur Tabelle 'chats' hinzugefügt.");
+  }
+
+  const tableInfoIpBans = db.prepare("PRAGMA table_info(ip_bans)").all();
+  const hasFingerprintBan = tableInfoIpBans.some(col => col.name === 'fingerprint');
+  if (!hasFingerprintBan) {
+    db.exec("ALTER TABLE ip_bans ADD COLUMN fingerprint TEXT;");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_ip_bans_fingerprint ON ip_bans(fingerprint);");
+    console.log("Migration: Spalte 'fingerprint' zur Tabelle 'ip_bans' hinzugefügt.");
   }
 
   // Repair-Migration: Tickets ohne gültige ID (NULL oder 'null') reparieren und mit TK-XXXX ausstatten

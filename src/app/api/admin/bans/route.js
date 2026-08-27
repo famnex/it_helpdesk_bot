@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { checkIpBanned, recordAbuseViolation, liftIpBan, manualBanIp } from '@/lib/abuse';
+import { checkIpBanned, recordAbuseViolation, liftIpBan, liftFingerprintBan, manualBanIp, manualBanFingerprint } from '@/lib/abuse';
 
 /**
- * GET: Holt alle IP-Sperren und Verwarnungen.
+ * GET: Holt alle IP-Sperren, Geräte-Sperren (Fingerprints) und Verwarnungen.
  */
 export async function GET() {
   const user = await getSessionUser();
@@ -17,6 +17,7 @@ export async function GET() {
       SELECT 
         id, 
         ip, 
+        fingerprint,
         session_id as sessionId, 
         user_email as userEmail, 
         warning_count as warningCount, 
@@ -50,7 +51,7 @@ export async function GET() {
 }
 
 /**
- * POST: Manuelle IP-Sperre erstellen oder Verwarnung setzen.
+ * POST: Manuelle IP- oder Geräte-Sperre erstellen oder Verwarnung setzen.
  */
 export async function POST(request) {
   const user = await getSessionUser();
@@ -60,7 +61,22 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { ip, hours, reason, action } = body;
+    const { ip, fingerprint, hours, reason, action } = body;
+
+    const durationHours = parseInt(hours, 10) || 24;
+
+    // Manuelle Fingerprint-Sperre
+    if (action === 'ban_fingerprint' || fingerprint) {
+      if (!fingerprint || !fingerprint.trim()) {
+        return NextResponse.json({ error: 'Device Fingerprint ist erforderlich.' }, { status: 400 });
+      }
+      const success = manualBanFingerprint({
+        fingerprint: fingerprint.trim(),
+        hours: durationHours,
+        reason: reason || `Manuelle Geräte-Sperre (${durationHours}h) durch Administrator ${user.name || user.email}`
+      });
+      return NextResponse.json({ success });
+    }
 
     if (!ip || !ip.trim()) {
       return NextResponse.json({ error: 'IP-Adresse ist erforderlich.' }, { status: 400 });
@@ -71,13 +87,13 @@ export async function POST(request) {
     if (action === 'warn') {
       const result = recordAbuseViolation({
         ip: cleanIp,
+        fingerprint: fingerprint ? fingerprint.trim() : null,
         reason: reason || 'Manuelle Verwarnung durch Administrator'
       });
       return NextResponse.json({ success: true, result });
     }
 
-    // Standard: Manuelle Sperre
-    const durationHours = parseInt(hours, 10) || 24;
+    // Standard: Manuelle IP-Sperre
     const success = manualBanIp({
       ip: cleanIp,
       hours: durationHours,
@@ -90,13 +106,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Fehler beim Erstellen der IP-Sperre.' }, { status: 500 });
     }
   } catch (err) {
-    console.error('Fehler beim Setzen der IP-Sperre:', err);
-    return NextResponse.json({ error: 'Serverfehler beim Setzen der IP-Sperre.' }, { status: 500 });
+    console.error('Fehler beim Setzen der Sperre:', err);
+    return NextResponse.json({ error: 'Serverfehler beim Setzen der Sperre.' }, { status: 500 });
   }
 }
 
 /**
- * DELETE: Hebt die IP-Sperre bzw. Verwarnung auf.
+ * DELETE: Hebt die IP-Sperre bzw. Fingerprint-Sperre auf.
  */
 export async function DELETE(request) {
   const user = await getSessionUser();
@@ -107,24 +123,27 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     let ip = searchParams.get('ip');
+    let fingerprint = searchParams.get('fingerprint');
 
-    if (!ip) {
+    if (!ip && !fingerprint) {
       const body = await request.json().catch(() => ({}));
       ip = body.ip;
+      fingerprint = body.fingerprint;
     }
 
-    if (!ip) {
-      return NextResponse.json({ error: 'IP-Adresse fehlt.' }, { status: 400 });
+    if (fingerprint && fingerprint.trim()) {
+      const success = liftFingerprintBan(fingerprint.trim());
+      return NextResponse.json({ success });
     }
 
-    const success = liftIpBan(ip.trim());
-    if (success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: 'Fehler beim Aufheben der IP-Sperre.' }, { status: 500 });
+    if (ip && ip.trim()) {
+      const success = liftIpBan(ip.trim());
+      return NextResponse.json({ success });
     }
+
+    return NextResponse.json({ error: 'IP-Adresse oder Device Fingerprint fehlt.' }, { status: 400 });
   } catch (err) {
-    console.error('Fehler beim Aufheben der IP-Sperre:', err);
+    console.error('Fehler beim Aufheben der Sperre:', err);
     return NextResponse.json({ error: 'Serverfehler.' }, { status: 500 });
   }
 }
