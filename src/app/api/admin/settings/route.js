@@ -28,8 +28,20 @@ export async function GET() {
       if (r.key === 'gemini_config' && val.apiKey) {
         val.apiKey = '********';
       }
-      if (r.key === 'proxycheck_config' && val.apiKey) {
-        val.apiKey = '********';
+      if (r.key === 'proxycheck_config') {
+        const defaultPc = {
+          enabled: false,
+          apiKey: '',
+          blockVpn: true,
+          blockTor: true,
+          blockProxy: true,
+          blockCompromised: true,
+          minRiskScore: 67,
+          whitelistedIps: '',
+          whitelistedAsns: 'AS13335, AS54113, AS20940, AS396982, AS714, AS13414, AS36040'
+        };
+        val = { ...defaultPc, ...val };
+        if (val.apiKey) val.apiKey = '********';
       }
       
       config[r.key] = val;

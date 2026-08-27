@@ -5451,20 +5451,40 @@ export default function AdminDashboardPage() {
                       <span className="text-[10px] text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
                     </div>
 
-                    <div>
-                      <label className="text-[11px] text-sky-400 font-bold block mb-1 flex items-center gap-1.5">
-                        <i className="fa-solid fa-shield-halved text-xs"></i>
-                        <span>AS-Nummern Whitelist (Apple Private Relay / Provider)</span>
-                      </label>
-                      <input 
-                        type="text"
+                    <div className="bg-sky-950/20 border border-sky-500/20 rounded-xl p-3.5 space-y-2">
+                      <div className="flex flex-wrap justify-between items-center gap-1.5">
+                        <label className="text-[11px] text-sky-400 font-bold block flex items-center gap-1.5">
+                          <i className="fa-solid fa-shield-halved text-xs"></i>
+                          <span>AS-Nummern Whitelist (Apple Private Relay / Provider)</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const defaultAsns = 'AS13335, AS54113, AS20940, AS396982, AS714, AS13414, AS36040';
+                            setProxycheckConfig(prev => {
+                              const current = (prev.whitelistedAsns || '').trim();
+                              if (!current) return { ...prev, whitelistedAsns: defaultAsns };
+                              const tokens = current.split(/[\n,;\s]+/).map(t => t.trim()).filter(Boolean);
+                              const defaults = defaultAsns.split(', ');
+                              defaults.forEach(d => { if (!tokens.includes(d)) tokens.push(d); });
+                              return { ...prev, whitelistedAsns: tokens.join(', ') };
+                            });
+                          }}
+                          className="text-[10px] text-sky-300 hover:text-white bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 px-2 py-0.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <i className="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
+                          <span>+ Apple Private Relay Standard-ASNs</span>
+                        </button>
+                      </div>
+                      <textarea 
+                        rows={2}
                         value={proxycheckConfig.whitelistedAsns || ''}
                         onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, whitelistedAsns: e.target.value })}
-                        placeholder="z. B. AS13335, AS54113, AS20940, AS396982"
+                        placeholder="z. B. AS13335, AS54113, AS20940, AS396982 (kommagetrennt oder pro Zeile)"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
                       />
-                      <span className="text-[10px] text-slate-500 block mt-1">
-                        Erlaubt Zugriffe von diesen Autonomen Systemen (AS), selbst bei hohem Risk Score oder aktivem VPN. Perfekt für Apple Private Relay (Cloudflare AS13335, Fastly AS54113).
+                      <span className="text-[10px] text-slate-400 block">
+                        Erlaubt Zugriffe von diesen Autonomen Systemen (AS), selbst bei hohem Risk Score oder aktivem VPN. Perfekt für Apple Private Relay (Cloudflare AS13335, Fastly AS54113, Akamai AS20940).
                       </span>
                     </div>
                   </div>
