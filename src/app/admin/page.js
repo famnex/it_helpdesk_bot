@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
@@ -307,6 +307,12 @@ export default function AdminDashboardPage() {
   const [testProxycheckLoading, setTestProxycheckLoading] = useState(false);
   const [testProxycheckResult, setTestProxycheckResult] = useState(null);
   const [showProxycheckKey, setShowProxycheckKey] = useState(false);
+  const [proxycheckCache, setProxycheckCache] = useState([]);
+  const [proxycheckCacheStats, setProxycheckCacheStats] = useState({ total: 0, proxies: 0, clean: 0, highRisk: 0 });
+  const [isProxycheckCacheLoading, setIsProxycheckCacheLoading] = useState(false);
+  const [proxycheckCacheSearch, setProxycheckCacheSearch] = useState('');
+  const [proxycheckCacheFilter, setProxycheckCacheFilter] = useState('all'); // 'all' | 'proxies' | 'clean' | 'high_risk'
+  const [selectedRawResponse, setSelectedRawResponse] = useState(null);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
@@ -483,12 +489,33 @@ export default function AdminDashboardPage() {
       loadStatistics();
     } else if (activeTab === 'chats') {
       loadChats();
+    } else if (activeTab === 'proxycheck') {
+      loadProxycheckCache();
     } else if (activeTab === 'export') {
       if (!exportPreview) {
         handleLoadExportPreview();
       }
     }
   }, [activeTab]);
+
+  const filteredProxycheckCache = useMemo(() => {
+    return proxycheckCache.filter(item => {
+      if (proxycheckCacheFilter === 'proxies' && item.isProxy !== 1) return false;
+      if (proxycheckCacheFilter === 'clean' && (item.isProxy === 1 || item.riskScore >= 50)) return false;
+      if (proxycheckCacheFilter === 'high_risk' && item.riskScore < 67) return false;
+
+      if (proxycheckCacheSearch) {
+        const query = proxycheckCacheSearch.toLowerCase().trim();
+        const ipMatch = (item.ip || '').toLowerCase().includes(query);
+        const providerMatch = (item.provider || '').toLowerCase().includes(query);
+        const countryMatch = (item.country || '').toLowerCase().includes(query);
+        const typeMatch = (item.proxyType || '').toLowerCase().includes(query);
+        if (!ipMatch && !providerMatch && !countryMatch && !typeMatch) return false;
+      }
+
+      return true;
+    });
+  }, [proxycheckCache, proxycheckCacheFilter, proxycheckCacheSearch]);
 
   const setExportDatePreset = (preset) => {
     setExportPreset(preset);
@@ -729,6 +756,90 @@ export default function AdminDashboardPage() {
       }
     } catch (e) {
       console.error('Fehler beim Setzen der Schnellsperre:', e);
+    }
+  };
+
+  const loadProxycheckCache = async () => {
+    setIsProxycheckCacheLoading(true);
+    try {
+      const res = await fetch('/api/admin/proxycheck/cache');
+      if (res.ok) {
+        const data = await res.json();
+        setProxycheckCache(data.rows || []);
+        if (data.stats) setProxycheckCacheStats(data.stats);
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden des ProxyCheck-Caches:', e);
+    } finally {
+      setIsProxycheckCacheLoading(false);
+    }
+  };
+
+  const handleDeleteCacheIp = async (ip) => {
+    if (!confirm(`Möchtest du den Cache-Eintrag für IP ${ip} wirklich löschen? Bei der nächsten Anfrage wird die IP erneut frisch bewertet.`)) return;
+    try {
+      const res = await fetch('/api/admin/proxycheck/cache', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      if (res.ok) {
+        loadProxycheckCache();
+      } else {
+        alert('Fehler beim Löschen des Cache-Eintrags.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    }
+  };
+
+  const handleClearCache = async (mode = 'expired') => {
+    const text = mode === 'all' 
+      ? 'Möchtest du wirklich den GESAMTEN ProxyCheck-Cache leeren? Alle bisher geprüften IPs werden dann bei künftigen Anfragen neu bewertet.' 
+      : 'Möchtest du alle abgelaufenen Cache-Einträge bereinigen?';
+    if (!confirm(text)) return;
+    try {
+      const res = await fetch('/api/admin/proxycheck/cache', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`${data.count || 0} Cache-Einträge wurden gelöscht.`);
+        loadProxycheckCache();
+      } else {
+        alert('Fehler beim Bereinigen des Caches.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
+    }
+  };
+
+  const handleTransferToWhitelist = async (ip) => {
+    if (!confirm(`Möchtest du die IP ${ip} dauerhaft auf die Whitelist übertragen? Anfragen von dieser IP werden dann niemals mehr blockiert.`)) return;
+    try {
+      const res = await fetch('/api/admin/proxycheck/cache/whitelist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProxycheckConfig(prev => ({
+          ...prev,
+          whitelistedIps: data.whitelistedIps || (prev.whitelistedIps ? `${prev.whitelistedIps}\n${ip}` : ip)
+        }));
+        loadProxycheckCache();
+        alert(`IP ${ip} wurde erfolgreich zur Whitelist hinzugefügt!`);
+      } else {
+        alert('Fehler beim Hinzufügen zur Whitelist.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Verbindungsfehler.');
     }
   };
 
@@ -4993,7 +5104,8 @@ export default function AdminDashboardPage() {
 
         {/* Tab 9: ProxyCheck.io IP-Sicherheit */}
         {activeTab === 'proxycheck' && (
-          <form onSubmit={handleSaveSettings} className="space-y-6 max-w-4xl mx-auto">
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <form onSubmit={handleSaveSettings} className="space-y-6">
             {settingsSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex items-center gap-2 shadow-lg animate-fade-in">
                 <i className="fa-solid fa-circle-check text-emerald-400 text-base"></i>
@@ -5103,18 +5215,25 @@ export default function AdminDashboardPage() {
                       {testProxycheckResult.success ? (
                         <>
                           <strong className="block text-emerald-300 font-bold text-xs">Verbindung zu ProxyCheck.io erfolgreich!</strong>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 text-xs text-slate-300">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs text-slate-300">
+                            <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
+                              <strong className="text-emerald-400 text-xs flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                <span>Aktiv ({testProxycheckResult.status?.toUpperCase()})</span>
+                              </strong>
+                            </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
                               <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif</span>
-                              <strong className="text-white text-xs">{testProxycheckResult.plan}</strong>
+                              <strong className="text-white text-xs truncate block" title={testProxycheckResult.plan}>{testProxycheckResult.plan}</strong>
                             </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Heute verbraucht</span>
-                              <strong className="text-white text-xs">{testProxycheckResult.queriesToday} Abfragen</strong>
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Tageslimit</span>
+                              <strong className="text-white text-xs">{testProxycheckResult.dailyLimit} Abfragen</strong>
                             </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Verbleibend</span>
-                              <strong className="text-emerald-300 text-xs">{testProxycheckResult.queriesRemaining} / {testProxycheckResult.dailyLimit}</strong>
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Antwortzeit</span>
+                              <strong className="text-sky-300 text-xs font-mono">{testProxycheckResult.queryTime}</strong>
                             </div>
                           </div>
                         </>
@@ -5226,9 +5345,304 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </form>
+
+          {/* Gecachte IP-Adressen (30-Tage Cache) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-database text-violet-400 text-lg"></i>
+                  <span>Gecachte IP-Adressen (30-Tage Cache)</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Übersicht aller analysierten Client-IPs. Nach 30 Tagen verfällt ein Eintrag automatisch und wird bei erneuter Chateingabe frisch validiert.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  type="button"
+                  onClick={loadProxycheckCache}
+                  disabled={isProxycheckCacheLoading}
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className={`fa-solid fa-rotate-right text-[11px] ${isProxycheckCacheLoading ? 'animate-spin' : ''}`}></i>
+                  <span>Aktualisieren</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleClearCache('expired')}
+                  disabled={isProxycheckCacheLoading}
+                  className="bg-slate-800 hover:bg-slate-750 text-amber-300 hover:text-amber-200 border border-amber-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Löscht alle Einträge, deren 30-Tage-Ablaufdatum überschritten ist"
+                >
+                  <i className="fa-solid fa-broom text-[11px]"></i>
+                  <span>Abgelaufene löschen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleClearCache('all')}
+                  disabled={isProxycheckCacheLoading}
+                  className="bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Leert den gesamten Cache"
+                >
+                  <i className="fa-solid fa-trash-can text-[11px]"></i>
+                  <span>Cache leeren</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gecachte IPs</span>
+                <span className="text-sm sm:text-base font-bold text-white">{proxycheckCacheStats.total}</span>
+              </div>
+              <div className="bg-red-950/30 border border-red-500/20 p-3 rounded-xl text-center">
+                <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">VPN & Proxies</span>
+                <span className="text-sm sm:text-base font-bold text-red-300">{proxycheckCacheStats.proxies}</span>
+              </div>
+              <div className="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-xl text-center">
+                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Regulär / Sauber</span>
+                <span className="text-sm sm:text-base font-bold text-emerald-300">{proxycheckCacheStats.clean}</span>
+              </div>
+              <div className="bg-amber-950/30 border border-amber-500/20 p-3 rounded-xl text-center">
+                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Hohes Risiko (≥67)</span>
+                <span className="text-sm sm:text-base font-bold text-amber-300">{proxycheckCacheStats.highRisk}</span>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1">
+                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                <input
+                  type="text"
+                  value={proxycheckCacheSearch}
+                  onChange={(e) => setProxycheckCacheSearch(e.target.value)}
+                  placeholder="Suche nach IP, Provider, Land oder Typ..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                />
+                {proxycheckCacheSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setProxycheckCacheSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setProxycheckCacheFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    proxycheckCacheFilter === 'all' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Alle ({proxycheckCache.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProxycheckCacheFilter('proxies')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    proxycheckCacheFilter === 'proxies' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  VPN & Proxies ({proxycheckCacheStats.proxies})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProxycheckCacheFilter('clean')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    proxycheckCacheFilter === 'clean' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Sauber ({proxycheckCacheStats.clean})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProxycheckCacheFilter('high_risk')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    proxycheckCacheFilter === 'high_risk' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Risiko ≥ 67 ({proxycheckCacheStats.highRisk})
+                </button>
+              </div>
+            </div>
+
+            {/* Cache Table */}
+            {isProxycheckCacheLoading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-8 h-8 border-3 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : filteredProxycheckCache.length === 0 ? (
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-8 text-center text-slate-500 text-xs">
+                {proxycheckCache.length === 0 
+                  ? 'Der ProxyCheck-Cache ist noch leer. Sobald Nutzer den Chat besuchen, werden deren IP-Bewertungen hier gespeichert.'
+                  : 'Keine Cache-Einträge gefunden, die den gewählten Filterkriterien entsprechen.'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                      <th className="py-2.5 px-3">IP-Adresse</th>
+                      <th className="py-2.5 px-3">Erkannter Typ</th>
+                      <th className="py-2.5 px-3">Risk Score</th>
+                      <th className="py-2.5 px-3">Land / Provider</th>
+                      <th className="py-2.5 px-3">Geprüft am</th>
+                      <th className="py-2.5 px-3">Gültig bis</th>
+                      <th className="py-2.5 px-3 text-right">Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {filteredProxycheckCache.map((item) => {
+                      const isHighRisk = item.riskScore >= 67;
+                      const isMediumRisk = item.riskScore >= 34 && item.riskScore < 67;
+                      const isVpn = item.proxyType && item.proxyType.toLowerCase().includes('vpn');
+                      const isTor = item.proxyType && item.proxyType.toLowerCase().includes('tor');
+                      const isProxy = item.isProxy === 1;
+
+                      return (
+                        <tr key={item.ip} className="hover:bg-slate-850/40 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${isProxy || isHighRisk ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
+                              <span className="font-mono font-bold text-white">{item.ip}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {isTor ? (
+                              <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span>🧅</span> TOR Node
+                              </span>
+                            ) : isVpn ? (
+                              <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span>🔒</span> VPN
+                              </span>
+                            ) : isProxy ? (
+                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span>🌐</span> {item.proxyType || 'Proxy'}
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span>🛡️</span> {item.proxyType || 'Regulär'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-bold font-mono text-[11px] ${
+                                isHighRisk ? 'text-red-400' : isMediumRisk ? 'text-amber-400' : 'text-emerald-400'
+                              }`}>
+                                {item.riskScore}
+                              </span>
+                              <span className="text-[10px] text-slate-500">/ 100</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-300 max-w-[200px] truncate text-[11px]" title={`${item.country || 'Unbekannt'} - ${item.provider || 'Unbekannt'}`}>
+                            <span className="font-semibold text-white block truncate">{item.country || 'Unbekannt'} {item.isocode ? `(${item.isocode})` : ''}</span>
+                            <span className="text-slate-400 text-[10px] block truncate">{item.provider || 'Unbekannt'}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                            {parseUtcDate(item.checkedAt).toLocaleString('de-DE')} Uhr
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`text-[11px] font-mono ${item.isValid ? 'text-slate-300' : 'text-amber-400'}`}>
+                              {parseUtcDate(item.expiresAt).toLocaleDateString('de-DE')}
+                            </span>
+                            {!item.isValid && (
+                              <span className="text-[9px] text-amber-400 block">Abgelaufen</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handleTransferToWhitelist(item.ip)}
+                              className="bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
+                              title="IP auf die Whitelist übertragen (wird nie wieder blockiert)"
+                            >
+                              <i className="fa-solid fa-plus text-[9px]"></i>
+                              <span>Whitelist</span>
+                            </button>
+                            {item.rawResponse && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRawResponse(item)}
+                                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-semibold text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer"
+                                title="Rohdaten / JSON ansehen"
+                              >
+                                <i className="fa-solid fa-code text-[9px]"></i>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCacheIp(item.ip)}
+                              className="bg-slate-800 hover:bg-red-900/60 text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-500/30 font-semibold text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer"
+                              title="Aus dem Cache löschen"
+                            >
+                              <i className="fa-solid fa-trash text-[9px]"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
         )}
       </main>
       </div>
+
+      {/* ProxyCheck Raw JSON Modal Overlay */}
+      {selectedRawResponse && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md p-4 flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-950/60">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-code text-violet-400 text-base"></i>
+                <h4 className="text-sm font-bold text-white">ProxyCheck Rohdaten: {selectedRawResponse.ip}</h4>
+              </div>
+              <button
+                onClick={() => setSelectedRawResponse(null)}
+                className="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 font-mono text-xs text-slate-300 bg-slate-950/80">
+              <pre className="whitespace-pre-wrap leading-relaxed">
+                {(() => {
+                  try {
+                    return JSON.stringify(JSON.parse(selectedRawResponse.rawResponse), null, 2);
+                  } catch (e) {
+                    return selectedRawResponse.rawResponse || 'Keine Rohdaten vorhanden.';
+                  }
+                })()}
+              </pre>
+            </div>
+            <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex justify-between items-center">
+              <span className="text-[11px] text-slate-400">
+                Geprüft am: {parseUtcDate(selectedRawResponse.checkedAt).toLocaleString('de-DE')} Uhr
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedRawResponse(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all cursor-pointer"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KI-Qualitätsanalyse Modal Overlay */}
       {qualityAnalysisModal && (
