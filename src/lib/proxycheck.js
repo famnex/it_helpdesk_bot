@@ -195,34 +195,46 @@ export async function checkIpSecurity(ip) {
     });
     clearTimeout(timeoutId);
 
-    if (response.ok) {
-      const data = await response.json();
-      rawJson = JSON.stringify(data);
+    if (!response.ok) {
+      console.warn(`[ProxyCheck Fail-Open] ProxyCheck.io antwortete mit HTTP ${response.status} für ${cleanIp}. Chatzugriff wird ungehindert erlaubt.`);
+      return { allowed: true, checked: false, error: `HTTP ${response.status}` };
+    }
 
-      if (data.status === 'ok' && data[cleanIp]) {
-        const ipInfo = data[cleanIp];
-        isProxy = ipInfo.proxy === 'yes';
-        proxyType = ipInfo.type || (isProxy ? 'Proxy' : 'Regular');
-        riskScore = parseInt(ipInfo.risk, 10) || 0;
-        country = ipInfo.country || 'Unbekannt';
-        isocode = ipInfo.isocode || '';
-        provider = ipInfo.provider || ipInfo.organisation || ipInfo.asn || 'Unbekannt';
+    const data = await response.json();
+    rawJson = JSON.stringify(data);
 
-        // Im 30-Tage-Cache speichern (User-Vorgabe: 30 Tage)
-        try {
-          db.prepare(`
-            INSERT OR REPLACE INTO proxycheck_cache (
-              ip, is_proxy, proxy_type, risk_score, country, isocode, provider, raw_response, checked_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'))
-          `).run(cleanIp, isProxy ? 1 : 0, proxyType, riskScore, country, isocode, provider, rawJson);
-        } catch (insertErr) {
-          console.error('Fehler beim Speichern in proxycheck_cache:', insertErr);
-        }
-      }
+    // Fail-Open: Wenn das Tageslimit aufgebraucht ist, der Dienst gestört ist oder der Key abgelehnt wird -> Niemals blockieren!
+    if (data.status === 'denied' || data.status === 'error' || data.status === 'warning') {
+      console.warn(`[ProxyCheck Fail-Open] ProxyCheck.io meldet "${data.message || data.status}" für ${cleanIp} (z. B. Tageskontingent aufgebraucht). Chatzugriff wird ungehindert erlaubt.`);
+      return { allowed: true, checked: false, error: data.message || data.status };
+    }
+
+    if (data.status !== 'ok' || !data[cleanIp]) {
+      console.warn(`[ProxyCheck Fail-Open] Unerwartete Antwort für ${cleanIp}. Chatzugriff wird ungehindert erlaubt.`);
+      return { allowed: true, checked: false };
+    }
+
+    const ipInfo = data[cleanIp];
+    isProxy = ipInfo.proxy === 'yes';
+    proxyType = ipInfo.type || (isProxy ? 'Proxy' : 'Regular');
+    riskScore = parseInt(ipInfo.risk, 10) || 0;
+    country = ipInfo.country || 'Unbekannt';
+    isocode = ipInfo.isocode || '';
+    provider = ipInfo.provider || ipInfo.organisation || ipInfo.asn || 'Unbekannt';
+
+    // Im 30-Tage-Cache speichern (User-Vorgabe: 30 Tage)
+    try {
+      db.prepare(`
+        INSERT OR REPLACE INTO proxycheck_cache (
+          ip, is_proxy, proxy_type, risk_score, country, isocode, provider, raw_response, checked_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'))
+      `).run(cleanIp, isProxy ? 1 : 0, proxyType, riskScore, country, isocode, provider, rawJson);
+    } catch (insertErr) {
+      console.error('Fehler beim Speichern in proxycheck_cache:', insertErr);
     }
   } catch (apiErr) {
-    console.error(`Fehler bei ProxyCheck.io-Abfrage für ${cleanIp}:`, apiErr.message);
-    // Bei Timeout oder API-Fehlern den Chat nicht blockieren (Fail-Open für Verfügbarkeit)
+    console.error(`[ProxyCheck Fail-Open] Fehler/Timeout bei ProxyCheck.io-Abfrage für ${cleanIp}:`, apiErr.message);
+    // Bei Timeout, Verbindungsabbruch oder API-Fehlern den Chat niemals blockieren (Fail-Open)
     return { allowed: true, checked: false, error: apiErr.message };
   }
 
