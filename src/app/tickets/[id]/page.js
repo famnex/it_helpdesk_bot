@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { marked } from 'marked';
-import { renderMarkdownWithLinks } from '@/lib/formatting';
+import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcDate } from '@/lib/formatting';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -17,18 +17,7 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
-const parseUtcDate = (dateStr) => {
-  if (!dateStr) return new Date();
-  if (dateStr instanceof Date) return dateStr;
-  let str = String(dateStr).trim();
-  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
-    str = str.replace(' ', 'T') + 'Z';
-  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
-    str = str + 'Z';
-  }
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
-};
+
 
 export default function CustomerTicketDetailPage() {
   const { id } = useParams();
@@ -662,6 +651,8 @@ export default function CustomerTicketDetailPage() {
 
             {messages.map((msg, index) => {
               const isSystem = msg.senderRole === 'system';
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const showDateDivider = !prevMsg || isDifferentDay(msg.createdAt, prevMsg?.createdAt);
               
               if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
                 return null;
@@ -669,10 +660,21 @@ export default function CustomerTicketDetailPage() {
 
               if (isSystem) {
                 return (
-                  <div key={index} className="flex justify-center">
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
-                      {msg.text}
-                    </span>
+                  <div key={index} className="space-y-3">
+                    {showDateDivider && (
+                      <div className="flex items-center gap-4 py-2 justify-center my-2">
+                        <div className="h-px bg-slate-800 flex-1"></div>
+                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                          {getDateDividerLabel(msg.createdAt)}
+                        </span>
+                        <div className="h-px bg-slate-800 flex-1"></div>
+                      </div>
+                    )}
+                    <div className="flex justify-center">
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
+                        {msg.text}
+                      </span>
+                    </div>
                   </div>
                 );
               }
@@ -695,85 +697,95 @@ export default function CustomerTicketDetailPage() {
                     : 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
 
               return (
-                <div 
-                  key={index} 
-                  className={`flex gap-3 max-w-[80%] ${isMyMessage ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
-                >
-                  <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md overflow-hidden`}>
-                    {isMyMessage ? (
-                      <i className="fa-solid fa-user text-xs"></i>
-                    ) : isAgent ? (
-                      msg.senderAvatarUrl ? (
-                        <img 
-                          src={getCleanImageUrl(msg.senderAvatarUrl)} 
-                          alt={msg.senderName || 'Agent'} 
-                          className="w-full h-full object-cover rounded-xl"
-                        />
-                      ) : (
-                        <i className="fa-solid fa-headset text-xs"></i>
-                      )
-                    ) : isSupportTeam ? (
-                      <i className="fa-solid fa-desktop text-xs"></i>
-                    ) : (
-                      <i className="fa-solid fa-robot text-xs"></i>
-                    )}
-                  </div>
-                  <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-full`}>
-                    <div 
-                      className={`${
-                        isMyMessage 
-                          ? 'bg-sky-600 text-white rounded-tr-none' 
-                          : isAgent 
-                            ? 'bg-slate-900 border border-emerald-500/30 text-slate-200 rounded-tl-none' 
-                            : isSupportTeam 
-                              ? 'bg-slate-900 border border-violet-500/30 text-slate-200 rounded-tl-none' 
-                              : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                      } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
-                    >
-                      <div 
-                        className="markdown-content"
-                        dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
-                      />
-                      {msg.imageUrl && (
-                        msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
+                <div key={index} className="space-y-4">
+                  {showDateDivider && (
+                    <div className="flex items-center gap-4 py-2 justify-center my-2">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        {getDateDividerLabel(msg.createdAt)}
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
+                  <div 
+                    className={`flex gap-3 max-w-[80%] ${isMyMessage ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md overflow-hidden`}>
+                      {isMyMessage ? (
+                        <i className="fa-solid fa-user text-xs"></i>
+                      ) : isAgent ? (
+                        msg.senderAvatarUrl ? (
                           <img 
-                            src={getCleanImageUrl(msg.imageUrl)} 
-                            alt="Foto" 
-                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
-                            className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
+                            src={getCleanImageUrl(msg.senderAvatarUrl)} 
+                            alt={msg.senderName || 'Agent'} 
+                            className="w-full h-full object-cover rounded-xl"
                           />
                         ) : (
-                          <div className="mt-2">
-                            <a
-                              href={getCleanImageUrl(msg.imageUrl)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
-                            >
-                              <i className="fa-solid fa-paperclip text-slate-400"></i>
-                              <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
-                              <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-                            </a>
-                          </div>
+                          <i className="fa-solid fa-headset text-xs"></i>
                         )
+                      ) : isSupportTeam ? (
+                        <i className="fa-solid fa-desktop text-xs"></i>
+                      ) : (
+                        <i className="fa-solid fa-robot text-xs"></i>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1 mx-1">
-                      <span className="text-[9px] text-slate-500">
-                        {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : isSupportTeam ? 'Support-Team' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
-                      </span>
-                      {isBot && msg.id && (
-                        <button
-                          type="button"
-                          onClick={() => handleFlagMessage(msg.id, index)}
-                          disabled={msg.isFlagged}
-                          className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
-                          title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
-                        >
-                          <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
-                          <span>{msg.isFlagged ? 'Gemeldet' : 'Melden'}</span>
-                        </button>
-                      )}
+                    <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-full`}>
+                      <div 
+                        className={`${
+                          isMyMessage 
+                            ? 'bg-sky-600 text-white rounded-tr-none' 
+                            : isAgent 
+                              ? 'bg-slate-900 border border-emerald-500/30 text-slate-200 rounded-tl-none' 
+                              : isSupportTeam 
+                                ? 'bg-slate-900 border border-violet-500/30 text-slate-200 rounded-tl-none' 
+                                : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                        } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                      >
+                        <div 
+                          className="markdown-content"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
+                        />
+                        {msg.imageUrl && (
+                          msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
+                            <img 
+                              src={getCleanImageUrl(msg.imageUrl)} 
+                              alt="Foto" 
+                              onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
+                              className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm mt-2 block cursor-pointer" 
+                            />
+                          ) : (
+                            <div className="mt-2">
+                              <a
+                                href={getCleanImageUrl(msg.imageUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
+                              >
+                                <i className="fa-solid fa-paperclip text-slate-400"></i>
+                                <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
+                                <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                              </a>
+                            </div>
+                          )
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 mx-1">
+                        <span className="text-[9px] text-slate-500">
+                          {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : isSupportTeam ? 'Support-Team' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        </span>
+                        {isBot && msg.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleFlagMessage(msg.id, index)}
+                            disabled={msg.isFlagged}
+                            className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
+                            title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
+                          >
+                            <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
+                            <span>{msg.isFlagged ? 'Gemeldet' : 'Melden'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

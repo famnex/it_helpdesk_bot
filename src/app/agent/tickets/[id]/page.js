@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { marked } from 'marked';
-import { renderMarkdownWithLinks } from '@/lib/formatting';
+import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcDate } from '@/lib/formatting';
 
 const getCleanImageUrl = (url) => {
   if (!url) return '';
@@ -17,18 +17,7 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
-const parseUtcDate = (dateStr) => {
-  if (!dateStr) return new Date();
-  if (dateStr instanceof Date) return dateStr;
-  let str = String(dateStr).trim();
-  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
-    str = str.replace(' ', 'T') + 'Z';
-  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
-    str = str + 'Z';
-  }
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
-};
+
 
 export default function AgentTicketDetailPage() {
   const { id } = useParams();
@@ -717,11 +706,24 @@ export default function AgentTicketDetailPage() {
             )}
 
             {messages.map((msg, index) => {
-              const isAgent = msg.senderRole === 'agent' || msg.senderRole === 'admin';
+              const isInternalMessage = msg.isInternal === 1;
               const isBot = msg.senderRole === 'bot';
               const isSystem = msg.senderRole === 'system';
-              const isInternalMessage = msg.isInternal === 1;
-              const isRightAligned = isAgent || isBot;
+
+              // Prüfen, ob der Absender der Ersteller des Tickets (Kunde) ist
+              const isCustomerOrCreator = msg.senderRole === 'customer' || (
+                !isInternalMessage && 
+                ticket?.creatorEmail && 
+                msg.senderEmail && 
+                msg.senderEmail.toLowerCase() === ticket.creatorEmail.toLowerCase()
+              );
+
+              // Support-Mitarbeiter & Bot rechts ausrichten, Ticket-Ersteller/Kunde immer links!
+              const isRightAligned = !isCustomerOrCreator || isInternalMessage;
+
+              // Datumswechsel ermitteln (WhatsApp / Teams-Style)
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const showDateDivider = !prevMsg || isDifferentDay(msg.createdAt, prevMsg?.createdAt);
 
               if (msg.text && msg.text.startsWith('[SYSTEM_EVENT:')) {
                 return null;
@@ -729,10 +731,21 @@ export default function AgentTicketDetailPage() {
 
               if (isSystem) {
                 return (
-                  <div key={index} className="flex justify-center">
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
-                      {msg.text}
-                    </span>
+                  <div key={index} className="space-y-3">
+                    {showDateDivider && (
+                      <div className="flex items-center gap-4 py-2 justify-center my-2">
+                        <div className="h-px bg-slate-800 flex-1"></div>
+                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                          {getDateDividerLabel(msg.createdAt)}
+                        </span>
+                        <div className="h-px bg-slate-800 flex-1"></div>
+                      </div>
+                    )}
+                    <div className="flex justify-center">
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
+                        {msg.text}
+                      </span>
+                    </div>
                   </div>
                 );
               }
@@ -742,7 +755,7 @@ export default function AgentTicketDetailPage() {
 
               // Avatar rendering helper
               const renderAvatar = () => {
-                if (msg.senderRole === 'bot') {
+                if (isBot) {
                   return (
                     <div className="w-8 h-8 rounded-xl bg-violet-650/10 border border-violet-500/20 text-violet-400 flex items-center justify-center shrink-0 mt-1 shadow-md">
                       <i className="fa-solid fa-robot text-xs"></i>
@@ -752,24 +765,33 @@ export default function AgentTicketDetailPage() {
                 if (msg.senderAvatarUrl) {
                   return (
                     <img 
-                      src={msg.senderAvatarUrl} 
+                      src={getCleanImageUrl(msg.senderAvatarUrl)} 
                       alt="Avatar" 
                       className="w-8 h-8 rounded-xl object-cover border border-slate-850 shadow-md mt-1 shrink-0" 
                     />
                   );
                 }
-                const avatarBg = isAgent 
-                  ? (isInternalMessage ? 'bg-violet-950 border border-violet-500/30 text-violet-400' : 'bg-slate-700 text-slate-300') 
+                const avatarBg = isRightAligned 
+                  ? (isInternalMessage ? 'bg-amber-950 border border-amber-500/30 text-amber-400' : 'bg-violet-600/20 text-violet-300 border border-violet-500/30') 
                   : 'bg-sky-500/10 border border-sky-500/20 text-sky-400';
                 return (
                   <div className={`w-8 h-8 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
-                    <i className={`fa-solid fa-${isAgent ? 'user-tie' : 'user'} text-xs`}></i>
+                    <i className={`fa-solid fa-${isRightAligned ? 'headset' : 'user'} text-xs`}></i>
                   </div>
                 );
               };
 
               return (
                 <div key={index} className="space-y-4">
+                  {showDateDivider && (
+                    <div className="flex items-center gap-4 py-2 justify-center my-2">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        {getDateDividerLabel(msg.createdAt)}
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
                   {index === 0 && msg.isPreTicket && (
                     <div className="flex items-center gap-4 py-4 justify-center">
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -836,7 +858,7 @@ export default function AgentTicketDetailPage() {
                         />
                       </div>
                       <span className="text-[9px] text-slate-500 mt-1 mx-1">
-                        {msg.senderRole === 'bot' ? 'IT-Helpdesk-Bot' : (msg.senderName || msg.senderEmail.split('@')[0])} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {isBot ? 'IT-Helpdesk-Bot' : isCustomerOrCreator ? `${msg.senderName || msg.senderEmail?.split('@')[0] || 'Kunde'} (Kunde)` : (msg.senderName || msg.senderEmail?.split('@')[0] || 'Support-Mitarbeiter')} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                     </div>
                   </div>

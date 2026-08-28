@@ -95,3 +95,60 @@ export function renderMarkdownWithLinks(text) {
   const linkedText = autoLinkText(text);
   return marked.parse(linkedText);
 }
+
+/**
+ * Parst ein UTC-Datumssignal robust in ein JavaScript Date Objekt.
+ */
+export function parseUtcDate(dateStr) {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let str = String(dateStr).trim();
+  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  return new Date(str);
+}
+
+/**
+ * Gibt eine kundenfreundliche Bezeichnung für Datumswechsel ("Heute", "Gestern", oder z. B. "26. August 2026") zurück.
+ */
+export function getDateDividerLabel(dateInput) {
+  if (!dateInput) return null;
+  const date = parseUtcDate(dateInput);
+  if (isNaN(date.getTime())) return null;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (msgDate.getTime() === today.getTime()) {
+    return 'Heute';
+  }
+  if (msgDate.getTime() === yesterday.getTime()) {
+    return 'Gestern';
+  }
+
+  return date.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+/**
+ * Prüft, ob zwei Zeitstempel an unterschiedlichen Tagen liegen.
+ */
+export function isDifferentDay(d1, d2) {
+  if (!d1 || !d2) return true;
+  const dateA = parseUtcDate(d1);
+  const dateB = parseUtcDate(d2);
+  if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return false;
+  return (
+    dateA.getFullYear() !== dateB.getFullYear() ||
+    dateA.getMonth() !== dateB.getMonth() ||
+    dateA.getDate() !== dateB.getDate()
+  );
+}

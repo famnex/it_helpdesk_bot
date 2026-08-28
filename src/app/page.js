@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
-import { renderMarkdownWithLinks } from '@/lib/formatting';
+import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcDate } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
 import { getOrCreateDeviceFingerprint } from '@/lib/fingerprint';
 
@@ -18,18 +18,7 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
-const parseUtcDate = (dateStr) => {
-  if (!dateStr) return new Date();
-  if (dateStr instanceof Date) return dateStr;
-  let str = String(dateStr).trim();
-  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
-    str = str.replace(' ', 'T') + 'Z';
-  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
-    str = str + 'Z';
-  }
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
-};
+
  
 export default function CustomerChatPage() {
   const [chatId, setChatId] = useState('');
@@ -1219,20 +1208,34 @@ export default function CustomerChatPage() {
 
           {/* Nachrichten-Liste */}
           {messages.map((msg, index) => {
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const showDateDivider = !prevMsg || isDifferentDay(msg.createdAt, prevMsg?.createdAt);
+
             if (msg.isTicketUI) {
               return (
-                <div key={index} className="flex justify-center w-full animate-fade-in my-4">
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl max-w-md w-full shadow-lg relative overflow-hidden flex items-start gap-4">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
-                    <div className="text-amber-500 bg-amber-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-ticket-simple text-xl"></i></div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center">
-                        <h4 className="text-sm font-bold text-amber-200">Support-Ticket erstellt</h4>
-                        <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded">{msg.ticketId}</span>
+                <div key={index} className="space-y-3">
+                  {showDateDivider && (
+                    <div className="flex items-center gap-4 py-2 justify-center my-2">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        {getDateDividerLabel(msg.createdAt)}
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
+                  <div className="flex justify-center w-full animate-fade-in my-4">
+                    <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl max-w-md w-full shadow-lg relative overflow-hidden flex items-start gap-4">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
+                      <div className="text-amber-500 bg-amber-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-ticket-simple text-xl"></i></div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-sm font-bold text-amber-200">Support-Ticket erstellt</h4>
+                          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded">{msg.ticketId}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-2">
+                          Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-300 mt-2">
-                        Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1242,31 +1245,42 @@ export default function CustomerChatPage() {
             if (msg.text && msg.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:')) {
               const ticketId = msg.text.replace('[SYSTEM_EVENT: TICKET_CREATED:', '').replace(']', '').trim();
               return (
-                <div key={index} className="flex justify-center w-full animate-fade-in my-4">
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl max-w-md w-full shadow-lg relative overflow-hidden flex items-start gap-4">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
-                    <div className="text-amber-500 bg-amber-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-ticket-simple text-xl"></i></div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center">
-                        <h4 className="text-sm font-bold text-amber-200">Support-Ticket erstellt</h4>
-                        <a 
-                          href={`/helpdesk/tickets/${ticketId}`}
-                          className="text-xs font-mono font-bold text-amber-400 hover:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded transition-colors"
-                        >
-                          {ticketId}
-                        </a>
+                <div key={index} className="space-y-3">
+                  {showDateDivider && (
+                    <div className="flex items-center gap-4 py-2 justify-center my-2">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        {getDateDividerLabel(msg.createdAt)}
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
+                  <div className="flex justify-center w-full animate-fade-in my-4">
+                    <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl max-w-md w-full shadow-lg relative overflow-hidden flex items-start gap-4">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
+                      <div className="text-amber-500 bg-amber-500/20 p-2.5 rounded-xl"><i className="fa-solid fa-ticket-simple text-xl"></i></div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-sm font-bold text-amber-200">Support-Ticket erstellt</h4>
+                          <a 
+                            href={`/helpdesk/tickets/${ticketId}`}
+                            className="text-xs font-mono font-bold text-amber-400 hover:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded transition-colors"
+                          >
+                            {ticketId}
+                          </a>
+                        </div>
+                        <p className="text-xs text-slate-350 mt-2">
+                          Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
+                          <br />
+                          <a 
+                            href={`/helpdesk/tickets/${ticketId}`} 
+                            className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold mt-2 transition-colors"
+                          >
+                            <span>Ticket anzeigen</span>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                          </a>
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-350 mt-2">
-                        Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
-                        <br />
-                        <a 
-                          href={`/helpdesk/tickets/${ticketId}`} 
-                          className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold mt-2 transition-colors"
-                        >
-                          <span>Ticket anzeigen</span>
-                          <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                        </a>
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1285,16 +1299,36 @@ export default function CustomerChatPage() {
             
             if (isSystem) {
               return (
-                <div key={index} className="flex justify-center">
-                  <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-1.5 rounded-xl shadow-sm italic">
-                    {msg.text}
-                  </span>
+                <div key={index} className="space-y-3">
+                  {showDateDivider && (
+                    <div className="flex items-center gap-4 py-2 justify-center my-2">
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        {getDateDividerLabel(msg.createdAt)}
+                      </span>
+                      <div className="h-px bg-slate-800 flex-1"></div>
+                    </div>
+                  )}
+                  <div className="flex justify-center">
+                    <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-1.5 rounded-xl shadow-sm italic">
+                      {msg.text}
+                    </span>
+                  </div>
                 </div>
               );
             }
  
             return (
               <div key={index} className="space-y-4">
+                {showDateDivider && (
+                  <div className="flex items-center gap-4 py-2 justify-center my-2">
+                    <div className="h-px bg-slate-800 flex-1"></div>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      {getDateDividerLabel(msg.createdAt)}
+                    </span>
+                    <div className="h-px bg-slate-800 flex-1"></div>
+                  </div>
+                )}
                 <div 
                   className={`flex gap-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse' : ''} animate-fade-in`}
                 >

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { marked } from 'marked';
-import { renderMarkdownWithLinks } from '@/lib/formatting';
+import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcDate } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
 
 const safeParseMarkdown = (content) => {
@@ -29,18 +29,7 @@ const getCleanImageUrl = (url) => {
   return `/helpdesk${clean}`;
 };
 
-const parseUtcDate = (dateStr) => {
-  if (!dateStr) return new Date();
-  if (dateStr instanceof Date) return dateStr;
-  let str = String(dateStr).trim();
-  if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
-    str = str.replace(' ', 'T') + 'Z';
-  } else if (str.includes('T') && !str.includes('Z') && !str.includes('+')) {
-    str = str + 'Z';
-  }
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
-};
+
 
 const CATEGORY_COLORS = [
   { stroke: '#8b5cf6', badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20', text: 'text-violet-400' },
@@ -4980,9 +4969,20 @@ export default function AdminDashboardPage() {
                         <div className="space-y-3 max-w-3xl border-l-2 border-red-500/20 pl-4 py-1">
                           {chat.messages.map((ctxMsg, ctxIdx) => {
                             const isUser = ctxMsg.sender === 'user';
+                            const prevCtxMsg = ctxIdx > 0 ? chat.messages[ctxIdx - 1] : null;
+                            const showDateDivider = !prevCtxMsg || isDifferentDay(ctxMsg.createdAt, prevCtxMsg?.createdAt);
                             
                             return (
                               <div key={ctxIdx} className="space-y-1">
+                                {showDateDivider && (
+                                  <div className="flex items-center gap-3 py-1.5 justify-center my-1">
+                                    <div className="h-px bg-slate-800 flex-1"></div>
+                                    <span className="text-[9px] bg-slate-950 border border-slate-800 text-slate-400 font-semibold px-2.5 py-0.5 rounded-full shadow-sm tracking-wide">
+                                      {getDateDividerLabel(ctxMsg.createdAt)}
+                                    </span>
+                                    <div className="h-px bg-slate-800 flex-1"></div>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2 text-[10px] font-bold">
                                   <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                     {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
