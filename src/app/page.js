@@ -48,6 +48,7 @@ export default function CustomerChatPage() {
   const [directTicketPhotos, setDirectTicketPhotos] = useState([]); // Array to store uploaded photo objects/paths
 
   // Missbrauch, IP-Sperren & ProxyCheck States
+  const [isLoadingInitialCheck, setIsLoadingInitialCheck] = useState(true);
   const [isChatAborted, setIsChatAborted] = useState(false);
   const [isIpBanned, setIsIpBanned] = useState(false);
   const [bannedUntil, setBannedUntil] = useState(null);
@@ -233,17 +234,18 @@ export default function CustomerChatPage() {
     sessionStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
  
     // Chatverlauf laden (für den aktiven Chat)
+    setIsLoadingInitialCheck(true);
     fetch(`/api/chat?chatId=${activeChatId}`, {
       headers: {
         'X-User-Session-Id': persistentSessionId,
         'X-Device-Fingerprint': getOrCreateDeviceFingerprint()
       }
     })
-      .then(res => res.json())
-      .then(data => {
-        if (data.isIpBanned) {
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403 || data.isIpBanned) {
           setIsIpBanned(true);
-          setBannedUntil(data.bannedUntil);
+          if (data.bannedUntil) setBannedUntil(data.bannedUntil);
         }
         if (data.isSecurityBlocked) {
           setIsSecurityBlocked(true);
@@ -268,6 +270,12 @@ export default function CustomerChatPage() {
             }
           ]);
         }
+      })
+      .catch(err => {
+        console.error('Fehler beim Initial-Check:', err);
+      })
+      .finally(() => {
+        setIsLoadingInitialCheck(false);
       });
     // 4. Häufige Fragen (Wissensdatenbank-Artikel) laden
     fetch('/api/knowledge')
@@ -486,6 +494,10 @@ export default function CustomerChatPage() {
 
   const handleSend = async (e, suggestionText = '') => {
     if (e) e.preventDefault();
+    
+    if (isIpBanned || isSecurityBlocked || isChatAborted || isLoadingInitialCheck) {
+      return;
+    }
     
     const textToSend = suggestionText || inputValue;
     if ((!textToSend.trim() && !selectedPhoto) || isTyping) return;
@@ -971,6 +983,69 @@ export default function CustomerChatPage() {
     }
   };
  
+  if (isLoadingInitialCheck) {
+    return (
+      <div className="min-h-screen h-[100dvh] w-full flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs text-slate-400 font-semibold tracking-wide">IT-Helpdesk wird geladen...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isIpBanned) {
+    return (
+      <div className="min-h-screen h-[100dvh] w-full flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans p-4 relative overflow-hidden">
+        <div className="max-w-md w-full bg-slate-900 border border-red-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-center animate-fade-in relative z-10">
+          <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto text-red-400 text-2xl shadow-inner">
+            <i className="fa-solid fa-mobile-screen-button"></i>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">Dieses Gerät ist gesperrt</h2>
+            <p className="text-xs text-red-300 font-semibold leading-relaxed">
+              Aufgrund wiederholter Verstöße gegen die Nutzungsrichtlinien wurde dieses Gerät (Device Fingerprint) für 24 Stunden für den IT-Support-Chat gesperrt.
+            </p>
+          </div>
+
+          {bannedUntil && (
+            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-xs space-y-1">
+              <span className="text-slate-400 block text-[11px] font-bold uppercase tracking-wider">Sperre aktiv bis:</span>
+              <strong className="text-red-300 font-mono text-sm block">
+                {new Date(bannedUntil).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr am {new Date(bannedUntil).toLocaleDateString('de-DE')}
+              </strong>
+            </div>
+          )}
+
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-left text-xs text-slate-400 space-y-2 leading-relaxed">
+            <div className="flex items-center gap-2 text-slate-200 font-bold">
+              <i className="fa-solid fa-circle-info text-sky-400"></i>
+              <span>Warum ist das Gerät gesperrt?</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Unser IT-Helpdesk schützt sich automatisch vor Beleidigungen, Spam und Trolling. Die Sperre gilt gerätebezogen für 24 Stunden ab dem letzten Verstoß.
+            </p>
+            <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Device ID:</span>
+              <span className="font-mono text-violet-300 font-semibold">{getOrCreateDeviceFingerprint()}</span>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <Link 
+              href="/login" 
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 px-4 py-2.5 rounded-xl transition-all border border-slate-700"
+            >
+              <i className="fa-solid fa-right-to-bracket text-sky-400"></i>
+              <span>Mitarbeiter-Login (Staff Bypass)</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen h-[100dvh] w-full flex flex-col bg-slate-950 font-sans text-slate-100 relative overflow-hidden">
       
