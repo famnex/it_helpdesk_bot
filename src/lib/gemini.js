@@ -1090,7 +1090,7 @@ export async function checkSelfResolutionIntent(userMessage) {
 
   const textLower = userMessage.toLowerCase().trim();
 
-  // Schneller Regex-/Phrasen-Check vor KI-Aufruf für eindeutige Absichten
+  // Eindeutige Phrasen, die eine Erledigung / Stornierung bedeuten
   const clearPhrases = [
     'hat sich erledigt', 'hat sich schon erledigt', 'hat sich von selbst erledigt', 'hat sich gelöst',
     'geht wieder', 'funktioniert wieder', 'klappt wieder', 'läuft wieder',
@@ -1106,7 +1106,9 @@ export async function checkSelfResolutionIntent(userMessage) {
     'hat sich erübrigt', 'ist nicht mehr nötig', 'ist nicht mehr erforderlich'
   ];
 
-  if (clearPhrases.some(phrase => textLower.includes(phrase))) {
+  const hasExplicitResolutionPhrase = clearPhrases.some(phrase => textLower.includes(phrase));
+
+  if (hasExplicitResolutionPhrase) {
     return { isResolved: true, confidence: 'high' };
   }
 
@@ -1118,13 +1120,34 @@ export async function checkSelfResolutionIntent(userMessage) {
     /(brauche|benötige).*(kein ticket|keine hilfe|nicht mehr)/i
   ];
 
-  if (regexPatterns.some(pattern => pattern.test(textLower))) {
+  const hasRegexResolution = regexPatterns.some(pattern => pattern.test(textLower));
+
+  if (hasRegexResolution) {
     return { isResolved: true, confidence: 'high' };
+  }
+
+  // NEGATIVER GUARD: Höflichkeitsfloskeln & reine Dankes-Sätze NIEMALS automatisch schließen!
+  // "Danke", "Vielen Dank", "Danke für die Info", "Danke dir", "Danke vorab" etc.
+  const politeKeywords = [
+    'danke', 'vielen dank', 'dankeschön', 'danke schön', 'danke dir', 'thx', 'thanks',
+    'danke vorab', 'danke schonmal', 'danke für die info', 'danke für die antwort',
+    'danke für die hilfe', 'danke für die schnelle bearbeitung', 'ok danke', 'alles klar danke'
+  ];
+
+  const isPoliteMessageWithoutResolution = politeKeywords.some(kw => textLower.includes(kw));
+
+  if (isPoliteMessageWithoutResolution && !hasExplicitResolutionPhrase && !hasRegexResolution) {
+    // Reines Danke ohne explizite Erledigungsmeldung = NIEMALS schließen!
+    return { isResolved: false, reason: 'Polite thank you message does not imply resolution' };
   }
 
   const { extractionModel } = getModelNames();
 
-  const prompt = `Analysiere, ob der Benutzer in der folgenden Nachricht mitteilt, dass sich sein IT-Problem erledigt hat, gelöst wurde, er keine Hilfe mehr benötigt oder das Support-Ticket storniert, zurückgenommen oder geschlossen werden soll:
+  const prompt = `Analysiere, ob der Benutzer in der folgenden Nachricht EINDEUTIG und AUSDRÜCKLICH mitteilt, dass sein IT-Problem gelöst ist, wieder funktioniert, er keine Hilfe mehr benötigt oder das Support-Ticket storniert, zurückgenommen oder geschlossen werden soll.
+
+STRENGSTE REGELN:
+1. Reines "Danke", "Vielen Dank", "Danke für die Antwort", "Danke für die Info", "Ok danke" oder sonstige Höflichkeitsfloskeln bedeuten NIEMALS, dass ein Ticket geschlossen werden darf! Solche Nachrichten dürfen NICHT als isResolved=true eingestuft werden (isResolved = false).
+2. "isResolved" darf NUR DANN true sein, wenn der Benutzer AUSDRÜCKLICH erklärt, dass sein technisches Problem gelöst ist, wieder funktioniert oder er das Ticket ausdrücklich stornieren/schließen möchte (z. B. "hat sich erledigt", "geht wieder", "kann geschlossen werden", "bitte stornieren").
 
 NACHRICHT DES BENUTZERS:
 "${userMessage}"
@@ -1141,7 +1164,7 @@ Antworte ZWINGEND als JSON-Objekt ohne Markdown:
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanJson);
     return {
-      isResolved: Boolean(result.isResolved && result.confidence !== 'low'),
+      isResolved: Boolean(result.isResolved && result.confidence === 'high'),
       confidence: result.confidence || 'medium'
     };
   } catch (e) {
