@@ -9,7 +9,10 @@ import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcD
 const getCleanImageUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
-  let clean = url.replace(/^\/helpdesk/, '');
+  let str = String(url).replace(/https?:\/\/cloud\.mso-hef\.de\/uploads\//gi, 'https://cloud.mso-hef.de/helpdesk/uploads/');
+  str = str.replace(/https?:\/\/cloud\.mso-hef\.de\/api\/uploads\//gi, 'https://cloud.mso-hef.de/helpdesk/api/uploads/');
+  if (str.startsWith('http://') || str.startsWith('https://')) return str;
+  let clean = str.replace(/^\/helpdesk/, '');
   if (clean.startsWith('/uploads/')) {
     clean = clean.replace(/^\/uploads\//, '/api/uploads/');
   }

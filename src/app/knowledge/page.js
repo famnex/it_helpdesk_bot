@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
 import UserNavMenu from '@/components/UserNavMenu';
+import { fixUploadUrl } from '@/lib/formatting';
 
 export default function PublicKnowledgePage() {
   const [chunks, setChunks] = useState([]);
@@ -189,7 +190,7 @@ export default function PublicKnowledgePage() {
                       {activeModalChunk.attachments.map(att => (
                         <a 
                           key={att.id}
-                          href={att.filePath} 
+                          href={fixUploadUrl(att.filePath)} 
                           download
                           className="flex items-center gap-3 bg-slate-950 hover:bg-slate-850/80 p-3 rounded-xl border border-slate-850 hover:border-sky-500/30 transition-all text-xs text-sky-400 font-semibold shadow-inner"
                         >

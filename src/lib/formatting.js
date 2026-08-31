@@ -1,5 +1,40 @@
 import { marked } from 'marked';
 
+/**
+ * Korrigiert Upload- und Anhang-URLs so, dass sie immer das erforderliche /helpdesk-Präfix enthalten,
+ * falls es fehlt (z. B. https://cloud.mso-hef.de/uploads/... -> https://cloud.mso-hef.de/helpdesk/uploads/...).
+ */
+export function fixUploadUrl(url) {
+  if (!url) return '';
+  let str = String(url).trim();
+  if (str.startsWith('data:') || str.startsWith('blob:')) return str;
+
+  // 1. cloud.mso-hef.de/uploads/ ohne /helpdesk/ korrigieren
+  str = str.replace(/https?:\/\/cloud\.mso-hef\.de\/uploads\//gi, 'https://cloud.mso-hef.de/helpdesk/uploads/');
+  str = str.replace(/https?:\/\/cloud\.mso-hef\.de\/api\/uploads\//gi, 'https://cloud.mso-hef.de/helpdesk/api/uploads/');
+
+  // 2. Relative Pfade /uploads/ ohne /helpdesk/ korrigieren
+  if (str.startsWith('/uploads/')) {
+    str = `/helpdesk${str}`;
+  } else if (str.startsWith('/api/uploads/')) {
+    str = `/helpdesk${str}`;
+  }
+
+  return str;
+}
+
+export function fixUploadUrlInText(text) {
+  if (!text) return '';
+  let str = String(text);
+  // Korrigiert cloud.mso-hef.de/uploads/ -> cloud.mso-hef.de/helpdesk/uploads/
+  str = str.replace(/(https?:\/\/cloud\.mso-hef\.de)\/uploads\//gi, '$1/helpdesk/uploads/');
+  str = str.replace(/(https?:\/\/cloud\.mso-hef\.de)\/api\/uploads\//gi, '$1/helpdesk/api/uploads/');
+  // Korrigiert Markdown-Links wie [Name](/uploads/...) -> [Name](/helpdesk/uploads/...)
+  str = str.replace(/(\[[^\]]*\]\()\/uploads\//gi, '$1/helpdesk/uploads/');
+  str = str.replace(/(\[[^\]]*\]\()\/api\/uploads\//gi, '$1/helpdesk/api/uploads/');
+  return str;
+}
+
 marked.use({
   renderer: {
     link(arg1, arg2, arg3) {
@@ -17,8 +52,10 @@ marked.use({
         text = arg3 || href;
       }
 
+      const cleanHref = fixUploadUrl(href);
+      const cleanText = fixUploadUrl(text);
       const cleanTitle = title ? ` title="${title}"` : '';
-      return `<a href="${href}"${cleanTitle} target="_blank" rel="noopener noreferrer" class="text-sky-400 underline hover:text-sky-300 transition-colors break-all">${text}</a>`;
+      return `<a href="${cleanHref}"${cleanTitle} target="_blank" rel="noopener noreferrer" class="text-sky-400 underline hover:text-sky-300 transition-colors break-all">${cleanText}</a>`;
     }
   }
 });
@@ -92,7 +129,8 @@ export function autoLinkText(text) {
  */
 export function renderMarkdownWithLinks(text) {
   if (!text) return '';
-  const linkedText = autoLinkText(text);
+  const textWithFixedUrls = fixUploadUrlInText(text);
+  const linkedText = autoLinkText(textWithFixedUrls);
   return marked.parse(linkedText);
 }
 

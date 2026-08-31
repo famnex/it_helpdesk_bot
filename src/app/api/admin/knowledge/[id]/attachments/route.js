@@ -73,7 +73,7 @@ export async function POST(request, { params }) {
     fs.writeFileSync(filePath, buffer);
 
     // Relativen Pfad für die Auslieferung über Next.js /public generieren
-    const relativeUrl = `/uploads/attachments/${filename}`;
+    const relativeUrl = `/helpdesk/uploads/attachments/${filename}`;
 
     // In der Datenbank speichern
     const info = db.prepare(`

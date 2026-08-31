@@ -1,6 +1,7 @@
 import db from './db.js';
 import fs from 'fs';
 import path from 'path';
+import { fixUploadUrl } from './formatting.js';
 
 function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -133,7 +134,8 @@ Regeln für die Abfrage:
           attachmentInfo = " [WICHTIG: Biete dem Benutzer zwingend diese Links zum Download an, falls er danach fragt oder die Lösung vorschlägt: ";
           attachments.forEach((att, idx) => {
             if (idx > 0) attachmentInfo += ", ";
-            attachmentInfo += `[${att.filename}](${att.filePath})`;
+            const cleanPath = fixUploadUrl(att.filePath);
+            attachmentInfo += `[${att.filename}](${cleanPath})`;
           });
           attachmentInfo += "]";
         }
