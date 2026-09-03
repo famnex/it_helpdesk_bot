@@ -25,15 +25,16 @@ export async function GET(request, { params }) {
              t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
              t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
              t.solution, t.created_at as createdAt, t.updated_at as updatedAt,
-             cu.name as creatorName,
+             COALESCE(cu.name, ch.user_name) as creatorName,
              (CASE 
                 WHEN t.is_authenticated_creator = 1 THEN 1
-                WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%') THEN 1
+                WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%' OR cu.id LIKE 'user-%') THEN 1
                 ELSE 0 
               END) as isRegisteredUser
       FROM tickets t
       LEFT JOIN users u ON t.assigned_agent_id = u.id
-      LEFT JOIN users cu ON t.creator_email = cu.email
+      LEFT JOIN users cu ON LOWER(t.creator_email) = LOWER(cu.email)
+      LEFT JOIN chats ch ON t.chat_id = ch.id
       WHERE t.id = ?
     `).get(id);
 
@@ -63,7 +64,7 @@ export async function GET(request, { params }) {
                m.text, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
-        LEFT JOIN users u ON m.sender_email = u.email
+        LEFT JOIN users u ON LOWER(m.sender_email) = LOWER(u.email)
         WHERE m.ticket_id = ? AND m.is_internal = 0
         ORDER BY m.created_at ASC
       `).all(id);
@@ -73,7 +74,7 @@ export async function GET(request, { params }) {
                m.text, m.is_internal as isInternal, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
-        LEFT JOIN users u ON m.sender_email = u.email
+        LEFT JOIN users u ON LOWER(m.sender_email) = LOWER(u.email)
         WHERE m.ticket_id = ?
         ORDER BY m.created_at ASC
       `).all(id);

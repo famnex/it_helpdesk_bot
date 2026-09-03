@@ -171,6 +171,30 @@ try {
     );
   `);
 
+  // Migration: Korrigiere leere Benutzernamen aus verknüpften Chats
+  try {
+    db.exec(`
+      UPDATE users 
+      SET name = (
+        SELECT user_name FROM chats 
+        WHERE LOWER(user_email) = LOWER(users.email) 
+          AND user_name IS NOT NULL 
+          AND user_name != '' 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      ) 
+      WHERE (name IS NULL OR name = '' OR name LIKE '%@%') 
+        AND EXISTS (
+          SELECT 1 FROM chats 
+          WHERE LOWER(user_email) = LOWER(users.email) 
+            AND user_name IS NOT NULL 
+            AND user_name != ''
+        );
+    `);
+  } catch (e) {
+    console.error("Migration users display_name cleanup:", e);
+  }
+
   // Migration: ticket_messages Tabelle aktualisieren, falls der Check-Constraint noch kein 'bot' enthält
   const ticketMessagesSql = db.prepare("SELECT sql FROM sqlite_master WHERE name='ticket_messages'").get()?.sql || '';
   if (ticketMessagesSql && !ticketMessagesSql.includes("'bot'")) {

@@ -37,9 +37,12 @@ export async function GET(request) {
                t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
                t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
                t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
-               t.created_at as createdAt, t.updated_at as updatedAt
+               t.created_at as createdAt, t.updated_at as updatedAt,
+               COALESCE(cu.name, ch.user_name) as creatorName
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
+        LEFT JOIN users cu ON LOWER(t.creator_email) = LOWER(cu.email)
+        LEFT JOIN chats ch ON t.chat_id = ch.id
         ${customerWhere}
         ORDER BY t.created_at DESC
       `).all(...params);
@@ -59,10 +62,10 @@ export async function GET(request) {
                t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
                t.last_agent_read_at as lastAgentReadAt,
                t.created_at as createdAt, t.updated_at as updatedAt,
-               cu.name as creatorName,
+               COALESCE(cu.name, ch.user_name) as creatorName,
                (CASE 
                   WHEN t.is_authenticated_creator = 1 THEN 1
-                  WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%') THEN 1
+                  WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%' OR cu.id LIKE 'user-%') THEN 1
                   ELSE 0 
                 END) as isRegisteredUser,
                (CASE
@@ -83,7 +86,8 @@ export async function GET(request) {
                 END) as hasUnread
         FROM tickets t
         LEFT JOIN users u ON t.assigned_agent_id = u.id
-        LEFT JOIN users cu ON t.creator_email = cu.email
+        LEFT JOIN users cu ON LOWER(t.creator_email) = LOWER(cu.email)
+        LEFT JOIN chats ch ON t.chat_id = ch.id
         ${agentWhere}
         ORDER BY t.created_at DESC
       `).all();
@@ -161,14 +165,17 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // Falls der Kunde noch nicht in der Tabelle 'users' existiert, direkt anlegen
+    // Falls der Kunde noch nicht in der Tabelle 'users' existiert (oder sein Name aktualisiert werden muss)
     if (email) {
-      const userExists = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      const userExists = db.prepare('SELECT id, name FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+      const inputName = (data.display_name || data.displayName || data.displayname || data.creator_name || data.name || '').trim() || null;
       if (!userExists) {
         const customerId = `user-${Math.floor(100000 + Math.random() * 900000)}`;
-        const customerName = data.creator_name || email.split('@')[0];
+        const customerName = inputName || email.split('@')[0];
         db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, \'customer\', ?)')
           .run(customerId, email, customerName);
+      } else if (inputName && userExists.name !== inputName) {
+        db.prepare('UPDATE users SET name = ? WHERE id = ?').run(inputName, userExists.id);
       }
     }
 

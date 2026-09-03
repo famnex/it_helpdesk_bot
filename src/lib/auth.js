@@ -37,7 +37,8 @@ export async function createSession(user) {
   const payload = {
     id: user.id,
     email: user.email,
-    role: user.role
+    role: user.role,
+    name: user.name || null
   };
   
   // Session-Token läuft nach 7 Tagen ab

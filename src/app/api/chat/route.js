@@ -234,10 +234,22 @@ export async function POST(request) {
     let chat = db.prepare('SELECT id, ticket_created as ticketCreated, user_email as userEmail, user_name as userName, is_agent_on_behalf as isAgentOnBehalf, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
     const resolvedEmail = email || incomingEmail || (chat ? chat.userEmail : null);
 
+    // Name / display_name aus Session, DB oder Request-Body auflösen
+    let resolvedUserName = (user && user.name) ? user.name : null;
+    const bodyDisplayName = (body && (body.display_name || body.displayName || body.user_name || body.userName || body.name) || '').trim() || null;
+
+    if (!resolvedUserName && resolvedEmail) {
+      const dbUser = db.prepare('SELECT name FROM users WHERE LOWER(email) = LOWER(?)').get(resolvedEmail);
+      if (dbUser && dbUser.name) resolvedUserName = dbUser.name;
+    }
+    if (!resolvedUserName && bodyDisplayName) {
+      resolvedUserName = bodyDisplayName;
+    }
+
     if (!chat) {
       db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id, user_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(chatId, resolvedEmail, user ? user.name : null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId, deviceFingerprint || null);
-      chat = { id: chatId, ticketCreated: 0, userEmail: resolvedEmail, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0, isAbusive: 0 };
+        .run(chatId, resolvedEmail, resolvedUserName || null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId, deviceFingerprint || null);
+      chat = { id: chatId, ticketCreated: 0, userEmail: resolvedEmail, userName: resolvedUserName, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0, isAbusive: 0 };
     } else {
       // Wenn der Chat bereits wegen Missbrauchs beendet wurde, keine weiteren Nachrichten annehmen!
       if (!isStaff && chat.isAbusive === 1) {
@@ -249,10 +261,14 @@ export async function POST(request) {
 
       // Immer versuchen, E-Mail, Name, IP, Session-ID und Fingerprint des Benutzers zu aktualisieren
       if (chat.isAgentOnBehalf !== 1) {
+        const finalName = resolvedUserName || chat.userName || null;
         db.prepare('UPDATE chats SET user_email = ?, user_name = ?, user_ip = ?, user_session_id = ?, user_fingerprint = COALESCE(?, user_fingerprint), customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(resolvedEmail || chat.userEmail || null, (user ? user.name : null) || chat.userName || null, userIp || null, userSessionId || null, deviceFingerprint || null, chatId);
+          .run(resolvedEmail || chat.userEmail || null, finalName, userIp || null, userSessionId || null, deviceFingerprint || null, chatId);
         if (resolvedEmail) {
           chat.userEmail = resolvedEmail;
+        }
+        if (finalName) {
+          chat.userName = finalName;
         }
       }
     }

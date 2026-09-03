@@ -17,11 +17,12 @@ export async function GET(request) {
   }
 
   const email = decoded.email;
-  const displayName = decoded.display_name || decoded.username || null;
+  const rawDisplayName = decoded.display_name || decoded.displayName || decoded.displayname || decoded.name || decoded.username || null;
+  const displayName = rawDisplayName ? String(rawDisplayName).trim() : null;
   
   try {
-    // Benutzer in der Datenbank suchen
-    let user = db.prepare('SELECT id, email, role, name FROM users WHERE email = ?').get(email);
+    // Benutzer in der Datenbank suchen (Case-Insensitive)
+    let user = db.prepare('SELECT id, email, role, name FROM users WHERE LOWER(email) = LOWER(?)').get(email);
     
     if (!user) {
       // Wenn der Benutzer noch nicht existiert, legen wir ihn an.
@@ -35,7 +36,7 @@ export async function GET(request) {
       db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, ?, ?)').run(userId, email, role, displayName);
       user = { id: userId, email, role, name: displayName };
     } else {
-      // Falls der Benutzer existiert, aber noch keinen Namen hat (oder der Name abweicht)
+      // Falls der Benutzer existiert, stellen wir sicher, dass sein Name mit display_name aktualisiert wird
       if (displayName && user.name !== displayName) {
         db.prepare('UPDATE users SET name = ? WHERE id = ?').run(displayName, user.id);
         user.name = displayName;
