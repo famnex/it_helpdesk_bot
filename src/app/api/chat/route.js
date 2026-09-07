@@ -108,8 +108,10 @@ export async function POST(request) {
     let chatId = '';
     let text = '';
     let relativePath = null;
-
     let isAgentOnBehalf = false;
+    let skipBot = false;
+    let body = null;
+    let inputDisplayName = null;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -122,7 +124,8 @@ export async function POST(request) {
         // support both skip_bot and skipBot
         skipBotVal = formData.get('skip_bot');
       }
-      var skipBot = skipBotVal === 'true';
+      skipBot = skipBotVal === 'true';
+      inputDisplayName = formData.get('display_name') || formData.get('displayName') || formData.get('user_name') || formData.get('userName') || formData.get('name') || null;
       
       const photoFile = formData.get('photo'); // File-Objekt
       
@@ -152,11 +155,12 @@ export async function POST(request) {
         fs.writeFileSync(absolutePath, buffer);
       }
     } else {
-      const body = await request.json();
+      body = await request.json().catch(() => ({}));
       chatId = body.chatId;
       text = body.text;
       isAgentOnBehalf = !!body.isAgentOnBehalf;
-      var skipBot = !!body.skipBot || !!body.skip_bot;
+      skipBot = !!body.skipBot || !!body.skip_bot;
+      inputDisplayName = body.display_name || body.displayName || body.user_name || body.userName || body.name || null;
     }
 
     if ((!text || !text.trim()) && !relativePath) {
@@ -236,7 +240,7 @@ export async function POST(request) {
 
     // Name / display_name aus Session, DB oder Request-Body auflösen
     let resolvedUserName = (user && user.name) ? user.name : null;
-    const bodyDisplayName = (body && (body.display_name || body.displayName || body.user_name || body.userName || body.name) || '').trim() || null;
+    const bodyDisplayName = (inputDisplayName || (body && (body.display_name || body.displayName || body.user_name || body.userName || body.name)) || '').trim() || null;
 
     if (!resolvedUserName && resolvedEmail) {
       const dbUser = db.prepare('SELECT name FROM users WHERE LOWER(email) = LOWER(?)').get(resolvedEmail);

@@ -694,8 +694,9 @@ export default function CustomerChatPage() {
       }
     } catch (err) {
       console.error('Chat-Fehler:', err);
-      const displayMsg = err.message && err.message !== 'API-Fehler'
-        ? `${err.message}`
+      const isAdmin = user && user.role === 'admin';
+      const displayMsg = (isAdmin && err.message && err.message !== 'API-Fehler')
+        ? `⚠️ Admin-Hinweis: ${err.message}`
         : 'Entschuldigung, meine Serververbindung klemmt gerade.';
       setMessages(prev => [...prev, { sender: 'bot', text: displayMsg }]);
       setIsTyping(false);
