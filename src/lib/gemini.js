@@ -29,6 +29,134 @@ function getApiKey() {
 }
 
 /**
+ * Testet die Google Gemini Verbindung und liefert detaillierte Diagnose-Informationen
+ * bei Konfigurations-, API- oder Modellproblemen zurück.
+ */
+export async function testGeminiConnection({ apiKey, chatModel, extractionModel }) {
+  let effectiveKey = apiKey;
+  if (!effectiveKey || effectiveKey === '********') {
+    effectiveKey = getApiKey();
+  }
+
+  if (!effectiveKey) {
+    return {
+      success: false,
+      error: 'Kein Google Gemini API-Key angegeben oder hinterlegt.',
+      details: 'Bitte gib einen gültigen Gemini API-Key im Feld oben ein.'
+    };
+  }
+
+  const modelToTest = chatModel?.trim() || getModelNames().chatModel || 'gemini-2.0-flash';
+
+  const testPayload = {
+    contents: [{ parts: [{ text: "Antworte bitte ausschließlich mit dem Wort: 'OK'." }] }]
+  };
+
+  async function executeCall(targetModel) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${effectiveKey}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload)
+      });
+
+      const rawText = await response.text();
+      let data = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        data = rawText;
+      }
+
+      if (response.ok) {
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'OK';
+        return { ok: true, status: response.status, reply };
+      }
+
+      // Fehleranalyse
+      const errObj = data?.error;
+      const errorCode = errObj?.code || response.status;
+      const errorMessage = errObj?.message || (typeof data === 'string' ? data : JSON.stringify(data));
+      const errorStatus = errObj?.status || '';
+
+      let hint = '';
+      if (errorCode === 400 && errorMessage.toLowerCase().includes('api key')) {
+        hint = 'Der Google Gemini API-Key ist ungültig oder fehlerhaft.';
+      } else if (errorCode === 403 || errorStatus === 'PERMISSION_DENIED') {
+        hint = 'Zugriff verweigert (403 Forbidden). Bitte prüfe die Berechtigungen in der Google Cloud Console und ob die Generative Language API im Google-Konto aktiviert ist.';
+      } else if (errorCode === 404 || errorStatus === 'NOT_FOUND' || errorMessage.toLowerCase().includes('not found')) {
+        hint = `Das Modell "${targetModel}" wurde nicht gefunden (404 Not Found). Bitte prüfe den Modellnamen auf Tippfehler (z.B. gemini-2.0-flash oder gemini-2.5-flash).`;
+      } else if (errorCode === 429 || errorStatus === 'RESOURCE_EXHAUSTED') {
+        hint = 'Kontingent erschöpft (429 Rate Limit / Quota Exceeded). Das Abfrage-Limit für diesen Key ist aktuell erreicht.';
+      } else if (errorCode >= 500) {
+        hint = 'Google Gemini Serverfehler (5xx). Der Dienst ist eventuell vorübergehend nicht erreichbar.';
+      }
+
+      return {
+        ok: false,
+        status: response.status,
+        errorStatus,
+        hint,
+        errorMessage
+      };
+    } catch (netErr) {
+      return {
+        ok: false,
+        status: 0,
+        hint: 'Netzwerkfehler: Es konnte keine HTTP-Verbindung zu Google Gemini aufgebaut werden.',
+        errorMessage: netErr.message
+      };
+    }
+  }
+
+  // 1. Chat-Modell testen
+  const chatResult = await executeCall(modelToTest);
+  if (!chatResult.ok) {
+    return {
+      success: false,
+      testedModel: modelToTest,
+      status: chatResult.status,
+      hint: chatResult.hint,
+      error: chatResult.hint 
+        ? `${chatResult.hint}\nDetails: ${chatResult.errorMessage}`
+        : `Fehler (${chatResult.status}): ${chatResult.errorMessage}`,
+      details: chatResult.errorMessage
+    };
+  }
+
+  // 2. Falls ein abweichendes Extraktions-Modell angegeben ist, auch dieses prüfen
+  const extModel = extractionModel?.trim();
+  if (extModel && extModel !== modelToTest) {
+    const extResult = await executeCall(extModel);
+    if (!extResult.ok) {
+      return {
+        success: false,
+        testedModel: extModel,
+        status: extResult.status,
+        hint: `Das Chat-Modell (${modelToTest}) funktioniert, aber das Wissensmodell (${extModel}) hat einen Fehler: ${extResult.hint || ''}`,
+        error: `Wissensmodell (${extModel}) fehlerhaft: ${extResult.errorMessage}`,
+        details: extResult.errorMessage
+      };
+    }
+
+    return {
+      success: true,
+      testedModel: `${modelToTest} & ${extModel}`,
+      reply: chatResult.reply,
+      message: `Verbindung erfolgreich hergestellt! Beide konfigurierten Modelle ("${modelToTest}" & "${extModel}") antworten einwandfrei.`
+    };
+  }
+
+  return {
+    success: true,
+    testedModel: modelToTest,
+    reply: chatResult.reply,
+    message: `Verbindung erfolgreich hergestellt! Das Modell "${modelToTest}" antwortet einwandfrei.`
+  };
+}
+
+/**
  * Ruft die konfigurierten Modellnamen aus der Datenbank ab oder nutzt Standardwerte.
  */
 function getModelNames() {

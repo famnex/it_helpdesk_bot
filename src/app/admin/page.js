@@ -286,6 +286,8 @@ export default function AdminDashboardPage() {
   const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '', logoutRedirectUrl: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
   const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
+  const [testGeminiLoading, setTestGeminiLoading] = useState(false);
+  const [testGeminiResult, setTestGeminiResult] = useState(null);
   const [proxycheckConfig, setProxycheckConfig] = useState({
     enabled: false,
     apiKey: '',
@@ -1692,6 +1694,30 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleTestGemini = async () => {
+    setTestGeminiLoading(true);
+    setTestGeminiResult(null);
+
+    try {
+      const res = await fetch('/api/admin/settings/test-gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: geminiConfig.apiKey,
+          chatModel: geminiConfig.chatModel,
+          extractionModel: geminiConfig.extractionModel
+        })
+      });
+
+      const data = await res.json();
+      setTestGeminiResult(data);
+    } catch (err) {
+      setTestGeminiResult({ success: false, error: 'Verbindungsfehler beim Testen der Google Gemini Verbindung.' });
+    } finally {
+      setTestGeminiLoading(false);
+    }
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setSettingsSuccess(false);
@@ -3058,6 +3084,71 @@ export default function AdminDashboardPage() {
                     />
                   </div>
                 </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-800/80">
+                  <span className="text-[11px] text-slate-400">
+                    Überprüft die Gültigkeit des API-Keys und die Erreichbarkeit der konfigurierten Modelle.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleTestGemini}
+                    disabled={testGeminiLoading}
+                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700/80 font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40 shrink-0 cursor-pointer"
+                  >
+                    {testGeminiLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Verbindung prüfen...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-microchip text-violet-400"></i>
+                        <span>Verbindung testen</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {testGeminiResult && (
+                  <div className="animate-fade-in pt-1">
+                    {testGeminiResult.success ? (
+                      <div className="bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+                        <div className="text-emerald-400 bg-emerald-500/10 p-1.5 rounded-lg shrink-0 mt-0.5">
+                          <i className="fa-solid fa-circle-check"></i>
+                        </div>
+                        <div className="space-y-1">
+                          <strong className="text-emerald-400 block font-bold">Verbindung erfolgreich!</strong>
+                          <p className="text-emerald-300/90">{testGeminiResult.message}</p>
+                          {testGeminiResult.reply && (
+                            <p className="text-[11px] text-emerald-400/80 mt-1">
+                              Antwort von Google: <span className="font-mono bg-emerald-900/50 px-1.5 py-0.5 rounded text-white font-semibold">"{testGeminiResult.reply}"</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-red-950/40 border border-red-500/30 text-red-200 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+                        <div className="text-red-400 bg-red-500/10 p-1.5 rounded-lg shrink-0 mt-0.5">
+                          <i className="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div className="space-y-1.5 w-full">
+                          <strong className="text-red-400 block font-bold">Verbindung fehlgeschlagen</strong>
+                          {testGeminiResult.hint && (
+                            <p className="text-red-300 font-medium">{testGeminiResult.hint}</p>
+                          )}
+                          {testGeminiResult.details && (
+                            <div className="mt-2 bg-black/40 border border-red-500/20 p-2.5 rounded-lg text-[11px] font-mono text-red-300/90 break-all space-y-1">
+                              {testGeminiResult.status && (
+                                <div className="text-red-400 font-bold">HTTP Status: {testGeminiResult.status} {testGeminiResult.errorStatus ? `(${testGeminiResult.errorStatus})` : ''}</div>
+                              )}
+                              <div>Fehlermeldung: {testGeminiResult.details}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
