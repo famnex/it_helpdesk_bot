@@ -614,7 +614,14 @@ export default function CustomerChatPage() {
         return;
       }
 
-      if (!res.ok) throw new Error('API-Fehler');
+      if (!res.ok) {
+        let errData = {};
+        try {
+          errData = await res.json();
+        } catch (e) {}
+        const serverError = errData.error || errData.message;
+        throw new Error(serverError || 'API-Fehler');
+      }
 
       const data = await res.json();
 
@@ -686,8 +693,11 @@ export default function CustomerChatPage() {
         }
       }
     } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { sender: 'bot', text: 'Entschuldigung, meine Serververbindung klemmt gerade.' }]);
+      console.error('Chat-Fehler:', err);
+      const displayMsg = err.message && err.message !== 'API-Fehler'
+        ? `${err.message}`
+        : 'Entschuldigung, meine Serververbindung klemmt gerade.';
+      setMessages(prev => [...prev, { sender: 'bot', text: displayMsg }]);
       setIsTyping(false);
     }
   };

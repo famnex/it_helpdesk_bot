@@ -285,7 +285,20 @@ export default function AdminDashboardPage() {
   const [smtpConfig, setSmtpConfig] = useState({ host: '', port: 1025, user: '', pass: '', secure: false, sender: '', sender_name: '' });
   const [idpConfig, setIdpConfig] = useState({ jwtSecret: '', redirectUrl: '', logoutText: '', logoutRedirectUrl: '' });
   const [githubConfig, setGithubConfig] = useState({ repoUrl: '', branch: '' });
-  const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '' });
+  const [geminiConfig, setGeminiConfig] = useState({ apiKey: '', chatModel: '', extractionModel: '', alertEmail: '' });
+  const DEFAULT_GEMINI_MODELS = [
+    { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Empfohlen - Schnell & Leistungsstark)' },
+    { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Höchste Genauigkeit & Tiefe)' },
+    { id: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash (Standard schnell)' },
+    { id: 'gemini-2.0-flash-lite', displayName: 'Gemini 2.0 Flash Lite (Sehr leicht & kostengünstig)' },
+    { id: 'gemini-1.5-flash', displayName: 'Gemini 1.5 Flash (Bewährt & stabil)' },
+    { id: 'gemini-1.5-pro', displayName: 'Gemini 1.5 Pro (Großes Kontextfenster)' }
+  ];
+  const [availableGeminiModels, setAvailableGeminiModels] = useState(DEFAULT_GEMINI_MODELS);
+  const [isLoadingGeminiModels, setIsLoadingGeminiModels] = useState(false);
+  const [geminiModelsStatus, setGeminiModelsStatus] = useState(null);
+  const [customChatModelInput, setCustomChatModelInput] = useState(false);
+  const [customExtractionModelInput, setCustomExtractionModelInput] = useState(false);
   const [testGeminiLoading, setTestGeminiLoading] = useState(false);
   const [testGeminiResult, setTestGeminiResult] = useState(null);
   const [proxycheckConfig, setProxycheckConfig] = useState({
@@ -1433,7 +1446,7 @@ export default function AdminDashboardPage() {
         if (config.smtp_config) setSmtpConfig(config.smtp_config);
         if (config.idp_config) setIdpConfig(config.idp_config);
         if (config.github_config) setGithubConfig(config.github_config);
-        if (config.gemini_config) setGeminiConfig(config.gemini_config);
+        if (config.gemini_config) setGeminiConfig({ apiKey: '', chatModel: '', extractionModel: '', alertEmail: '', ...config.gemini_config });
         if (config.proxycheck_config) setProxycheckConfig(config.proxycheck_config);
       }
 
@@ -1441,6 +1454,7 @@ export default function AdminDashboardPage() {
       loadFlaggedMessages().catch(() => {});
       loadAbusiveChats().catch(() => {});
       loadIpBans().catch(() => {});
+      handleFetchGeminiModels(true).catch(() => {});
     } catch (err) {
       console.error('Fehler beim Laden der Admin-Daten:', err);
     } finally {
@@ -1715,6 +1729,31 @@ export default function AdminDashboardPage() {
       setTestGeminiResult({ success: false, error: 'Verbindungsfehler beim Testen der Google Gemini Verbindung.' });
     } finally {
       setTestGeminiLoading(false);
+    }
+  };
+
+  const handleFetchGeminiModels = async (silent = false) => {
+    setIsLoadingGeminiModels(true);
+    if (!silent) setGeminiModelsStatus(null);
+
+    try {
+      const apiKeyParam = geminiConfig.apiKey ? `?apiKey=${encodeURIComponent(geminiConfig.apiKey)}` : '';
+      const res = await fetch(`/api/admin/settings/gemini-models${apiKeyParam}`);
+      const data = await res.json();
+      if (data.models && data.models.length > 0) {
+        setAvailableGeminiModels(data.models);
+        if (!silent) {
+          setGeminiModelsStatus({ success: true, message: `${data.models.length} Modelle erfolgreich von Google geladen!` });
+        }
+      } else if (!silent) {
+        setGeminiModelsStatus({ success: false, message: data.error || 'Keine Modelle gefunden.' });
+      }
+    } catch (e) {
+      if (!silent) {
+        setGeminiModelsStatus({ success: false, message: 'Verbindungsfehler beim Laden der Modelle.' });
+      }
+    } finally {
+      setIsLoadingGeminiModels(false);
     }
   };
 
@@ -3048,10 +3087,29 @@ export default function AdminDashboardPage() {
 
             {/* Gemini Models Config */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <i className="fa-solid fa-microchip text-violet-500"></i>
-                <span>Google Gemini Konfiguration</span>
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-microchip text-violet-500"></i>
+                  <span>Google Gemini Konfiguration</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => handleFetchGeminiModels(false)}
+                  disabled={isLoadingGeminiModels}
+                  className="self-start sm:self-auto text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Aktuelle Modell-Liste von Google Gemini API abrufen"
+                >
+                  <i className={`fa-solid fa-arrows-rotate ${isLoadingGeminiModels ? 'animate-spin text-violet-400' : 'text-slate-400'}`}></i>
+                  <span>Modelle aus Google API laden</span>
+                </button>
+              </div>
+
+              {geminiModelsStatus && (
+                <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${geminiModelsStatus.success ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20' : 'bg-red-950/40 text-red-300 border border-red-500/20'}`}>
+                  <i className={`fa-solid ${geminiModelsStatus.success ? 'fa-circle-check text-emerald-400' : 'fa-triangle-exclamation text-red-400'}`}></i>
+                  <span>{geminiModelsStatus.message}</span>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -3066,23 +3124,110 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Chat-Modell (z.B. gemini-3.5-flash)</label>
-                    <input 
-                      type="text" 
-                      value={geminiConfig.chatModel || ''}
-                      onChange={(e) => setGeminiConfig({ ...geminiConfig, chatModel: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] text-slate-400 font-bold block">Chat-Modell</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setCustomChatModelInput(!customChatModelInput)} 
+                        className="text-[10px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
+                      >
+                        {customChatModelInput ? 'Aus Liste wählen' : 'Manuell eingeben'}
+                      </button>
+                    </div>
+                    {customChatModelInput ? (
+                      <input 
+                        type="text" 
+                        value={geminiConfig.chatModel || ''}
+                        onChange={(e) => setGeminiConfig({ ...geminiConfig, chatModel: e.target.value })}
+                        placeholder="z.B. gemini-2.5-flash"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                      />
+                    ) : (
+                      <select 
+                        value={availableGeminiModels.some(m => m.id === geminiConfig.chatModel) ? geminiConfig.chatModel : '__custom__'}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setCustomChatModelInput(true);
+                          } else {
+                            setGeminiConfig({ ...geminiConfig, chatModel: e.target.value });
+                          }
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500 cursor-pointer"
+                      >
+                        {availableGeminiModels.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.displayName || m.id}
+                          </option>
+                        ))}
+                        {!availableGeminiModels.some(m => m.id === geminiConfig.chatModel) && geminiConfig.chatModel && (
+                          <option value="__custom__">
+                            Aktuell: {geminiConfig.chatModel}
+                          </option>
+                        )}
+                      </select>
+                    )}
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Wissens-/Deduplizierungs-Modell (z.B. gemini-3.5-flash)</label>
-                    <input 
-                      type="text" 
-                      value={geminiConfig.extractionModel || ''}
-                      onChange={(e) => setGeminiConfig({ ...geminiConfig, extractionModel: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] text-slate-400 font-bold block">Wissens-/Deduplizierungs-Modell</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setCustomExtractionModelInput(!customExtractionModelInput)} 
+                        className="text-[10px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
+                      >
+                        {customExtractionModelInput ? 'Aus Liste wählen' : 'Manuell eingeben'}
+                      </button>
+                    </div>
+                    {customExtractionModelInput ? (
+                      <input 
+                        type="text" 
+                        value={geminiConfig.extractionModel || ''}
+                        onChange={(e) => setGeminiConfig({ ...geminiConfig, extractionModel: e.target.value })}
+                        placeholder="z.B. gemini-2.5-flash"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                      />
+                    ) : (
+                      <select 
+                        value={availableGeminiModels.some(m => m.id === geminiConfig.extractionModel) ? geminiConfig.extractionModel : '__custom__'}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setCustomExtractionModelInput(true);
+                          } else {
+                            setGeminiConfig({ ...geminiConfig, extractionModel: e.target.value });
+                          }
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500 cursor-pointer"
+                      >
+                        {availableGeminiModels.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.displayName || m.id}
+                          </option>
+                        ))}
+                        {!availableGeminiModels.some(m => m.id === geminiConfig.extractionModel) && geminiConfig.extractionModel && (
+                          <option value="__custom__">
+                            Aktuell: {geminiConfig.extractionModel}
+                          </option>
+                        )}
+                      </select>
+                    )}
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                    <i className="fa-solid fa-bell text-amber-500 mr-1.5"></i>
+                    Warn-E-Mail bei Gemini-Störungen (Optional)
+                  </label>
+                  <input 
+                    type="email" 
+                    value={geminiConfig.alertEmail || ''}
+                    onChange={(e) => setGeminiConfig({ ...geminiConfig, alertEmail: e.target.value })}
+                    placeholder="z.B. it-admin@schule.de"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Erhält automatisch eine Warnmeldung, falls Google Gemini ausfällt oder Fehler meldet und dadurch Benutzeranfragen oder Ticket-Erstellungen fehlschlagen.
+                  </p>
                 </div>
 
                 <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-800/80">

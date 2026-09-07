@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import db from './db';
-import { generateMagicLinkToken } from './auth';
+import db from './db.js';
+import { generateMagicLinkToken } from './auth.js';
 
 /**
  * Ermittelt die Basis-URL des Helpdesks für E-Mail-Links.
@@ -329,4 +329,124 @@ export async function sendTicketResolvedNotification(customerEmail, ticketId, ti
   `;
 
   return sendMail({ to: customerEmail, subject, html, text });
+}
+
+/**
+ * Sendet eine Warn-E-Mail an die in der Google Gemini Konfiguration hinterlegte E-Mail-Adresse,
+ * wenn Gemini ausfällt oder gestört ist und Anfragen/Tickets beeinträchtigt sind.
+ * Beinhaltet einen automatischen Cooldown (30 Minuten), um Postfächer vor E-Mail-Fluten zu schützen.
+ */
+export async function sendGeminiOutageAlert({ errorMessage, modelName, context = 'Ticket-Erstellung / Chat-Assistent', force = false }) {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('gemini_config');
+    if (!row || !row.value) return false;
+
+    const config = JSON.parse(row.value);
+    const alertEmail = config.alertEmail ? String(config.alertEmail).trim() : '';
+    if (!alertEmail || !alertEmail.includes('@')) {
+      return false; // Keine gültige Warn-E-Mail hinterlegt
+    }
+
+    // Cooldown-Check (30 Minuten)
+    if (!force) {
+      try {
+        const lastAlertRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('last_gemini_alert_at');
+        if (lastAlertRow && lastAlertRow.value) {
+          const lastAlertTime = parseInt(lastAlertRow.value, 10);
+          const cooldownMs = 30 * 60 * 1000;
+          if (!isNaN(lastAlertTime) && (Date.now() - lastAlertTime < cooldownMs)) {
+            console.log(`[Gemini-Outage-Alert] Cooldown aktiv. Letzte Warnung vor ${Math.round((Date.now() - lastAlertTime) / 60000)} Minuten gesendet.`);
+            return false;
+          }
+        }
+      } catch (cdErr) {
+        console.error('Fehler beim Prüfen des Alert-Cooldowns:', cdErr);
+      }
+    }
+
+    // Zeitstempel aktualisieren
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('last_gemini_alert_at', ?)").run(String(Date.now()));
+    } catch (e) {}
+
+    const host = getBaseAppUrl();
+    const settingsLink = `${host}/admin`;
+
+    const subject = `⚠️ WARNUNG: Google Gemini Störung im IT-Helpdesk`;
+    const text = `WARNUNG: Google Gemini Störung im IT-Helpdesk
+
+Hallo Administrator,
+
+die Verbindung zur Google Gemini API ist aktuell gestört oder liefert Fehler.
+Dadurch können Benutzeranfragen im KI-Assistenten nicht verarbeitet und keine Support-Tickets über die KI angelegt werden.
+
+Details zur Störung:
+• Bereich: ${context}
+• Modell: ${modelName || 'Standard-Modell'}
+• Fehlermeldung: ${errorMessage || 'Unbekannter API-Fehler'}
+• Zeitpunkt: ${new Date().toLocaleString('de-DE')}
+
+Bitte prüfe die Google Gemini Einstellungen und den API-Key im Admin-Bereich:
+${settingsLink}
+
+Hinweis: Um dein Postfach zu schützen, wird diese Warnmeldung maximal einmal alle 30 Minuten versendet.`;
+
+    const html = `
+      <div style="font-family: sans-serif; padding: 25px; color: #1e293b; max-width: 650px; margin: 0 auto; border: 1px solid #fecaca; border-radius: 12px; background-color: #ffffff;">
+        <div style="background-color: #fee2e2; border: 1px solid #f87171; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+          <h2 style="color: #991b1b; margin: 0 0 8px 0; font-size: 18px;">
+            ⚠️ Google Gemini Störung gemeldet
+          </h2>
+          <p style="color: #7f1d1d; margin: 0; font-size: 13px; line-height: 1.5;">
+            Die Google Gemini API ist aktuell nicht erreichbar oder liefert Fehler. Dadurch können Benutzeranfragen im KI-Assistenten nicht beantwortet und keine Tickets automatisch erstellt werden.
+          </p>
+        </div>
+
+        <p style="font-size: 14px; margin-bottom: 15px;">Hallo Administrator,</p>
+        <p style="font-size: 14px; line-height: 1.5; color: #334155; margin-bottom: 20px;">
+          Bei einer Anfrage an die Google Gemini KI ist soeben ein Fehler aufgetreten:
+        </p>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 25px; font-size: 12px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 4px 0; color: #64748b; width: 140px; font-weight: bold;">Betroffener Bereich:</td>
+              <td style="padding: 4px 0; color: #0f172a;">${context}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #64748b; font-weight: bold;">Modell:</td>
+              <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${modelName || 'Standard-Modell'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #64748b; font-weight: bold;">Zeitpunkt:</td>
+              <td style="padding: 4px 0; color: #0f172a;">${new Date().toLocaleString('de-DE')}</td>
+            </tr>
+          </table>
+          <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
+            <strong style="color: #64748b; display: block; margin-bottom: 5px;">Fehlermeldung:</strong>
+            <pre style="background-color: #0f172a; color: #f87171; padding: 10px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 11px; margin: 0; white-space: pre-wrap; word-break: break-all;">${errorMessage || 'Unbekannter API-Fehler'}</pre>
+          </div>
+        </div>
+
+        <p style="margin: 25px 0;">
+          <a href="${settingsLink}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 13px; display: inline-block;">
+            Gemini-Einstellungen im Admin-Bereich prüfen
+          </a>
+        </p>
+
+        <p style="color: #94a3b8; font-size: 11px; margin-top: 25px; border-top: 1px solid #f1f5f9; padding-top: 15px; line-height: 1.4;">
+          <strong>Hinweis zum Spamschutz:</strong> Diese Benachrichtigung wird maximal einmal alle 30 Minuten versendet, auch wenn weitere Fehler auftreten.
+        </p>
+      </div>
+    `;
+
+    const success = await sendMail({ to: alertEmail, subject, html, text });
+    if (success) {
+      console.log(`[Gemini-Outage-Alert] Warn-E-Mail erfolgreich an ${alertEmail} gesendet.`);
+    }
+    return success;
+  } catch (err) {
+    console.error('Fehler beim Senden der Gemini-Störungs-Mail:', err);
+    return false;
+  }
 }

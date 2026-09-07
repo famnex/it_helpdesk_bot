@@ -2,6 +2,7 @@ import db from './db.js';
 import fs from 'fs';
 import path from 'path';
 import { fixUploadUrl } from './formatting.js';
+import { sendGeminiOutageAlert } from './mailer.js';
 
 function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -46,13 +47,24 @@ export async function testGeminiConnection({ apiKey, chatModel, extractionModel 
     };
   }
 
-  const modelToTest = chatModel?.trim() || getModelNames().chatModel || 'gemini-2.0-flash';
+  const modelToTest = chatModel?.trim() || getModelNames().chatModel || 'gemini-2.5-flash';
 
   const testPayload = {
-    contents: [{ parts: [{ text: "Antworte bitte ausschließlich mit dem Wort: 'OK'." }] }]
+    contents: [{ parts: [{ text: "Antworte bitte ausschließlich mit dem Wort: 'OK'." }] }],
+    systemInstruction: { parts: [{ text: "Du bist ein IT-Helpdesk Bot-Test." }] }
   };
 
   async function executeCall(targetModel) {
+    if (targetModel.includes('3.5-flash')) {
+      return {
+        ok: false,
+        status: 404,
+        errorStatus: 'NOT_FOUND',
+        hint: `Das Modell "${targetModel}" existiert bei Google nicht! Bitte wähle ein offizielles Modell wie "gemini-2.5-flash" oder "gemini-2.0-flash" aus dem Dropdown.`,
+        errorMessage: `Modell "${targetModel}" ist ein fiktiver Name und wird von Google nicht bereitgestellt.`
+      };
+    }
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${effectiveKey}`;
     try {
       const response = await fetch(url, {
@@ -86,7 +98,7 @@ export async function testGeminiConnection({ apiKey, chatModel, extractionModel 
       } else if (errorCode === 403 || errorStatus === 'PERMISSION_DENIED') {
         hint = 'Zugriff verweigert (403 Forbidden). Bitte prüfe die Berechtigungen in der Google Cloud Console und ob die Generative Language API im Google-Konto aktiviert ist.';
       } else if (errorCode === 404 || errorStatus === 'NOT_FOUND' || errorMessage.toLowerCase().includes('not found')) {
-        hint = `Das Modell "${targetModel}" wurde nicht gefunden (404 Not Found). Bitte prüfe den Modellnamen auf Tippfehler (z.B. gemini-2.0-flash oder gemini-2.5-flash).`;
+        hint = `Das Modell "${targetModel}" wurde nicht gefunden (404 Not Found). Bitte prüfe den Modellnamen oder wähle eines der verfügbaren Modelle aus dem Dropdown (z.B. gemini-2.5-flash).`;
       } else if (errorCode === 429 || errorStatus === 'RESOURCE_EXHAUSTED') {
         hint = 'Kontingent erschöpft (429 Rate Limit / Quota Exceeded). Das Abfrage-Limit für diesen Key ist aktuell erreicht.';
       } else if (errorCode >= 500) {
@@ -165,17 +177,100 @@ function getModelNames() {
     if (row) {
       const config = JSON.parse(row.value);
       return {
-        chatModel: config.chatModel || 'gemini-3.5-flash',
-        extractionModel: config.extractionModel || 'gemini-3.5-flash'
+        chatModel: (config.chatModel && !config.chatModel.includes('3.5-flash')) ? config.chatModel : 'gemini-2.5-flash',
+        extractionModel: (config.extractionModel && !config.extractionModel.includes('3.5-flash')) ? config.extractionModel : 'gemini-2.5-flash'
       };
     }
   } catch (e) {
     // ignorieren
   }
   return {
-    chatModel: 'gemini-3.5-flash',
-    extractionModel: 'gemini-3.5-flash'
+    chatModel: 'gemini-2.5-flash',
+    extractionModel: 'gemini-2.5-flash'
   };
+}
+
+/**
+ * Ruft die Liste der aktuell verfügbaren Modelle direkt von der Google Gemini API ab.
+ */
+export async function getAvailableGeminiModels(apiKeyOverride = null) {
+  let effectiveKey = apiKeyOverride;
+  if (!effectiveKey || effectiveKey === '********') {
+    effectiveKey = getApiKey();
+  }
+
+  const fallbackModels = [
+    { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Empfohlen - Schnell & Leistungsstark)' },
+    { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Höchste Genauigkeit & Tiefe)' },
+    { id: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash (Standard schnell)' },
+    { id: 'gemini-2.0-flash-lite', displayName: 'Gemini 2.0 Flash Lite (Sehr leicht & kostengünstig)' },
+    { id: 'gemini-1.5-flash', displayName: 'Gemini 1.5 Flash (Bewährt & stabil)' },
+    { id: 'gemini-1.5-pro', displayName: 'Gemini 1.5 Pro (Großes Kontextfenster)' }
+  ];
+
+  if (!effectiveKey) {
+    return {
+      success: false,
+      error: 'Kein API-Key vorhanden.',
+      models: fallbackModels
+    };
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${effectiveKey}`;
+    const response = await fetch(url);
+    const rawText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      data = rawText;
+    }
+
+    if (!response.ok) {
+      const errMsg = data?.error?.message || `HTTP ${response.status}`;
+      return {
+        success: false,
+        error: `Fehler beim Abrufen der Modelle von Google: ${errMsg}`,
+        models: fallbackModels
+      };
+    }
+
+    const fetchedModels = (data.models || [])
+      .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => {
+        const id = m.name.replace(/^models\//, '');
+        return {
+          id,
+          displayName: m.displayName ? `${m.displayName} (${id})` : id,
+          description: m.description || '',
+          inputTokenLimit: m.inputTokenLimit,
+          outputTokenLimit: m.outputTokenLimit
+        };
+      });
+
+    fetchedModels.sort((a, b) => {
+      const getPriority = (id) => {
+        if (id.startsWith('gemini-2.5')) return 100;
+        if (id.startsWith('gemini-2.0')) return 80;
+        if (id.startsWith('gemini-1.5')) return 60;
+        if (id.startsWith('gemini-1.0')) return 40;
+        return 20;
+      };
+      return getPriority(b.id) - getPriority(a.id);
+    });
+
+    return {
+      success: true,
+      models: fetchedModels.length > 0 ? fetchedModels : fallbackModels
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Netzwerkfehler beim Abrufen der Modelle: ${err.message}`,
+      models: fallbackModels
+    };
+  }
 }
 
 /**
@@ -184,27 +279,59 @@ function getModelNames() {
 async function callGemini(modelName, payload) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY ist nicht konfiguriert.');
+    const err = new Error('GEMINI_API_KEY ist nicht konfiguriert.');
+    sendGeminiOutageAlert({
+      errorMessage: 'Der Google Gemini API-Key ist nicht konfiguriert oder fehlt in den Einstellungen.',
+      modelName,
+      context: 'KI-Anfrage / Ticket-Erstellung'
+    }).catch(() => {});
+    throw err;
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API Fehler (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json();
   try {
-    return data.candidates[0].content.parts[0].text;
-  } catch (err) {
-    throw new Error('Ungültiges Antwortformat von der Gemini API.');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let errorMsg = `Gemini API Fehler (${response.status}): ${errText}`;
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed?.error?.message) {
+          errorMsg = `Gemini API Fehler (${response.status}): ${parsed.error.message}`;
+        }
+      } catch (e) {}
+
+      // Warnung an Admin senden (mit Cooldown)
+      sendGeminiOutageAlert({
+        errorMessage: errorMsg,
+        modelName,
+        context: 'KI-Verarbeitung / Chat & Ticket-Erstellung'
+      }).catch(() => {});
+
+      throw new Error(errorMsg);
+    }
+
+    const data = await response.json();
+    try {
+      return data.candidates[0].content.parts[0].text;
+    } catch (err) {
+      throw new Error('Ungültiges Antwortformat von der Gemini API.');
+    }
+  } catch (fetchErr) {
+    if (!fetchErr.message.startsWith('Gemini API Fehler')) {
+      sendGeminiOutageAlert({
+        errorMessage: `Netzwerkfehler beim Verbindungsaufbau: ${fetchErr.message}`,
+        modelName,
+        context: 'Netzwerkverbindung zu generativelanguage.googleapis.com'
+      }).catch(() => {});
+    }
+    throw fetchErr;
   }
 }
 

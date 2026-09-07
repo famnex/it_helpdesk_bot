@@ -780,6 +780,9 @@ export async function POST(request) {
 
   } catch (err) {
     console.error('Fehler bei der Chat-Verarbeitung:', err);
-    return NextResponse.json({ error: 'Fehler bei der Antwortgenerierung.' }, { status: 500 });
+    return NextResponse.json({ 
+      error: `Fehler bei der Antwortgenerierung: ${err.message}`,
+      details: err.message
+    }, { status: 500 });
   }
 }

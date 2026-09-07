@@ -195,6 +195,18 @@ try {
     console.error("Migration users display_name cleanup:", e);
   }
 
+  // Migration: Ersetze ungültiges fiktives Modell "gemini-3.5-flash" durch "gemini-2.5-flash"
+  try {
+    const gemRow = db.prepare("SELECT value FROM settings WHERE key = 'gemini_config'").get();
+    if (gemRow && gemRow.value && gemRow.value.includes('3.5-flash')) {
+      const updatedVal = gemRow.value.replaceAll('gemini-3.5-flash', 'gemini-2.5-flash');
+      db.prepare("UPDATE settings SET value = ? WHERE key = 'gemini_config'").run(updatedVal);
+      console.log('Migration: gemini-3.5-flash erfolgreich durch gemini-2.5-flash in settings ersetzt.');
+    }
+  } catch (e) {
+    console.error("Migration gemini_config 3.5-flash cleanup:", e);
+  }
+
   // Migration: ticket_messages Tabelle aktualisieren, falls der Check-Constraint noch kein 'bot' enthält
   const ticketMessagesSql = db.prepare("SELECT sql FROM sqlite_master WHERE name='ticket_messages'").get()?.sql || '';
   if (ticketMessagesSql && !ticketMessagesSql.includes("'bot'")) {
@@ -724,8 +736,8 @@ if (settingsCount === 0) {
   // Gemini API & Modelle Konfiguration
   insertSetting.run('gemini_config', JSON.stringify({
     apiKey: '',
-    chatModel: 'gemini-3.5-flash',
-    extractionModel: 'gemini-3.5-flash'
+    chatModel: 'gemini-2.5-flash',
+    extractionModel: 'gemini-2.5-flash'
   }));
 
   console.log('Seed: Standard-Einstellungen angelegt.');
