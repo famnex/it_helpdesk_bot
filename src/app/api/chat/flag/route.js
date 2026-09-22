@@ -1,3 +1,5 @@
+import { canAccessChat } from '@/lib/access';
+import { getSessionUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
@@ -8,6 +10,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Nachrichten-ID fehlt.' }, { status: 400 });
     }
 
+    const message = db.prepare('SELECT chat_id FROM chat_messages WHERE id=?').get(messageId);
+    if (!message || !await canAccessChat(message.chat_id, await getSessionUser())) return NextResponse.json({error:'Kein Zugriff.'},{status:403});
     // Nachricht aktualisieren
     const result = db.prepare(`
       UPDATE chat_messages 

@@ -1,4 +1,10 @@
 'use client';
+import { mergeConversation } from '@/lib/conversations';
+import Dialog from '@/components/Dialog';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { notify } from '@/lib/feedback';
+import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment } from '@/lib/attachments';
+import VerificationBadge from '@/components/VerificationBadge';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -32,9 +38,11 @@ export default function AgentTicketDetailPage() {
   const [isSending, setIsSending] = useState(false);
 
   // Forms
+  const replyId = useRef(null);
   const [replyText, setReplyText] = useState('');
   const [isInternal, setIsInternal] = useState(false);
-  const [attachment, setAttachment] = useState(null); // { file, previewUrl, name }
+  const [attachment, setAttachment] = useState(null);
+  useUnsavedChanges(!!replyText.trim() || !!attachment); // { file, previewUrl, name }
   const [closingMessage, setClosingMessage] = useState('');
   const [learnBotKnowledge, setLearnBotKnowledge] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -93,17 +101,16 @@ export default function AgentTicketDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Die Datei überschreitet die maximale Größe von 10 MB.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
+    const error = attachmentError(file);
+    if (error) { notify(error); return; }
+    if (attachment && !window.confirm('Den gewählten Anhang ersetzen?')) return;
+    if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
     const isImg = file.type.startsWith('image/');
     let previewUrl = null;
     if (isImg) {
       previewUrl = URL.createObjectURL(file);
     }
+    replyId.current = null;
     setAttachment({
       file,
       previewUrl,
@@ -111,6 +118,8 @@ export default function AgentTicketDetailPage() {
       isImage: isImg
     });
   };
+
+  useEffect(() => () => { if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl); }, [attachment?.previewUrl]);
 
   const handleRemoveAttachment = () => {
     if (attachment?.previewUrl) {
@@ -120,6 +129,7 @@ export default function AgentTicketDetailPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const isNearBottomRef = useRef(true);
   useEffect(() => {
     // Session prüfen
     fetch('/api/auth/me')
@@ -161,8 +171,7 @@ export default function AgentTicketDetailPage() {
 
             setMessages(prev => {
               const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
-              const existingTexts = new Set(prev.map(m => (m.text || '').trim()));
-              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id) && !existingTexts.has((nm.text || '').trim()));
+              const toAdd = data.newMessages.filter(nm => !existingIds.has(nm.id));
               if (toAdd.length === 0) return prev;
               return [...prev, ...toAdd];
             });
@@ -205,7 +214,7 @@ export default function AgentTicketDetailPage() {
 
   const handleReplyInputChange = (e) => {
     const val = e.target.value;
-    setReplyText(val);
+    setReplyText(val); replyId.current = null;
 
     const now = Date.now();
     if (now - lastTypedTimeRef.current > 2000) {
@@ -224,7 +233,7 @@ export default function AgentTicketDetailPage() {
     }
   };
 
-  const isNearBottomRef = useRef(true);
+
 
   const handleScroll = (e) => {
     const el = e.target;
@@ -233,13 +242,13 @@ export default function AgentTicketDetailPage() {
     }
   };
 
-  const scrollToBottom = (force = false) => {
+  function scrollToBottom(force = false) {
     if (force || isNearBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }
 
-  const loadData = async () => {
+  async function loadData() {
     try {
       const [ticketRes, agentsRes] = await Promise.all([
         fetch(`/api/tickets/${id}`),
@@ -255,113 +264,12 @@ export default function AgentTicketDetailPage() {
         if (numericTicketIds.length > 0) {
           maxTicketMsgIdRef.current = Math.max(...numericTicketIds, 0);
         }
+        let history = [];
         if (data.ticket.chatId) {
-          try {
-            const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
-            if (chatRes.ok) {
-              const chatData = await chatRes.json();
-              const chatMessages = chatData.messages || [];
-              const ticketCreatedEventIndex = chatMessages.findIndex(m => m.text && m.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:'));
-              
-              let preTicketMessages = [];
-              let postTicketMessages = [];
-              
-              if (ticketCreatedEventIndex !== -1) {
-                preTicketMessages = chatMessages.slice(0, ticketCreatedEventIndex);
-                postTicketMessages = chatMessages.slice(ticketCreatedEventIndex + 1);
-              } else {
-                preTicketMessages = chatMessages;
-              }
-
-              const ticketCreatedTime = data.ticket.createdAt ? new Date(data.ticket.createdAt).getTime() : 0;
-
-              const chatHistory = preTicketMessages.map(m => {
-                const mTime = m.createdAt ? new Date(m.createdAt).getTime() : 0;
-                // Pre-Ticket ist eine Nachricht nur dann, wenn sie VOR der Ticketerstellung gesendet wurde
-                const isPre = ticketCreatedTime > 0 ? (mTime < ticketCreatedTime - 1000) : true;
-                return {
-                  ...m,
-                  isPreTicket: isPre,
-                  senderRole: m.sender === 'user' ? 'customer' : 'bot',
-                  senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
-                  senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
-                  text: m.text,
-                  imageUrl: m.imageUrl,
-                  createdAt: m.createdAt
-                };
-              });
-
-              const missingPostMessages = postTicketMessages
-                .map(m => ({
-                  ...m,
-                  isPreTicket: false,
-                  senderRole: m.sender === 'user' ? 'customer' : 'bot',
-                  senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
-                  senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
-                  text: m.text,
-                  imageUrl: m.imageUrl,
-                  createdAt: m.createdAt
-                }))
-                .filter(pm => {
-                  const existsInTicket = ticketMessages.some(tm => 
-                    tm.senderRole === pm.senderRole && 
-                    tm.text === pm.text
-                  );
-                  return !existsInTicket;
-                });
-
-              const combined = [...chatHistory, ...missingPostMessages, ...ticketMessages];
-              
-              // Eindeutige Nachrichten filtern (um Duplikate aus Chat-Import und Pre-Ticket-Fetch zu verhindern)
-              const seenMap = new Set();
-              const deduplicated = [];
-              for (const m of combined) {
-                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-                if (!seenMap.has(key)) {
-                  seenMap.add(key);
-                  deduplicated.push(m);
-                }
-              }
-
-              deduplicated.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-              setMessages(deduplicated);
-            } else {
-              const seenMap = new Set();
-              const deduplicated = [];
-              for (const m of ticketMessages) {
-                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-                if (!seenMap.has(key)) {
-                  seenMap.add(key);
-                  deduplicated.push(m);
-                }
-              }
-              setMessages(deduplicated);
-            }
-          } catch (e) {
-            console.error('Fehler beim Laden des Pre-Ticket-Chats:', e);
-            const seenMap = new Set();
-            const deduplicated = [];
-            for (const m of ticketMessages) {
-              const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-              if (!seenMap.has(key)) {
-                seenMap.add(key);
-                deduplicated.push(m);
-              }
-            }
-            setMessages(deduplicated);
-          }
-        } else {
-          const seenMap = new Set();
-          const deduplicated = [];
-          for (const m of ticketMessages) {
-            const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-            if (!seenMap.has(key)) {
-              seenMap.add(key);
-              deduplicated.push(m);
-            }
-          }
-          setMessages(deduplicated);
+          const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
+          if (chatRes.ok) history = (await chatRes.json()).messages || [];
         }
+        setMessages(mergeConversation(history,ticketMessages,data.ticket));
       } else {
         router.push('/agent');
       }
@@ -375,18 +283,20 @@ export default function AgentTicketDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleSendReply = async (e) => {
     e.preventDefault();
     if ((!replyText.trim() && !attachment) || isSending) return;
 
     setIsSending(true);
+    replyId.current ||= crypto.randomUUID();
     try {
-      let uploadedUrl = null;
-      if (attachment?.file) {
+      let uploadedUrl = attachment?.uploadedUrl || null;
+      if (attachment?.file && !uploadedUrl) {
         const formData = new FormData();
         formData.append('file', attachment.file);
+        formData.append('ticketId',id);
         const uploadRes = await fetch('/api/tickets/upload', {
           method: 'POST',
           body: formData
@@ -394,8 +304,9 @@ export default function AgentTicketDetailPage() {
         if (uploadRes.ok) {
           const uploadData = await uploadRes.json();
           uploadedUrl = uploadData.url;
+          setAttachment(previous => previous ? {...previous,uploadedUrl:uploadData.url} : previous);
         } else {
-          alert('Fehler beim Hochladen des Dateianhangs.');
+          notify('Fehler beim Hochladen des Dateianhangs.');
           setIsSending(false);
           return;
         }
@@ -403,7 +314,7 @@ export default function AgentTicketDetailPage() {
 
       const res = await fetch(`/api/tickets/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': replyId.current },
         body: JSON.stringify({ 
           text: replyText,
           is_internal: isInternal,
@@ -411,15 +322,16 @@ export default function AgentTicketDetailPage() {
         })
       });
       if (res.ok) {
-        setReplyText('');
+        setReplyText(''); replyId.current = null;
         handleRemoveAttachment();
         setIsInternal(false);
         await loadData();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Senden.');
+        notify(data.error || 'Fehler beim Senden.');
       }
     } catch (err) {
+      notify('Senden fehlgeschlagen. Dein Entwurf ist erhalten.');
       console.error('Fehler beim Senden:', err);
     } finally {
       setIsSending(false);
@@ -465,7 +377,7 @@ export default function AgentTicketDetailPage() {
         setLearnBotKnowledge(false);
         await loadData();
       } else {
-        alert(data.error || 'Fehler beim Schließen.');
+        notify(data.error || 'Fehler beim Schließen.');
       }
     } catch (err) {
       console.error('Fehler beim Schließen des Tickets:', err);
@@ -489,7 +401,7 @@ export default function AgentTicketDetailPage() {
         await loadData();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Ändern des Themas.');
+        notify(data.error || 'Fehler beim Ändern des Themas.');
       }
     } catch (err) {
       console.error('Fehler beim Aktualisieren des Themas:', err);
@@ -512,11 +424,11 @@ export default function AgentTicketDetailPage() {
         await loadData();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Wiedereröffnen.');
+        notify(data.error || 'Fehler beim Wiedereröffnen.');
       }
     } catch (err) {
       console.error('Fehler beim Wiedereröffnen:', err);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -573,7 +485,7 @@ export default function AgentTicketDetailPage() {
                     type="button" 
                     onClick={() => setIsEditingTitle(false)}
                     disabled={isSavingTitle}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 p-1.5 rounded-lg text-xs flex items-center justify-center shrink-0 w-7 h-7 transition-colors"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded-lg text-xs flex items-center justify-center shrink-0 w-7 h-7 transition-colors"
                     title="Abbrechen"
                   >
                     <i className="fa-solid fa-xmark"></i>
@@ -592,21 +504,21 @@ export default function AgentTicketDetailPage() {
                     className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors"
                     title="Thema bearbeiten"
                   >
-                    <i className="fa-solid fa-pen text-[9px]"></i>
+                    <i className="fa-solid fa-pen text-xs"></i>
                   </button>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${statusClass} shrink-0`}>{statusLabel}</span>
                 </div>
               )}
             </div>
             
             {/* Sub-header meta line with user status */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400 mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400 mt-0.5">
               <span className="truncate max-w-[180px] sm:max-w-xs">
                 Ersteller: <span className="font-semibold text-slate-200">{ticket.creatorName ? `${ticket.creatorName} (${ticket.creatorEmail})` : ticket.creatorEmail}</span>
               </span>
 
               {partnerPresence && (
-                <span className="inline-flex items-center gap-1.5 text-[9px] font-medium px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 shrink-0">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 shrink-0">
                   <span className={`w-1.5 h-1.5 rounded-full ${
                     partnerPresence.isOnline 
                       ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
@@ -619,17 +531,8 @@ export default function AgentTicketDetailPage() {
               )}
 
               {/* Status-Badge: Angemeldeter User vs. Gast */}
-              {ticket.isRegisteredUser === 1 ? (
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-full shrink-0">
-                  <i className="fa-solid fa-user-check text-[8px]"></i>
-                  <span>Angemeldeter User</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded-full shrink-0">
-                  <i className="fa-solid fa-user-slash text-[8px]"></i>
-                  <span>Gast / Nicht angemeldet</span>
-                </span>
-              )}
+              <VerificationBadge method={ticket.creatorAuthMethod} />
+              {ticket.aiEnabled === 0 && <span className="text-sm text-slate-300">Ohne KI</span>}
             </div>
           </div>
         </div>
@@ -640,7 +543,7 @@ export default function AgentTicketDetailPage() {
             <select 
               value={ticket.assignedAgentId || ''}
               onChange={(e) => handleAssign(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-200 max-w-[110px] sm:max-w-[150px] truncate"
+              className="bg-slate-950 border border-slate-800 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 text-slate-200 max-w-[110px] sm:max-w-[150px] truncate"
             >
               <option value="">-- Zuweisen --</option>
               {agents.map(ag => (
@@ -654,7 +557,7 @@ export default function AgentTicketDetailPage() {
               onClick={() => setShowCloseModal(true)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1 rounded-lg transition-all shadow-md flex items-center gap-1 shrink-0 cursor-pointer"
             >
-              <i className="fa-solid fa-check text-[10px]"></i>
+              <i className="fa-solid fa-check text-xs"></i>
               <span className="hidden sm:inline">Schließen</span>
             </button>
           </div>
@@ -665,7 +568,7 @@ export default function AgentTicketDetailPage() {
               className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 font-semibold text-xs px-3 py-1.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 cursor-pointer"
               title="Ticket wieder öffnen"
             >
-              <i className="fa-solid fa-lock-open text-[10px]"></i>
+              <i className="fa-solid fa-lock-open text-xs"></i>
               <span>Wieder öffnen</span>
             </button>
           </div>
@@ -688,7 +591,7 @@ export default function AgentTicketDetailPage() {
                 </span>
                 <button onClick={() => setCloseSuccessChunks(null)} className="text-emerald-400 hover:text-emerald-200 text-xs"><i className="fa-solid fa-xmark"></i></button>
               </div>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-xs text-slate-400">
                 Die Lösung wurde analysiert und {closeSuccessChunks.filter(c => c.isNew).length} neue Chunks wurden der Wissensdatenbank hinzugefügt. ({closeSuccessChunks.filter(c => !c.isNew).length} Duplikate verworfen).
               </p>
             </div>
@@ -738,14 +641,14 @@ export default function AgentTicketDetailPage() {
                     {showDateDivider && (
                       <div className="flex items-center gap-4 py-2 justify-center my-2">
                         <div className="h-px bg-slate-800 flex-1"></div>
-                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                           {getDateDividerLabel(msg.createdAt)}
                         </span>
                         <div className="h-px bg-slate-800 flex-1"></div>
                       </div>
                     )}
                     <div className="flex justify-center">
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
                         {msg.text}
                       </span>
                     </div>
@@ -770,7 +673,7 @@ export default function AgentTicketDetailPage() {
                     <img 
                       src={getCleanImageUrl(msg.senderAvatarUrl)} 
                       alt="Avatar" 
-                      className="w-8 h-8 rounded-xl object-cover border border-slate-850 shadow-md mt-1 shrink-0" 
+                      className="w-8 h-8 rounded-xl object-cover border border-slate-800 shadow-md mt-1 shrink-0"
                     />
                   );
                 }
@@ -789,7 +692,7 @@ export default function AgentTicketDetailPage() {
                   {showDateDivider && (
                     <div className="flex items-center gap-4 py-2 justify-center my-2">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                         {getDateDividerLabel(msg.createdAt)}
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -798,8 +701,8 @@ export default function AgentTicketDetailPage() {
                   {index === 0 && msg.isPreTicket && (
                     <div className="flex items-center gap-4 py-4 justify-center">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[9px] bg-slate-900 border border-slate-800 text-slate-500 px-3 py-1 rounded-full font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-sm">
-                        <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-500 px-3 py-1 rounded-full font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-sm">
+                        <i className="fa-solid fa-clock-rotate-left text-xs"></i>
                         <span>Chatverlauf vor Ticket</span>
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -808,8 +711,8 @@ export default function AgentTicketDetailPage() {
                   {isFirstTicketMessage && (
                     <div className="flex items-center gap-4 py-4 justify-center">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[9px] bg-slate-900 border border-slate-800 text-violet-400 px-3 py-1 rounded-full font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-sm">
-                        <i className="fa-solid fa-ticket-simple text-[10px]"></i>
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-violet-400 px-3 py-1 rounded-full font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-sm">
+                        <i className="fa-solid fa-ticket-simple text-xs"></i>
                         <span>Ticket wurde erstellt</span>
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -822,13 +725,13 @@ export default function AgentTicketDetailPage() {
                     <div className={`flex flex-col ${isRightAligned ? 'items-end' : 'items-start'} max-w-full`}>
                       {/* Internal vermerk header */}
                       {isInternalMessage && (
-                        <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <i className="fa-solid fa-lock text-[8px]"></i>
+                        <span className="text-xs text-amber-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <i className="fa-solid fa-lock text-xs"></i>
                           <span>Interner Vermerk (nur Mitarbeiter)</span>
                         </span>
                       )}
                       <div 
-                        className={`${isRightAligned ? (isInternalMessage ? 'bg-amber-950/40 text-amber-100 border-2 border-amber-500/50 rounded-tr-none shadow-amber-950/30' : isBot ? 'bg-slate-850/85 border border-slate-750 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                        className={`${isRightAligned ? (isInternalMessage ? 'bg-amber-950/40 text-amber-100 border-2 border-amber-500/50 rounded-tr-none shadow-amber-950/30' : isBot ? 'bg-slate-800/85 border border-slate-700 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
                       >
                         {msg.imageUrl && (
                           msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
@@ -849,8 +752,8 @@ export default function AgentTicketDetailPage() {
                                 className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
                               >
                                 <i className="fa-solid fa-paperclip text-slate-400"></i>
-                                <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
-                                <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                                <span>Anhang öffnen ({msg.attachmentName || 'Datei'})</span>
+                                <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                               </a>
                             </div>
                           )
@@ -860,7 +763,7 @@ export default function AgentTicketDetailPage() {
                           dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
                         />
                       </div>
-                      <span className="text-[9px] text-slate-500 mt-1 mx-1">
+                      <span className="text-xs text-slate-500 mt-1 mx-1">
                         {isBot ? 'IT-Helpdesk-Bot' : isCustomerOrCreator ? `${msg.senderName || msg.senderEmail?.split('@')[0] || 'Kunde'} (Kunde)` : (msg.senderName || msg.senderEmail?.split('@')[0] || 'Support-Mitarbeiter')} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                       </span>
                     </div>
@@ -896,7 +799,7 @@ export default function AgentTicketDetailPage() {
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 className="hidden"
-                accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv"
+                accept={ATTACHMENT_ACCEPT}
               />
 
               <form onSubmit={handleSendReply} className={`max-w-4xl mx-auto flex flex-col gap-3 rounded-2xl p-2.5 shadow-inner transition-all ${
@@ -916,11 +819,11 @@ export default function AgentTicketDetailPage() {
                     <input 
                       type="checkbox" 
                       checked={isInternal}
-                      onChange={(e) => setIsInternal(e.target.checked)}
+                      onChange={(e) => { setIsInternal(e.target.checked); replyId.current = null; }}
                       className="rounded border-slate-800 text-amber-500 bg-transparent focus:ring-0 focus:ring-offset-0"
                     />
                     <span className={`flex items-center gap-1 font-bold ${isInternal ? 'text-amber-300' : 'text-slate-400'}`}>
-                      <i className="fa-solid fa-lock text-[10px]"></i>
+                      <i className="fa-solid fa-lock text-xs"></i>
                       <span>Als internen Vermerk speichern (Kunde sieht das nicht)</span>
                     </span>
                   </label>
@@ -949,7 +852,7 @@ export default function AgentTicketDetailPage() {
                       )}
                       <div className="truncate">
                         <span className="font-semibold text-slate-200 block truncate">{attachment.name}</span>
-                        <span className="text-[10px] text-slate-400">Angehängte Datei bereit zum Senden</span>
+                        <span className="text-xs text-slate-400">Angehängte Datei bereit zum Senden</span>
                       </div>
                     </div>
                     <button
@@ -966,6 +869,7 @@ export default function AgentTicketDetailPage() {
                 <div className="flex items-end gap-3">
                   <textarea 
                     value={replyText}
+                    onPaste={e => pasteAttachment(e, file => handleFileSelect({target:{files:[file]}}), message => notify(message))}
                     onChange={handleReplyInputChange}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -995,7 +899,7 @@ export default function AgentTicketDetailPage() {
             </div>
           ) : (
             <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 flex items-center justify-center gap-3 text-xs text-slate-400 font-medium sticky bottom-0 z-20">
-              <span className="flex items-center gap-1.5 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+              <span className="flex items-center gap-1.5 text-slate-500 font-bold uppercase tracking-wider text-xs">
                 <i className="fa-solid fa-lock text-slate-500"></i>
                 Das Ticket ist geschlossen.
               </span>
@@ -1003,7 +907,7 @@ export default function AgentTicketDetailPage() {
                 onClick={handleReopenTicket}
                 className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
               >
-                <i className="fa-solid fa-lock-open text-[10px]"></i>
+                <i className="fa-solid fa-lock-open text-xs"></i>
                 <span>Wieder öffnen</span>
               </button>
             </div>
@@ -1015,7 +919,7 @@ export default function AgentTicketDetailPage() {
 
       {/* Modal zum Schließen des Tickets */}
       {showCloseModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <Dialog title="Ticket abschließen" onClose={() => setShowCloseModal(false)}>
           <form onSubmit={handleCloseTicket} className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-emerald-500">
@@ -1023,13 +927,13 @@ export default function AgentTicketDetailPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">Ticket abschließen</h3>
-                <p className="text-[10px] text-slate-400">Verfasse eine Abschlussnachricht an den Kunden. Diese wird per E-Mail und im Ticket übermittelt inklusive Bewertungsaufforderung.</p>
+                <p className="text-xs text-slate-400">Verfasse eine Abschlussnachricht an den Kunden. Diese wird per E-Mail und im Ticket übermittelt inklusive Bewertungsaufforderung.</p>
               </div>
             </div>
 
              <div className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">Abschlussnachricht an den Kunden</label>
+                <label className="text-xs text-slate-400 font-bold block mb-1">Abschlussnachricht an den Kunden</label>
                 <textarea 
                   value={closingMessage}
                   onChange={(e) => setClosingMessage(e.target.value)}
@@ -1044,16 +948,17 @@ export default function AgentTicketDetailPage() {
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    checked={learnBotKnowledge}
+                    disabled={ticket.aiEnabled === 0}
+                    checked={ticket.aiEnabled === 0 ? false : learnBotKnowledge}
                     onChange={(e) => setLearnBotKnowledge(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 mt-0.5"
                   />
                   <div className="flex flex-col">
                     <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                      <i className="fa-solid fa-brain text-violet-400 text-[11px]"></i>
+                      <i className="fa-solid fa-brain text-violet-400 text-xs"></i>
                       Lösung in das Bot-Wissen übernehmen (KI-Wissensdatenbank)
                     </span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">
+                    <span className="text-xs text-slate-400 mt-0.5">
                       Wenn aktiviert, analysiert die KI diesen Fall und speichert die Lösung als Wissensartikel, damit der Chatbot ähnliche Fragen zukünftig automatisch beantworten kann.
                     </span>
                   </div>
@@ -1080,7 +985,7 @@ export default function AgentTicketDetailPage() {
               </div>
             </div>
           </form>
-        </div>
+        </Dialog>
       )}
 
       {/* Gestapelte Toast-Benachrichtigungen (Mobil: unten von unten nachschiebend, Desktop: unten rechts von rechts einschiebend) */}
@@ -1096,7 +1001,7 @@ export default function AgentTicketDetailPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">
                     {toast.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
                   </span>
                   <button 
@@ -1120,7 +1025,7 @@ export default function AgentTicketDetailPage() {
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
                   >
                     <span>Zum Ticket wechseln</span>
-                    <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
                   </Link>
                 )}
               </div>

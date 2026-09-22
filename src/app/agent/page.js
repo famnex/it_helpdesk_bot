@@ -1,9 +1,12 @@
 'use client';
+import Dialog from '@/components/Dialog';
+import { notify } from '@/lib/feedback';
+import VerificationBadge from '@/components/VerificationBadge';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { marked } from 'marked';
+import { renderMarkdownWithLinks } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
 
 const parseUtcDate = (dateStr) => {
@@ -94,7 +97,7 @@ export default function AgentDashboardPage() {
         body: JSON.stringify({
           chatId: behalfChatId,
           text: userText,
-          isAgentOnBehalf: true
+          aiEnabled: true, isAgentOnBehalf: true
         })
       });
 
@@ -160,22 +163,24 @@ export default function AgentDashboardPage() {
           detailsText += `\n\n**Bisherige Lösungsversuche:**\n${behalfFormAttempts}`;
         }
 
-        await fetch(`/api/tickets/${ticketData.ticketId}`, {
+        const detailsResponse = await fetch(`/api/tickets/${ticketData.ticketId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `${behalfChatId}-details` },
           body: JSON.stringify({ text: detailsText })
         });
+
+        if (!detailsResponse.ok) throw new Error('Ticket angelegt, aber die Beschreibung konnte nicht gespeichert werden. Bitte erneut senden.');
 
         // Close modal and reload dashboard data
         setShowBehalfModal(false);
         loadData();
       } else {
         const errorData = await res.json();
-        alert(errorData.error || 'Fehler beim Erstellen des Tickets.');
+        notify(errorData.error || 'Fehler beim Erstellen des Tickets.');
       }
     } catch (err) {
       console.error('Fehler beim Erstellen des Tickets:', err);
-      alert('Verbindungsfehler.');
+      notify(err.message || 'Verbindungsfehler.');
     } finally {
       setIsSubmittingBehalfTicket(false);
     }
@@ -310,7 +315,7 @@ export default function AgentDashboardPage() {
     if (user) loadData();
   }, [filter]);
 
-  const loadData = async () => {
+  async function loadData() {
     try {
       const statusParam = filter === 'closed' ? 'closed' : filter === 'all' ? 'all' : 'active';
       const [ticketsRes, agentsRes] = await Promise.all([
@@ -334,7 +339,7 @@ export default function AgentDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleLogout = async () => {
     try {
@@ -382,11 +387,11 @@ export default function AgentDashboardPage() {
         setTickets(prev => prev.filter(t => t.id !== ticketId));
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Löschen.');
+        notify(data.error || 'Fehler beim Löschen.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -406,16 +411,16 @@ export default function AgentDashboardPage() {
         await loadData();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Wiedereröffnen.');
+        notify(data.error || 'Fehler beim Wiedereröffnen.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
   useEffect(() => {
-    setCurrentPage(1);
+    queueMicrotask(() => setCurrentPage(1));
   }, [filter, searchQuery]);
 
   const filteredTickets = tickets.filter(t => {
@@ -467,7 +472,7 @@ export default function AgentDashboardPage() {
           </div>
           <div>
             <h1 className="text-sm md:text-base font-bold text-white leading-tight">IT-Helpdesk Agenten-Portal</h1>
-            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
+            <p className="text-xs md:text-xs text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
           </div>
         </div>
 
@@ -506,7 +511,7 @@ export default function AgentDashboardPage() {
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'active' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Aktiv</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'active' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.active}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'active' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.active}</span>
               </button>
               <button 
                 onClick={() => setFilter('unread')}
@@ -514,28 +519,28 @@ export default function AgentDashboardPage() {
               >
                 <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
                 <span>Ungelesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unread' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unread}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'unread' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unread}</span>
               </button>
               <button 
                 onClick={() => setFilter('mine')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'mine' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Mir zugewiesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.mine}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.mine}</span>
               </button>
               <button 
                 onClick={() => setFilter('unassigned')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'unassigned' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Unzugewiesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unassigned' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unassigned}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'unassigned' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unassigned}</span>
               </button>
               <button 
                 onClick={() => setFilter('closed')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'closed' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Geschlossen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'closed' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.closed}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'closed' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.closed}</span>
               </button>
             </div>
 
@@ -574,7 +579,7 @@ export default function AgentDashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-300">
-                <thead className="bg-slate-950/50 text-slate-400 text-[11px] font-bold uppercase border-b border-slate-800">
+                <thead className="bg-slate-950/50 text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
                   <tr>
                     <th className="px-3 sm:px-4 py-3">ID</th>
                     <th className="px-3 sm:px-4 py-3">Betreff</th>
@@ -598,7 +603,7 @@ export default function AgentDashboardPage() {
                     }
 
                     return (
-                      <tr key={tk.id} className="hover:bg-slate-850/50 transition-colors">
+                      <tr key={tk.id} className="hover:bg-slate-800/50 transition-colors">
                         <td className="px-3 sm:px-4 py-2.5 font-mono text-violet-400 font-bold whitespace-nowrap">
                           {tk.id}
                         </td>
@@ -606,7 +611,7 @@ export default function AgentDashboardPage() {
                           <div className="flex items-center gap-1.5 min-w-0">
                             {tk.hasUnread === 1 && tk.status !== 'closed' && (
                               <span 
-                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold shrink-0 shadow-sm"
+                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md text-xs font-bold shrink-0 shadow-sm"
                                 title="Ungelesene Nachrichten vorhanden"
                               >
                                 <i className="fa-solid fa-envelope text-amber-400 animate-bounce"></i>
@@ -620,28 +625,19 @@ export default function AgentDashboardPage() {
                               {tk.title}
                             </Link>
                           </div>
-                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                          <span className="text-xs text-slate-500 block mt-0.5">
                             Aktualisiert: {parseUtcDate(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr
                           </span>
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 text-slate-400 whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             <span className="text-slate-300 font-semibold">{tk.creatorName || tk.creatorEmail.split('@')[0]}</span>
-                            {tk.isRegisteredUser === 1 ? (
-                              <span className="inline-flex items-center gap-0.5 text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded-full font-bold" title="Angemeldeter Benutzer (Passwort/IDP verifiziert)">
-                                <i className="fa-solid fa-circle-check text-[8px]"></i>
-                                <span>Verifiziert</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 text-[9px] bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.2 rounded-full" title="Gast / Unverifiziert">
-                                <span>Gast</span>
-                              </span>
-                            )}
+                            <VerificationBadge method={tk.creatorAuthMethod} />
                           </div>
-                          <span className="text-[10px] text-slate-500 block truncate">{tk.creatorEmail}</span>
+                          <span className="text-xs text-slate-500 block truncate">{tk.creatorEmail}</span>
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${statusClass}`}>
                             {statusLabel}
                           </span>
                         </td>
@@ -650,7 +646,7 @@ export default function AgentDashboardPage() {
                             <select
                               value={tk.assignedAgentId || ''}
                               onChange={(e) => handleQuickAssign(tk.id, e.target.value)}
-                              className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 font-medium cursor-pointer"
+                              className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 font-medium cursor-pointer"
                             >
                               <option value="">(Nicht zugewiesen)</option>
                               {agents.map((ag) => (
@@ -660,10 +656,10 @@ export default function AgentDashboardPage() {
                               ))}
                             </select>
                           ) : (
-                            <span className="text-[11px] text-slate-500 italic">
+                            <span className="text-xs text-slate-500 italic">
                               Geschlossen
                               {tk.closedByName && (
-                                <span className="block not-italic text-[10px] text-slate-400 font-medium">
+                                <span className="block not-italic text-xs text-slate-400 font-medium">
                                   von {tk.closedByName}
                                 </span>
                               )}
@@ -691,7 +687,7 @@ export default function AgentDashboardPage() {
                             {user?.role === 'admin' && (
                               <button
                                 onClick={() => handleDeleteTicket(tk.id)}
-                                className="w-7 h-7 rounded-lg bg-red-650/20 hover:bg-red-650 text-red-300 hover:text-white border border-red-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm"
+                                className="w-7 h-7 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm"
                                 title="Ticket unwiderruflich löschen"
                               >
                                 <i className="fa-solid fa-trash-can text-xs"></i>
@@ -709,28 +705,28 @@ export default function AgentDashboardPage() {
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="bg-slate-950/60 border-t border-slate-800 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-                <div className="text-[11px]">
+                <div className="text-xs">
                   Zeige <span className="font-bold text-slate-200">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> bis <span className="font-bold text-slate-200">{Math.min(currentPage * ITEMS_PER_PAGE, filteredTickets.length)}</span> von <span className="font-bold text-slate-200">{filteredTickets.length}</span> Tickets
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="bg-slate-850 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-750 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                    className="bg-slate-800 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-700 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
                   >
-                    <i className="fa-solid fa-chevron-left text-[10px]"></i>
+                    <i className="fa-solid fa-chevron-left text-xs"></i>
                     <span>Zurück</span>
                   </button>
-                  <span className="px-2 text-[11px] font-bold text-slate-300">
+                  <span className="px-2 text-xs font-bold text-slate-300">
                     Seite {currentPage} von {totalPages}
                   </span>
                   <button
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="bg-slate-850 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-750 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                    className="bg-slate-800 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-700 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <span>Weiter</span>
-                    <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
                   </button>
                 </div>
               </div>
@@ -741,17 +737,17 @@ export default function AgentDashboardPage() {
       </main>
 
       {showBehalfModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <Dialog title="Ticket im Auftrag" onClose={() => setShowBehalfModal(false)}>
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40 shrink-0">
               <div>
                 <h3 className="text-base font-bold text-white">Ticket im Namen eines Benutzers erstellen</h3>
-                <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider mt-0.5">Assistenten-Modus</p>
+                <p className="text-xs text-violet-400 font-bold uppercase tracking-wider mt-0.5">Assistenten-Modus</p>
               </div>
               <button 
                 onClick={() => setShowBehalfModal(false)}
-                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-850"
+                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>
@@ -767,7 +763,7 @@ export default function AgentDashboardPage() {
                       key={idx} 
                       className={`flex gap-3 max-w-[85%] ${msg.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
                     >
-                      <div className={`w-8 h-8 rounded-xl ${msg.sender === 'user' ? 'bg-slate-700 text-slate-350' : 'bg-violet-600/10 text-violet-400 border border-violet-500/25'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
+                      <div className={`w-8 h-8 rounded-xl ${msg.sender === 'user' ? 'bg-slate-700 text-slate-300' : 'bg-violet-600/10 text-violet-400 border border-violet-500/25'} flex items-center justify-center shrink-0 mt-1 shadow-md`}>
                         <i className={`fa-solid fa-${msg.sender === 'user' ? 'user-tie' : 'robot'} text-xs`}></i>
                       </div>
                       <div className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} max-w-full`}>
@@ -776,14 +772,14 @@ export default function AgentDashboardPage() {
                             {msg.text}
                           </div>
                         ) : (
-                          <div className="bg-slate-950 border border-slate-850 text-slate-200 rounded-tl-none p-3.5 rounded-2xl shadow-sm text-sm leading-relaxed">
+                          <div className="bg-slate-950 border border-slate-800 text-slate-200 rounded-tl-none p-3.5 rounded-2xl shadow-sm text-sm leading-relaxed">
                             <div 
                               className="markdown-content"
-                              dangerouslySetInnerHTML={{ __html: marked.parse(msg.text || '') }}
+                              dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
                             />
                           </div>
                         )}
-                        <span className="text-[9px] text-slate-500 mt-1 mx-1">
+                        <span className="text-xs text-slate-500 mt-1 mx-1">
                           {msg.sender === 'user' ? 'Du (Agent)' : 'IT-Assistent'}
                         </span>
                       </div>
@@ -795,7 +791,7 @@ export default function AgentDashboardPage() {
                       <div className="w-8 h-8 rounded-xl bg-violet-600/10 text-violet-400 border border-violet-500/25 flex items-center justify-center shrink-0 mt-1 shadow-md">
                         <i className="fa-solid fa-robot text-xs"></i>
                       </div>
-                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-850 p-4 rounded-2xl rounded-tl-none">
+                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 p-4 rounded-2xl rounded-tl-none">
                         <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                         <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                         <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
@@ -830,7 +826,7 @@ export default function AgentDashboardPage() {
                     <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400"><i className="fa-solid fa-circle-check text-base"></i></div>
                     <div>
                       <h4 className="text-xs font-bold text-emerald-300">Daten erfolgreich erfasst!</h4>
-                      <p className="text-[11px] text-slate-400 mt-1">Die KI hat die Ticket-Details extrahiert. Bitte überprüfe die Angaben unten und passe sie ggf. an.</p>
+                      <p className="text-xs text-slate-400 mt-1">Die KI hat die Ticket-Details extrahiert. Bitte überprüfe die Angaben unten und passe sie ggf. an.</p>
                     </div>
                   </div>
 
@@ -930,7 +926,7 @@ export default function AgentDashboardPage() {
                   <button
                     type="button"
                     onClick={() => setShowBehalfForm(false)}
-                    className="border border-slate-800 hover:bg-slate-800 text-slate-350 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+                    className="border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer"
                   >
                     Zurück zum Chat
                   </button>
@@ -948,7 +944,7 @@ export default function AgentDashboardPage() {
               </form>
             )}
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* Gestapelte Toast-Benachrichtigungen (Mobil: unten von unten nachschiebend, Desktop: unten rechts von rechts einschiebend) */}
@@ -964,7 +960,7 @@ export default function AgentDashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">
                     {toast.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
                   </span>
                   <button 
@@ -988,7 +984,7 @@ export default function AgentDashboardPage() {
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
                   >
                     <span>Zum Ticket wechseln</span>
-                    <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
                   </Link>
                 )}
               </div>

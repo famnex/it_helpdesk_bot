@@ -1,3 +1,4 @@
+import sanitizeHtml from 'sanitize-html';
 import { marked } from 'marked';
 
 /**
@@ -131,7 +132,7 @@ export function renderMarkdownWithLinks(text) {
   if (!text) return '';
   const textWithFixedUrls = fixUploadUrlInText(text);
   const linkedText = autoLinkText(textWithFixedUrls);
-  return marked.parse(linkedText);
+  return sanitizeHtml(marked.parse(linkedText), { allowedTags: sanitizeHtml.defaults.allowedTags, allowedAttributes: { a: ['href','title','target','rel','class'], code: ['class'], span: ['class'] }, allowedSchemes: ['https','http','mailto'], allowProtocolRelative: false, transformTags: { a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }) } });
 }
 
 /**

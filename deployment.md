@@ -121,3 +121,30 @@ Nachdem alles läuft, ist der IT-Helpdesk einsatzbereit:
 4. Generiere das JWT-Secret (oder passe es an).
 5. Klicke auf **Setup fertigstellen & Einloggen**.
 6. Das System ist nun vollständig einsatzbereit und du bist direkt im Admin-Dashboard eingeloggt.
+
+
+## Sichere Aktualisierungen und Datenpfade
+
+Node.js **22 LTS** verwenden (`nvm use`; anschließend `npm ci`). Lokal ist die App unter `http://localhost:3000/helpdesk` erreichbar. `NEXT_PUBLIC_APP_URL` enthält die öffentliche URL einschließlich `/helpdesk`.
+
+Das Web-Update arbeitet ausschließlich mit getrennten Releases. Bestehende Direktinstallationen bleiben startbar; die alte Update-Funktion mit einem Build im laufenden Verzeichnis wurde entfernt. Für den Release-Betrieb einmalig diese Struktur einrichten:
+
+- `/srv/helpdesk/releases/<version>`: unveränderliche Git-Checkouts mit installiertem und gebautem Projekt.
+- `/srv/helpdesk/current`: Symlink auf das aktive Release; **PM2 cwd muss `/srv/helpdesk/current` sein**.
+- `/srv/helpdesk/shared/database.db`: vorhandene SQLite-Datenbank übernehmen, bei gestopptem Prozess einschließlich eventuell vorhandener WAL/SHM-Dateien.
+- `/srv/helpdesk/shared/uploads`: sämtliche bestehenden Uploads aus `public/uploads` und `uploads` übernehmen. Keine Dateien mit gleichem Namen ungeprüft überschreiben.
+
+PM2-Umgebungsvariablen setzen:
+
+```text
+HELPDESK_RELEASE_ROOT=/srv/helpdesk
+HELPDESK_DATA_DIR=/srv/helpdesk/shared
+HELPDESK_UPLOAD_DIR=/srv/helpdesk/shared/uploads
+HELPDESK_PM2_NAME=it-helpdesk
+```
+
+Vor dem ersten Start eine vollständige Sicherung von Datenbank, Uploads und Konfiguration anlegen. Neue Migrationen ergänzen nur Spalten/Tabellen und sind wiederholbar. Historische Verifikation bleibt `unknown`; historische Chats/Tickets werden ohne KI weitergeführt. Ein neuer KI-Chat erfordert den gewählten KI-Weg. Bestehende Sitzungen und alte unbegrenzte Magic Links werden ungültig: erneut anmelden. Neue Magic Links gelten 30 Minuten und einmalig. Logout widerruft alle Sitzungen desselben Kontos.
+
+Das Update sperrt parallele Durchläufe, validiert den Branchnamen und baut in einem neuen Release mit isolierter Build-Datenbank. Erst nach erfolgreichem Build wird der Symlink atomar umgestellt und PM2 neu gestartet. Eine fehlgeschlagene Vorbereitung verändert das aktive Release nicht. Für einen manuellen Code-Rollback den Symlink auf das vorige Release umstellen und PM2 neu starten. Daten nur aus einer zusammengehörigen Sicherung wiederherstellen; vorher neue seitdem eingegangene Tickets sichern. Ein nach Prozessabbruch verbliebenes `update.lock` darf erst nach Prüfung auf einen tatsächlich noch laufenden Update-Prozess entfernt werden.
+
+Vor produktiver Freigabe Login am echten Schulportal, SMTP-Zertifikate und Versand sowie Zwischenablage unter den tatsächlich eingesetzten Browsern prüfen. Privates Wissen bleibt für Bot-Antworten verfügbar und wird weiterhin nur aus der öffentlichen Wissensliste ausgeblendet.

@@ -57,12 +57,12 @@ export default function UserNavMenu({ user, currentView, onLogout }) {
 
   const getRoleBadge = () => {
     if (role === 'admin') {
-      return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">Admin</span>;
+      return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">Admin</span>;
     }
     if (role === 'agent') {
-      return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/30">Agent</span>;
+      return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/30">Agent</span>;
     }
-    return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">Benutzer</span>;
+    return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">Benutzer</span>;
   };
 
   const renderAvatar = () => {
@@ -93,7 +93,7 @@ export default function UserNavMenu({ user, currentView, onLogout }) {
         className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold select-none cursor-pointer ${
           isOpen 
             ? 'bg-slate-800 border-sky-500/50 text-white shadow-lg' 
-            : 'bg-slate-900/90 hover:bg-slate-850 border-slate-800 hover:border-slate-700 text-slate-200'
+            : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-200'
         }`}
         title={`Benutzermenü für ${displayName}`}
         aria-expanded={isOpen}
@@ -101,7 +101,7 @@ export default function UserNavMenu({ user, currentView, onLogout }) {
       >
         {renderAvatar()}
         <span className="max-w-[130px] sm:max-w-[180px] truncate text-slate-200 font-semibold">{displayName}</span>
-        <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-sky-400' : ''}`}></i>
+        <i className={`fa-solid fa-chevron-down text-xs text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-sky-400' : ''}`}></i>
       </button>
 
       {/* Dropdown Menu */}
@@ -115,7 +115,7 @@ export default function UserNavMenu({ user, currentView, onLogout }) {
               {getRoleBadge()}
             </div>
             {user.email && user.email !== displayName && (
-              <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+              <p className="text-xs text-slate-400 truncate">{user.email}</p>
             )}
           </div>
 

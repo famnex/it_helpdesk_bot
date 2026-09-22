@@ -149,3 +149,10 @@
 .safe-padding-bottom {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
+
+/* Readable controls, visible keyboard focus, unrestricted browser zoom. */
+@theme { --text-xs: 0.875rem; --text-xs--line-height: 1.4; }
+textarea { font-size: 1rem !important; }
+button, input, select, textarea { scroll-margin-block: 1rem; }
+button:focus-visible, a:focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+.markdown-content { overflow-wrap: anywhere; font-size: 1rem; line-height: 1.6; }

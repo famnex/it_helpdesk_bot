@@ -1,3 +1,7 @@
+import { withAttachmentMetadata } from '@/lib/uploads';
+import { idempotent } from '@/lib/idempotency';
+import { canAccessChat, guestHash, recordTicketIdentity } from '@/lib/access';
+import { saveAttachment } from '@/lib/uploads';
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
@@ -12,8 +16,6 @@ import { queueTicketNotification } from '@/lib/notifications';
 import { sendAssignmentNotification, sendUnassignedTicketNotification, sendTicketCreatedNotification } from '@/lib/mailer';
 import { checkIpBanned, recordAbuseViolation } from '@/lib/abuse';
 import { checkIpSecurity } from '@/lib/proxycheck';
-import fs from 'fs';
-import path from 'path';
 
 /**
  * GET: Holt den Verlauf eines bestimmten Chats oder alle alten Chats eines angemeldeten Benutzers.
@@ -41,7 +43,9 @@ export async function GET(request) {
 
   try {
     if (chatId) {
-      const chat = db.prepare('SELECT id, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
+      if (db.prepare('SELECT id FROM chats WHERE id=?').get(chatId) && !await canAccessChat(chatId,user)) return NextResponse.json({ error: 'Dieser Verlauf ist nicht mehr zugänglich. Bitte einen neuen Chat starten.', accessDenied: true }, {status:403});
+      await guestHash(true);
+      const chat = db.prepare('SELECT id, auth_method as authMethod, ai_enabled as aiEnabled, is_abusive as isAbusive FROM chats WHERE id = ?').get(chatId);
 
       // Verlauf eines bestimmten Chats laden
       const messages = db.prepare(`
@@ -61,7 +65,9 @@ export async function GET(request) {
       });
       
       return NextResponse.json({ 
-        messages: messagesWithPrefix,
+        messages: messagesWithPrefix.map(withAttachmentMetadata),
+        aiEnabled: chat ? !!chat.aiEnabled : null,
+        authMethod: chat?.authMethod || 'unknown',
         isAbusive: chat ? chat.isAbusive === 1 : false,
         isIpBanned: banStatus.isBanned,
         bannedUntil: banStatus.bannedUntil,
@@ -77,9 +83,9 @@ export async function GET(request) {
       const userChats = db.prepare(`
         SELECT id, created_at as createdAt 
         FROM chats 
-        WHERE user_email = ? AND id NOT LIKE 'link-%'
+        WHERE owner_user_id = ? AND id NOT LIKE 'link-%'
         ORDER BY created_at DESC
-      `).all(user.email);
+      `).all(user.id);
       
       return NextResponse.json({ 
         chats: userChats,
@@ -102,12 +108,14 @@ export async function GET(request) {
 /**
  * POST: Nimmt eine neue Nachricht entgegen, ruft Gemini auf und speichert die Antwort.
  */
-export async function POST(request) {
+async function createMessage(request) {
   try {
     const contentType = request.headers.get('content-type') || '';
     let chatId = '';
     let text = '';
     let relativePath = null;
+    let photoFile = null;
+    let aiRequested = false;
     let isAgentOnBehalf = false;
     let skipBot = false;
     let body = null;
@@ -127,48 +135,35 @@ export async function POST(request) {
       skipBot = skipBotVal === 'true';
       inputDisplayName = formData.get('display_name') || formData.get('displayName') || formData.get('user_name') || formData.get('userName') || formData.get('name') || null;
       
-      const photoFile = formData.get('photo'); // File-Objekt
-      
-      if (photoFile && photoFile.size > 0) {
-        // Validierung der Dateigröße (max. 10 MB) und des Dateityps
-        if (photoFile.size > 10 * 1024 * 1024) {
-          return NextResponse.json({ error: 'Das Bild darf maximal 10 MB groß sein.' }, { status: 400 });
-        }
-        
-        if (!photoFile.type.startsWith('image/')) {
-          return NextResponse.json({ error: 'Es sind nur Bilder erlaubt.' }, { status: 400 });
-        }
-
-        // Zielverzeichnis erstellen falls nicht vorhanden
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'chat');
-        fs.mkdirSync(uploadDir, { recursive: true });
-
-        // Eindeutigen Dateinamen generieren
-        const origExt = path.extname(photoFile.name) || '.jpg';
-        const fileName = `chat-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}${origExt.toLowerCase()}`;
-        
-        relativePath = `/uploads/chat/${fileName}`;
-        const absolutePath = path.join(uploadDir, fileName);
-
-        // Datei schreiben
-        const buffer = Buffer.from(await photoFile.arrayBuffer());
-        fs.writeFileSync(absolutePath, buffer);
-      }
+      photoFile = formData.get('photo');
+      aiRequested = formData.get('aiEnabled') === 'true';
     } else {
       body = await request.json().catch(() => ({}));
       chatId = body.chatId;
+      aiRequested = body.aiEnabled === true;
       text = body.text;
       isAgentOnBehalf = !!body.isAgentOnBehalf;
       skipBot = !!body.skipBot || !!body.skip_bot;
       inputDisplayName = body.display_name || body.displayName || body.user_name || body.userName || body.name || null;
     }
 
-    if ((!text || !text.trim()) && !relativePath) {
+    if ((typeof text !== 'string' || !text.trim()) && !photoFile) {
       return NextResponse.json({ error: 'Nachrichtentext oder Foto fehlt.' }, { status: 400 });
     }
 
     const user = await getSessionUser();
     const email = user ? user.email : null;
+    if (typeof chatId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(chatId)) return NextResponse.json({error:'Ungültige Chat-ID.'},{status:400});
+    const ownedChat = db.prepare('SELECT * FROM chats WHERE id=?').get(chatId);
+    if (ownedChat && !await canAccessChat(chatId,user)) return NextResponse.json({error:'Kein Zugriff.',accessDenied:true},{status:403});
+    if (isAgentOnBehalf && !['agent','admin'].includes(user?.role)) return NextResponse.json({error:'Kein Zugriff.'},{status:403});
+    const ownerHash = await guestHash(true);
+    const aiEnabled = ownedChat ? ownedChat.ai_enabled === 1 && aiRequested : aiRequested;
+    skipBot ||= !aiEnabled;
+    if (ownedChat && !aiEnabled) {
+      db.prepare('UPDATE chats SET ai_enabled=0 WHERE id=?').run(chatId);
+      db.prepare('UPDATE tickets SET ai_enabled=0 WHERE chat_id=?').run(chatId);
+    }
 
     // IP-Adresse extrahieren
     const xForwardedFor = request.headers.get('x-forwarded-for');
@@ -242,7 +237,7 @@ export async function POST(request) {
     let resolvedUserName = (user && user.name) ? user.name : null;
     const bodyDisplayName = (inputDisplayName || (body && (body.display_name || body.displayName || body.user_name || body.userName || body.name)) || '').trim() || null;
 
-    if (!resolvedUserName && resolvedEmail) {
+    if (!resolvedUserName && user && resolvedEmail) {
       const dbUser = db.prepare('SELECT name FROM users WHERE LOWER(email) = LOWER(?)').get(resolvedEmail);
       if (dbUser && dbUser.name) resolvedUserName = dbUser.name;
     }
@@ -253,6 +248,7 @@ export async function POST(request) {
     if (!chat) {
       db.prepare('INSERT INTO chats (id, user_email, user_name, is_agent_on_behalf, user_ip, user_session_id, user_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(chatId, resolvedEmail, resolvedUserName || null, isAgentOnBehalf ? 1 : 0, userIp, userSessionId, deviceFingerprint || null);
+      db.prepare('UPDATE chats SET owner_user_id=?, guest_secret_hash=?, auth_method=?, verified_at=?, ai_enabled=? WHERE id=?').run(user?.id || null, user ? null : ownerHash, user?.authMethod || 'guest', user?.verifiedAt || null, aiEnabled ? 1 : 0, chatId);
       chat = { id: chatId, ticketCreated: 0, userEmail: resolvedEmail, userName: resolvedUserName, isAgentOnBehalf: isAgentOnBehalf ? 1 : 0, isAbusive: 0 };
     } else {
       // Wenn der Chat bereits wegen Missbrauchs beendet wurde, keine weiteren Nachrichten annehmen!
@@ -277,6 +273,11 @@ export async function POST(request) {
       }
     }
 
+    if (photoFile) {
+      try { relativePath = await saveAttachment(photoFile, {user,chatId}); }
+      catch (e) { return NextResponse.json({error:e.message},{status:400}); }
+    }
+
     // 2. Benutzernachricht speichern (mit eventuellem Foto)
     const isSystemEvent = text && text.startsWith('[SYSTEM_EVENT:');
     let shouldInsert = true;
@@ -295,9 +296,10 @@ export async function POST(request) {
       cleanRelativePath = `/helpdesk${clean}`;
     }
 
+    let userMessageId = null;
     if (shouldInsert) {
-      db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
-        .run(chatId, 'user', text, relativePath);
+      userMessageId = db.prepare('INSERT INTO chat_messages (chat_id, sender, text, image_url) VALUES (?, ?, ?, ?)')
+        .run(chatId, 'user', text, relativePath).lastInsertRowid;
     }
 
     // Falls es sich um ein System-Event handelt (z.B. [SYSTEM_EVENT: TICKET_CREATED:...]), keine KI anwerfen
@@ -315,18 +317,22 @@ export async function POST(request) {
       // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
       if (!isSystemEvent) {
         try {
-          const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
+          const ticket = db.prepare('SELECT id, creator_email, assigned_agent_id FROM tickets WHERE chat_id = ?').get(chatId);
           if (ticket) {
             db.prepare(`
-              INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-              VALUES (?, ?, 'customer', ?)
-            `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Foto hochgeladen)');
+              INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url, chat_message_id)
+              VALUES (?, ?, 'customer', ?, ?, ?)
+            `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Anhang)', relativePath, userMessageId);
+            db.prepare("UPDATE tickets SET updated_at=CURRENT_TIMESTAMP, status=CASE WHEN status='closed' THEN CASE WHEN assigned_agent_id IS NULL THEN 'open' ELSE 'assigned' END ELSE status END WHERE id=?").run(ticket.id);
+            const recipients = ticket.assigned_agent_id ? db.prepare('SELECT email FROM users WHERE id=?').all(ticket.assigned_agent_id) : db.prepare("SELECT email FROM users WHERE role IN ('agent','admin')").all();
+            for (const recipient of recipients) await queueTicketNotification({ticketId:ticket.id,recipientEmail:recipient.email,recipientRole:'agent',senderName:user?.name || 'Kunde',messageText:text || '(Anhang gesendet)'});
+
           }
         } catch (e) {
           console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
         }
       }
-      return NextResponse.json({ success: true, imageUrl: cleanRelativePath });
+      return NextResponse.json({ success: true, userMessageId, imageUrl: cleanRelativePath });
     }
 
     // Falls ein Ticket mit dieser chatId verknüpft ist, Nachricht dort spiegeln (System-Events ausgenommen)
@@ -335,9 +341,9 @@ export async function POST(request) {
         const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
         if (ticket) {
           db.prepare(`
-            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-            VALUES (?, ?, 'customer', ?)
-          `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Foto hochgeladen)');
+            INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url, chat_message_id)
+            VALUES (?, ?, 'customer', ?, ?, ?)
+          `).run(ticket.id, ticket.creator_email || 'Kunde', text || '(Anhang)', relativePath, userMessageId);
         }
       } catch (e) {
         console.error('Fehler beim Spiegeln der Benutzernachricht im Ticket:', e);
@@ -397,6 +403,7 @@ export async function POST(request) {
 
         return NextResponse.json({
           text: botReply,
+          userMessageId,
           isHandedOver: true,
           isClosedByBot: true,
           imageUrl: cleanRelativePath
@@ -472,6 +479,7 @@ export async function POST(request) {
 
         return NextResponse.json({
           text: botAck,
+          userMessageId,
           isHandedOver: true,
           isSilent: !botAck,
           imageUrl: cleanRelativePath
@@ -489,7 +497,7 @@ export async function POST(request) {
 
     // 4. Gemini aufrufen
     const isAgentOnBehalfMode = chat ? chat.isAgentOnBehalf === 1 : false;
-    const aiResult = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0, isAgentOnBehalfMode);
+    const aiResult = await generateChatResponse(chatHistory, chat ? chat.ticketCreated : 0, isAgentOnBehalfMode, user);
     let aiResponse = aiResult.text;
     const usedKnowledgeIds = aiResult.usedKnowledgeIds;
  
@@ -608,6 +616,8 @@ export async function POST(request) {
 
               db.prepare('INSERT INTO tickets (id, title, creator_email, chat_id, status, assigned_agent_id, is_authenticated_creator) VALUES (?, ?, ?, ?, ?, ?, ?)')
                 .run(newTicketId, finalTitle, userEmailForTicket, chatId, ticketStatus, assignedId, user ? 1 : 0);
+              recordTicketIdentity(newTicketId, user, userEmailForTicket, !!chat.isAgentOnBehalf);
+              db.prepare('UPDATE tickets SET ai_enabled=? WHERE id=?').run(aiEnabled ? 1 : 0,newTicketId);
               
               autoTicketId = newTicketId;
               db.prepare('UPDATE chats SET ticket_created = 1 WHERE id = ?').run(chatId);
@@ -759,15 +769,16 @@ export async function POST(request) {
       const ticket = db.prepare('SELECT id, creator_email FROM tickets WHERE chat_id = ?').get(chatId);
       if (ticket) {
         db.prepare(`
-          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text)
-          VALUES (?, ?, 'bot', ?)
-        `).run(ticket.id, 'KI-Bot (Chat)', aiResponse);
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, chat_message_id)
+          VALUES (?, ?, 'bot', ?, ?)
+        `).run(ticket.id, 'KI-Bot (Chat)', aiResponse, botMessageId);
       }
     } catch (e) {
       console.error('Fehler beim Spiegeln der Botnachricht im Ticket:', e);
     }
 
     return NextResponse.json({
+      userMessageId,
       text: aiResponse,
       ticketCreated,
       autoTicketId,
@@ -789,4 +800,18 @@ export async function POST(request) {
       details: err.message
     }, { status: 500 });
   }
+}
+
+export const POST = idempotent(createMessage);
+
+export async function PATCH(request) {
+  const { chatId, aiEnabled } = await request.json();
+  if (aiEnabled !== false) return NextResponse.json({error:'Für KI-Unterstützung bitte einen neuen Chat starten.'},{status:400});
+  if (!db.prepare('SELECT id FROM chats WHERE id=?').get(chatId)) return NextResponse.json({success:true});
+  if (!await canAccessChat(chatId,await getSessionUser())) return NextResponse.json({error:'Kein Zugriff.'},{status:403});
+  db.transaction(() => {
+    db.prepare('UPDATE chats SET ai_enabled=0 WHERE id=?').run(chatId);
+    db.prepare('UPDATE tickets SET ai_enabled=0 WHERE chat_id=?').run(chatId);
+  })();
+  return NextResponse.json({success:true});
 }

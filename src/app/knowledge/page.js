@@ -1,12 +1,14 @@
 'use client';
+import Dialog from '@/components/Dialog';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { marked } from 'marked';
+import { renderMarkdownWithLinks } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
 import { fixUploadUrl } from '@/lib/formatting';
 
 export default function PublicKnowledgePage() {
+  const [loadError, setLoadError] = useState('');
   const [chunks, setChunks] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Alle');
@@ -15,7 +17,6 @@ export default function PublicKnowledgePage() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    loadKnowledge();
     // Prüfen ob Benutzer angemeldet ist
     fetch('/api/auth/me')
       .then(res => res.json())
@@ -23,23 +24,22 @@ export default function PublicKnowledgePage() {
         if (data.user) setUser(data.user);
       })
       .catch(() => {});
-  }, [search]);
+  }, []);
 
-  const loadKnowledge = async () => {
-    try {
-      const url = search.trim() ? `/api/knowledge?q=${encodeURIComponent(search)}` : '/api/knowledge';
-      const res = await fetch(url);
-      if (res.ok) {
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsLoading(true); setLoadError('');
+      try {
+        const res = await fetch(search.trim() ? `/api/knowledge?q=${encodeURIComponent(search)}` : '/api/knowledge', {signal:controller.signal});
+        if (!res.ok) throw new Error('Wissen konnte nicht geladen werden. Bitte erneut versuchen.');
         const data = await res.json();
-        setChunks(data.chunks || []);
-        setSelectedCategory('Alle'); // Reset filter on new search
-      }
-    } catch (err) {
-      console.error('Fehler beim Laden des Wissens:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        if (!controller.signal.aborted) setChunks(data.chunks || []);
+      } catch (e) { if (e.name !== 'AbortError') setLoadError(e.message); }
+      finally { if (!controller.signal.aborted) setIsLoading(false); }
+    },250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  },[search]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -52,7 +52,7 @@ export default function PublicKnowledgePage() {
           </Link>
           <div>
             <h1 className="text-base font-bold text-white">Campus IT-Wissensdatenbank</h1>
-            <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Selbsthilfe-Portal</p>
+            <p className="text-xs text-sky-400 font-bold uppercase tracking-wider">Selbsthilfe-Portal</p>
           </div>
         </div>
         
@@ -90,9 +90,10 @@ export default function PublicKnowledgePage() {
           </div>
         </div>
 
+        {loadError && <p role="alert" className="text-amber-300">{loadError}</p>}
         {/* Category Tabs */}
         {!isLoading && chunks.length > 0 && (
-          <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-[10px] font-bold scrollbar-none">
+          <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-xs font-bold scrollbar-none">
             {['Alle', ...new Set(chunks.map(c => c.category || 'Sonstiges'))].map(cat => (
               <button
                 key={cat}
@@ -131,15 +132,15 @@ export default function PublicKnowledgePage() {
               <div 
                 key={index}
                 onClick={() => setActiveModalChunk(k)}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between hover:border-slate-705 hover:bg-slate-850/50 transition-all hover:scale-[1.01] duration-300 animate-fade-in cursor-pointer select-none"
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between hover:border-slate-705 hover:bg-slate-800/50 transition-all hover:scale-[1.01] duration-300 animate-fade-in cursor-pointer select-none"
               >
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <div className="flex items-center gap-2 text-sky-400">
                       <div className="bg-sky-500/10 p-1.5 rounded-lg border border-sky-500/20"><i className="fa-regular fa-lightbulb text-sm"></i></div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{k.category || 'Sonstiges'}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider">{k.category || 'Sonstiges'}</span>
                     </div>
-                    <i className="fa-solid fa-up-right-from-square text-[10px] text-slate-505"></i>
+                    <i className="fa-solid fa-up-right-from-square text-xs text-slate-505"></i>
                   </div>
                   <h3 className="font-bold text-sm text-white leading-snug">{k.title}</h3>
                 </div>
@@ -150,7 +151,7 @@ export default function PublicKnowledgePage() {
 
         {/* Fullscreen Info Modal */}
         {activeModalChunk && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setActiveModalChunk(null)}>
+          <Dialog title="Wissensartikel" onClose={() => setActiveModalChunk(null)}>
             <div 
               className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative animate-scale-up space-y-6"
               onClick={(e) => e.stopPropagation()}
@@ -158,7 +159,7 @@ export default function PublicKnowledgePage() {
               {/* Close Button */}
               <button 
                 onClick={() => setActiveModalChunk(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-850 hover:bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
                 title="Schließen"
               >
                 <i className="fa-solid fa-xmark"></i>
@@ -175,14 +176,14 @@ export default function PublicKnowledgePage() {
                 <div className="h-px bg-slate-800"></div>
 
                 <div 
-                  className="text-xs sm:text-sm text-slate-350 leading-relaxed bg-slate-950 p-5 rounded-2xl border border-slate-850 markdown-content overflow-x-auto whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: marked.parse(activeModalChunk.description || activeModalChunk.fact || '') }}
+                  className="text-xs sm:text-sm text-slate-300 leading-relaxed bg-slate-950 p-5 rounded-2xl border border-slate-800 markdown-content overflow-x-auto whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(activeModalChunk.description || activeModalChunk.fact || '') }}
                 />
 
                 {activeModalChunk.attachments && activeModalChunk.attachments.length > 0 && (
                   <div className="space-y-3 pt-2">
                     <div className="h-px bg-slate-800"></div>
-                    <h4 className="text-[10px] font-bold text-slate-450 uppercase tracking-wider flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <i className="fa-solid fa-paperclip text-sky-400"></i>
                       <span>Dateianhänge zum Download</span>
                     </h4>
@@ -192,12 +193,12 @@ export default function PublicKnowledgePage() {
                           key={att.id}
                           href={fixUploadUrl(att.filePath)} 
                           download
-                          className="flex items-center gap-3 bg-slate-950 hover:bg-slate-850/80 p-3 rounded-xl border border-slate-850 hover:border-sky-500/30 transition-all text-xs text-sky-400 font-semibold shadow-inner"
+                          className="flex items-center gap-3 bg-slate-950 hover:bg-slate-800/80 p-3 rounded-xl border border-slate-800 hover:border-sky-500/30 transition-all text-xs text-sky-400 font-semibold shadow-inner"
                         >
                           <i className="fa-solid fa-file-arrow-down text-base text-sky-500"></i>
                           <div className="flex flex-col items-start min-w-0">
                             <span className="truncate max-w-[170px] text-slate-200">{att.filename}</span>
-                            <span className="text-[9px] text-slate-500 font-normal mt-0.5">({(att.fileSize / 1024).toFixed(1)} KB)</span>
+                            <span className="text-xs text-slate-500 font-normal mt-0.5">({(att.fileSize / 1024).toFixed(1)} KB)</span>
                           </div>
                         </a>
                       ))}
@@ -206,7 +207,7 @@ export default function PublicKnowledgePage() {
                 )}
               </div>
             </div>
-          </div>
+          </Dialog>
         )}
 
       </main>

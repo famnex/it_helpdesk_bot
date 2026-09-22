@@ -1,8 +1,11 @@
+import { uploadRoot } from './uploads';
+import { isImageAttachment } from './attachments';
 import db from './db.js';
 import fs from 'fs';
 import path from 'path';
 import { fixUploadUrl } from './formatting.js';
 import { sendGeminiOutageAlert } from './mailer.js';
+import { buildChatUserContext } from './chatUserContext.js';
 
 function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -339,8 +342,9 @@ async function callGemini(modelName, payload) {
  * Generiert eine Antwort im Bot-Chat basierend auf dem aktuellen Chatverlauf
  * und den passenden Wissenseinträgen aus der Datenbank.
  */
-export async function generateChatResponse(chatMessagesState, ticketAlreadyCreated = false, isAgentOnBehalf = false) {
+export async function generateChatResponse(chatMessagesState, ticketAlreadyCreated = false, isAgentOnBehalf = false, sessionUser = null) {
   const { chatModel } = getModelNames();
+  const userContext = buildChatUserContext(sessionUser, isAgentOnBehalf);
 
   if (isAgentOnBehalf) {
     const systemInstruction = `Du bist ein hilfreicher IT-Assistent für Schul-Admins und Support-Agenten. Deine Aufgabe ist es, dem Agenten dabei zu helfen, ein Support-Ticket für einen anderen Benutzer (z. B. Lehrer oder Schüler) zu erstellen.
@@ -355,7 +359,7 @@ Regeln für die Abfrage:
 - Biete KEINE Ratschläge, Diagnosen oder Fehlerbehebungen an, da der Agent selbst IT-Support leistet. Konzentriere dich rein auf das Sammeln der Informationen!
 - Wenn der Agent dir eine Liste von Antworten oder alle Infos direkt gibt, akzeptiere das sofort.
 - Sobald du alle 3 Punkte (Betroffener Benutzer mit Name/Mail, Problembeschreibung, bisherige Versuche) erfasst hast, gib ZWINGEND am Ende deiner Antwort exakt diesen Tag aus: [TICKET_CREATED]
-- Stelle in der Nachricht mit [TICKET_CREATED] keine weiteren Fragen mehr.`;
+- Stelle in der Nachricht mit [TICKET_CREATED] keine weiteren Fragen mehr.` + userContext;
 
     const payload = {
       contents: chatMessagesState.slice(-10).map(msg => {
@@ -453,10 +457,10 @@ REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
    - BIETE ein Support-Ticket auch immer an, wenn der Benutzer explizit danach fragt oder einen menschlichen Support-Mitarbeiter verlangt.
 
 2. ZWINGENDE VORAUSSETZUNGEN FÜR [TICKET_CREATED]:
-   - E-Mail-Adresse: Bei nicht angemeldeten Nutzern muss eine E-Mail-Adresse vorliegen. Sobald der Nutzer im Chatverlauf eine E-Mail-Adresse genannt hat (z. B. "max@gmail.com"), gilt diese als vollständig erfasst. Frage NIEMALS erneut nach der E-Mail-Adresse, wenn sie im Verlauf bereits genannt wurde!
+   - E-Mail-Adresse: Eine E-Mail-Adresse aus dem Benutzerkontext der Anmeldung gilt bereits als vollständig erfasst und muss nicht erneut genannt oder bestätigt werden. Bei nicht angemeldeten Nutzern muss eine E-Mail-Adresse vorliegen. Sobald der Nutzer im Chatverlauf eine E-Mail-Adresse genannt hat (z. B. "max@gmail.com"), gilt diese als vollständig erfasst. Frage NIEMALS erneut nach einer bereits bekannten E-Mail-Adresse!
    - Raumnummer: Frage NUR nach der Raumnummer, wenn es sich um ein physisches Gerät (z. B. Beamer, PC, Smartboard, Drucker, Monitor, Netzdose) oder ein lokales Netzwerkproblem handelt. Bei Software-, Login- oder Account-Problemen NIEMALS nach Raumnummer oder Aufenthaltsort fragen.
    - Fehlermeldung: Frage nach einer Fehlermeldung, ABER NUR wenn es plausibel ist, dass eine Fehlermeldung auf dem Bildschirm erscheinen könnte. Wenn aus dem Kontext bereits klar hervorgeht, dass es keine Bildschirm-Fehlermeldung geben kann (z. B. "ich bekomme keine E-Mail", "nichts passiert", "das Gerät geht nicht an", "die Seite lädt nicht"), dann gilt diese Voraussetzung als automatisch erfüllt – frage in diesem Fall NICHT nach einer Fehlermeldung!
-   - ANTI-REDUNDANZ-PFLICHT (KRITISCH): Bevor du nach einer Information fragst, prüfe IMMER zuerst den gesamten bisherigen Chatverlauf! Wenn eine Information (E-Mail, Fehlermeldung, Raumnummer, Problembeschreibung) bereits im Verlauf genannt wurde oder aus dem Kontext eindeutig hervorgeht, darfst du NIEMALS erneut danach fragen. Nutze bereits vorhandene Informationen direkt.
+   - ANTI-REDUNDANZ-PFLICHT (KRITISCH): Bevor du nach einer Information fragst, prüfe IMMER zuerst den Benutzerkontext aus der Anmeldung und den gesamten bisherigen Chatverlauf! Wenn eine Information (Name, E-Mail, Schulzugehörigkeit, Fehlermeldung, Raumnummer, Problembeschreibung) bereits bekannt ist oder aus dem Kontext eindeutig hervorgeht, darfst du NIEMALS erneut danach fragen. Nutze bereits vorhandene Informationen direkt.
 
 3. ABSOLUTES VERBOT (SEHR WICHTIG):
    - Der Tag [TICKET_CREATED] ist der technische Auslöser, der das Ticket SOFORT im System anlegt.
@@ -471,7 +475,7 @@ REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
      3. Sobald alle Pflichtangaben vorliegen, erstelle das Ticket SOFORT durch Ausgabe des Tags [TICKET_CREATED]!`;
   }
 
-  const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction;
+  const systemInstruction = basePrompt + knowledgeString + "\n\n" + ticketInstruction + userContext;
 
   // 3. Letzte 10 Nachrichten für den Kontext aufbereiten
   const contents = chatMessagesState.slice(-10).map(msg => {
@@ -481,11 +485,13 @@ REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
     parts.push({ text: msg.text || "" });
     
     // Bildteil hinzufügen, falls vorhanden
-    if (msg.imageUrl) {
+    if (msg.imageUrl && isImageAttachment(msg.imageUrl)) {
       try {
         let relPath = msg.imageUrl.replace(/^\/helpdesk/, '');
         if (!relPath.startsWith('/')) relPath = '/' + relPath;
-        const filePath = path.join(process.cwd(), 'public', relPath);
+        relPath = relPath.replace(/^\/(api\/)?uploads\//,'');
+        if (!/^(private|chat)\/[a-zA-Z0-9_.-]+$/.test(relPath)) throw new Error('Ungültiger Bildpfad.');
+        const filePath = path.join(uploadRoot(), relPath);
         if (fs.existsSync(filePath)) {
           const fileBuffer = fs.readFileSync(filePath);
           const base64Data = fileBuffer.toString('base64');
@@ -1119,6 +1125,7 @@ ${ticketHistoryText}`;
  * Analysiert einen Chatverlauf umfassend hinsichtlich Wissensnutzung, Wissenslücken und Feedback für die Prompt/Programm-Entwicklung.
  */
 export async function analyzeChatQuality(chatId) {
+  if (!db.prepare('SELECT ai_enabled FROM chats WHERE id=?').get(chatId)?.ai_enabled) throw new Error('Für diesen Chat ist keine KI-Verarbeitung erlaubt.');
   const { extractionModel } = getModelNames();
   
   // Chat & Nachrichten laden
@@ -1427,4 +1434,3 @@ Antworte ZWINGEND als JSON-Objekt ohne Markdown:
     return { isResolved: false };
   }
 }
-

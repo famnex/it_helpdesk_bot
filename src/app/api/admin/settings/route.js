@@ -16,6 +16,7 @@ export async function GET() {
     const config = {};
 
     rows.forEach(r => {
+      if (!r.key.endsWith('_config')) return;
       let val = JSON.parse(r.value);
       
       // Passwörter und Secrets maskieren

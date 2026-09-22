@@ -30,14 +30,14 @@ export default function SetupPage() {
       });
   }, []);
 
-  const generateRandomSecret = () => {
+  function generateRandomSecret() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+=-';
     let secret = '';
     for (let i = 0; i < 48; i++) {
       secret += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setJwtSecret(secret);
-  };
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,7 +115,7 @@ export default function SetupPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="text-[10px] text-slate-400 font-bold tracking-wider block mb-2 uppercase">
+              <label className="text-xs text-slate-400 font-bold tracking-wider block mb-2 uppercase">
                 Admin E-Mail-Adresse <span className="text-red-500">*</span>
               </label>
               <div className="relative">
@@ -134,7 +134,7 @@ export default function SetupPage() {
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 font-bold tracking-wider block mb-2 uppercase">
+              <label className="text-xs text-slate-400 font-bold tracking-wider block mb-2 uppercase">
                 Admin Name (optional)
               </label>
               <div className="relative">
@@ -153,13 +153,13 @@ export default function SetupPage() {
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-[10px] text-slate-400 font-bold tracking-wider block uppercase">
+                <label className="text-xs text-slate-400 font-bold tracking-wider block uppercase">
                   JWT Secret (für Signaturprüfung)
                 </label>
                 <button
                   type="button"
                   onClick={generateRandomSecret}
-                  className="text-[10px] font-bold text-violet-400 hover:text-violet-300 transition-colors uppercase"
+                  className="text-xs font-bold text-violet-400 hover:text-violet-300 transition-colors uppercase"
                 >
                   <i className="fa-solid fa-rotate mr-1"></i> Generieren
                 </button>
@@ -176,7 +176,7 @@ export default function SetupPage() {
                   className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all font-mono"
                 />
               </div>
-              <p className="text-[9px] text-slate-500 mt-1.5 leading-normal">
+              <p className="text-xs text-slate-500 mt-1.5 leading-normal">
                 Wird verwendet, um Sessions abzusichern. Sollte geheim gehalten werden. Standardmäßig wurde bereits ein sicherer, zufälliger Schlüssel generiert.
               </p>
             </div>
@@ -202,7 +202,7 @@ export default function SetupPage() {
             </button>
           </div>
 
-          <div className="p-4 bg-slate-950/20 rounded-2xl border border-slate-800/40 text-[10px] text-slate-400 leading-normal flex items-start gap-2.5">
+          <div className="p-4 bg-slate-950/20 rounded-2xl border border-slate-800/40 text-xs text-slate-400 leading-normal flex items-start gap-2.5">
             <i className="fa-solid fa-info-circle text-violet-500 mt-0.5 shrink-0 text-xs"></i>
             <span>
               Nach Abschluss der Initialisierung wirst du sofort angemeldet und zur Administration weitergeleitet. Dort kannst du weitere Konfigurationen (wie E-Mail-Server, GitHub-Verbindungen und Gemini-API-Schlüssel) hinterlegen.

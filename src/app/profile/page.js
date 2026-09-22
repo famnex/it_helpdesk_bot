@@ -19,7 +19,7 @@ export default function ProfilePage() {
     loadProfile();
   }, []);
 
-  const loadProfile = async () => {
+  async function loadProfile() {
     try {
       const res = await fetch('/api/profile');
       if (!res.ok) {
@@ -37,7 +37,7 @@ export default function ProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleSaveName = async (e) => {
     e.preventDefault();
@@ -135,7 +135,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <h1 className="text-base font-bold text-white">Mein Profil</h1>
-            <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider">Benutzereinstellungen</p>
+            <p className="text-xs text-violet-400 font-bold uppercase tracking-wider">Benutzereinstellungen</p>
           </div>
         </div>
 
@@ -162,7 +162,7 @@ export default function ProfilePage() {
                   className="w-24 h-24 rounded-full object-cover border-2 border-violet-500 shadow-xl transition-transform group-hover:scale-105"
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center border-2 border-slate-750 text-3xl text-slate-400 shadow-xl group-hover:scale-105 transition-transform">
+                <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center border-2 border-slate-700 text-3xl text-slate-400 shadow-xl group-hover:scale-105 transition-transform">
                   <i className="fa-solid fa-user"></i>
                 </div>
               )}
@@ -170,7 +170,7 @@ export default function ProfilePage() {
               {/* Upload Overlay on Hover */}
               <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
                 <i className="fa-solid fa-camera text-base mb-1"></i>
-                <span className="text-[9px] font-bold uppercase">Ändern</span>
+                <span className="text-xs font-bold uppercase">Ändern</span>
                 <input
                   type="file"
                   accept=".jpg,.jpeg,.png,.gif,.webp"
@@ -190,9 +190,9 @@ export default function ProfilePage() {
 
             <div>
               <h2 className="text-lg font-bold text-white">{profile?.name || 'Name nicht eingerichtet'}</h2>
-              <p className="text-xs text-slate-450 mt-0.5">{profile?.email}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{profile?.email}</p>
               <div className="mt-2.5">
-                <span className="text-[9px] font-bold text-violet-400 bg-violet-600/10 px-2.5 py-1 rounded-full uppercase border border-violet-500/15 tracking-wider">
+                <span className="text-xs font-bold text-violet-400 bg-violet-600/10 px-2.5 py-1 rounded-full uppercase border border-violet-500/15 tracking-wider">
                   Rolle: {profile?.role === 'admin' ? 'Administrator' : 'Support-Agent'}
                 </span>
               </div>
@@ -216,7 +216,7 @@ export default function ProfilePage() {
           {/* Form to Update Profile Name */}
           <form onSubmit={handleSaveName} className="space-y-4">
             <div>
-              <label className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-1.5">Anzeigename</label>
+              <label className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Anzeigename</label>
               <input
                 type="text"
                 value={name}
@@ -228,7 +228,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="pt-2 flex justify-between items-center">
-              <span className="text-[10px] text-slate-500 font-medium">
+              <span className="text-xs text-slate-500 font-medium">
                 Registriert seit: {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('de-DE') : 'Unbekannt'}
               </span>
               <button

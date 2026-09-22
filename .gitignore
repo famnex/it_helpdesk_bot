@@ -58,3 +58,8 @@ scratch/
 test_system_data.json
 *_data.json
 
+
+# Protected runtime attachments and SQLite sidecars
+/uploads/
+*.db-wal
+*.db-shm

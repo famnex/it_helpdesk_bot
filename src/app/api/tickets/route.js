@@ -1,3 +1,5 @@
+import { idempotent } from '@/lib/idempotency';
+import { canAccessChat, canAccessTicket, recordTicketIdentity, isStaff } from '@/lib/access';
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
@@ -32,7 +34,7 @@ export async function GET(request) {
       }
 
       tickets = db.prepare(`
-        SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
+        SELECT t.id, t.ai_enabled as aiEnabled, t.title, t.status, t.creator_email as creatorEmail,
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
                t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
                t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
@@ -55,7 +57,7 @@ export async function GET(request) {
       }
 
       tickets = db.prepare(`
-        SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
+        SELECT t.id, t.ai_enabled as aiEnabled, t.title, t.status, t.creator_email as creatorEmail,
                t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
                t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
                t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
@@ -63,11 +65,7 @@ export async function GET(request) {
                t.last_agent_read_at as lastAgentReadAt,
                t.created_at as createdAt, t.updated_at as updatedAt,
                COALESCE(cu.name, ch.user_name) as creatorName,
-               (CASE 
-                  WHEN t.is_authenticated_creator = 1 THEN 1
-                  WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%' OR cu.id LIKE 'user-%') THEN 1
-                  ELSE 0 
-                END) as isRegisteredUser,
+               t.auth_method as creatorAuthMethod, (CASE WHEN t.auth_method IN ('idp','email') THEN 1 ELSE 0 END) as isRegisteredUser,
                (CASE
                   WHEN t.last_agent_read_at IS NULL THEN 1
                   WHEN EXISTS (
@@ -150,15 +148,21 @@ export async function GET(request) {
  * POST: Erstellt ein neues Ticket.
  * - Wenn nicht angemeldet, muss eine E-Mail-Adresse übergeben werden.
  */
-export async function POST(request) {
+async function createMessage(request) {
   try {
     const user = await getSessionUser();
     const data = await request.json();
+    if (data.chat_id && (typeof data.chat_id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(data.chat_id))) return NextResponse.json({error:'Ungültige Chat-ID.'},{status:400});
+    if (data.chat_id && !await canAccessChat(data.chat_id,user) && !(isStaff(user) && !db.prepare('SELECT id FROM chats WHERE id=?').get(data.chat_id))) return NextResponse.json({error:'Kein Zugriff auf diesen Chat.'},{status:403});
+    const sourceChat = data.chat_id ? db.prepare('SELECT * FROM chats WHERE id=?').get(data.chat_id) : null;
+    const aiEnabled = sourceChat?.ai_enabled === 1;
+    const existingTicket = data.chat_id && db.prepare('SELECT id FROM tickets WHERE chat_id=?').get(data.chat_id);
+    if (existingTicket) return NextResponse.json({success:true,ticketId:existingTicket.id,id:existingTicket.id});
     
     const isAgent = user && (user.role === 'agent' || user.role === 'admin');
     let email = (isAgent && data.creator_email) ? data.creator_email : (user ? user.email : data.creator_email);
     
-    if (!email) {
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ 
         error: 'E-Mail-Adresse ist erforderlich.', 
         emailRequired: true 
@@ -174,7 +178,7 @@ export async function POST(request) {
         const customerName = inputName || email.split('@')[0];
         db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, \'customer\', ?)')
           .run(customerId, email, customerName);
-      } else if (inputName && userExists.name !== inputName) {
+      } else if (user?.id === userExists.id && inputName && userExists.name !== inputName) {
         db.prepare('UPDATE users SET name = ? WHERE id = ?').run(inputName, userExists.id);
       }
     }
@@ -183,7 +187,7 @@ export async function POST(request) {
     const chatId = data.chat_id || null;
 
     // Wenn ein Chat verknüpft ist, generiere den Titel per KI aus dem Verlauf (auch im Direktmodus)
-    if (chatId) {
+    if (chatId && aiEnabled) {
       try {
         const chatMessages = db.prepare(`
           SELECT sender, text FROM chat_messages 
@@ -229,6 +233,7 @@ export async function POST(request) {
           : (user && user.email === email ? user.name : null);
         db.prepare('INSERT INTO chats (id, user_email, user_name) VALUES (?, ?, ?)')
           .run(chatId, email, chatUserName);
+        db.prepare("UPDATE chats SET owner_user_id=?, auth_method='guest', is_agent_on_behalf=1 WHERE id=?").run(user.id,chatId);
       }
     }
 
@@ -251,7 +256,7 @@ export async function POST(request) {
       `).all(chatId);
     }
 
-    if (potentialAgents.length > 0) {
+    if (aiEnabled && potentialAgents.length > 0) {
       try {
         matchedAgentId = await determineAgentAssignment(title, chatMessages, potentialAgents);
       } catch (err) {
@@ -263,7 +268,7 @@ export async function POST(request) {
     let assignedAgentId = null;
     let matchedAgent = null;
 
-    let requestedAssignee = data.assignedAgentId || data.assigned_agent_id;
+    let requestedAssignee = isAgent ? data.assignedAgentId || data.assigned_agent_id : 'auto';
 
     // Wenn der Ersteller explizit 'me' wählt, direkt ihm selbst zuweisen
     if (requestedAssignee === 'me' && isAgent) {
@@ -295,11 +300,15 @@ export async function POST(request) {
 
     const isAuthenticatedCreator = (user && user.email === email) ? 1 : 0;
 
+    const concurrentTicket = chatId && db.prepare('SELECT id FROM tickets WHERE chat_id=?').get(chatId);
+    if (concurrentTicket) return NextResponse.json({success:true,ticketId:concurrentTicket.id});
     // Ticket anlegen
     db.prepare(`
       INSERT INTO tickets (id, title, status, creator_email, assigned_agent_id, chat_id, is_authenticated_creator) 
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(ticketId, title, status, email, assignedAgentId, chatId, isAuthenticatedCreator);
+    recordTicketIdentity(ticketId,user,email,!!sourceChat?.is_agent_on_behalf || (isAgent && !!data.creator_email));
+    db.prepare('UPDATE tickets SET ai_enabled=? WHERE id=?').run(aiEnabled ? 1 : 0,ticketId);
 
     // Chat als ticket_created markieren, System-Event und Chat-Verlauf im Ticket speichern
     if (chatId) {
@@ -320,21 +329,21 @@ export async function POST(request) {
       // Chat-Verlauf vollständig in die Ticket-Nachrichten importieren
       try {
         const rawChatMsgs = db.prepare(`
-          SELECT sender, text, image_url, created_at 
+          SELECT id, sender, text, image_url, created_at
           FROM chat_messages 
           WHERE chat_id = ? AND text NOT LIKE '[SYSTEM_EVENT:%'
           ORDER BY created_at ASC
         `).all(chatId);
 
         const insertTmStmt = db.prepare(`
-          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url, created_at)
-          VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+          INSERT INTO ticket_messages (ticket_id, sender_email, sender_role, text, image_url, created_at, chat_message_id)
+          VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)
         `);
 
         for (const cMsg of rawChatMsgs) {
           const sRole = cMsg.sender === 'user' ? 'customer' : 'bot';
           const sEmail = cMsg.sender === 'user' ? email : 'IT-Support-Bot';
-          insertTmStmt.run(ticketId, sEmail, sRole, cMsg.text, cMsg.image_url || null, cMsg.created_at || null);
+          insertTmStmt.run(ticketId, sEmail, sRole, cMsg.text, cMsg.image_url || null, cMsg.created_at || null, cMsg.id);
         }
       } catch (importErr) {
         console.error('Fehler beim Importieren des Chat-Verlaufs ins Ticket:', importErr);
@@ -395,3 +404,5 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
   }
 }
+
+export const POST = idempotent(createMessage);

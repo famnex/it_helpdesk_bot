@@ -1,3 +1,5 @@
+import { withAttachmentMetadata } from '@/lib/uploads';
+import { canAccessRoom, isStaff } from '@/lib/access';
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
@@ -20,8 +22,10 @@ export async function GET(request) {
   const roomId = searchParams.get('roomId');
   const lastMsgId = parseInt(searchParams.get('lastMsgId') || '0', 10);
   const lastTicketMsgId = parseInt(searchParams.get('lastTicketMsgId') || '0', 10);
-  const myRole = searchParams.get('myRole') || ''; // 'customer', 'agent', 'admin', 'bot'
-  const myEmail = (searchParams.get('myEmail') || '').toLowerCase();
+  const user = await getSessionUser();
+  if (!await canAccessRoom(roomType,roomId,user)) return NextResponse.json({error:'Kein Zugriff.'},{status:403});
+  const myRole = user?.role || 'customer';
+  const myEmail = user?.email?.toLowerCase() || '';
 
   if (!roomId) {
     return NextResponse.json({ error: 'roomId fehlt.' }, { status: 400 });
@@ -41,14 +45,14 @@ export async function GET(request) {
     if (roomType === 'ticket') {
       // Abfragen neuer Ticket-Nachrichten ab lastMsgId
       const rows = db.prepare(`
-        SELECT m.id, m.ticket_id as ticketId, m.sender_email as senderEmail, 
-               m.sender_role as senderRole, m.text, m.is_internal as isInternal, 
+        SELECT m.id, m.ticket_id as ticketId, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail,
+               m.sender_role as senderRole, m.image_url as imageUrl, m.text, m.is_internal as isInternal,
                m.created_at as createdAt, u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
         LEFT JOIN users u ON m.sender_email = u.email
-        WHERE m.ticket_id = ? AND m.id > ?
+        WHERE m.ticket_id = ? AND m.id > ? AND (m.is_internal = 0 OR ?)
         ORDER BY m.id ASC
-      `).all(roomId, lastMsgId);
+      `).all(roomId, lastMsgId, isStaff(user) ? 1 : 0);
 
       newMessages = rows.map(m => {
         if (m.senderAvatarUrl && !m.senderAvatarUrl.startsWith('/helpdesk')) {
@@ -95,8 +99,8 @@ export async function GET(request) {
         const ticket = db.prepare(`SELECT id FROM tickets WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1`).get(roomId);
         if (ticket) {
           const ticketRows = db.prepare(`
-            SELECT m.id, m.ticket_id as ticketId, m.sender_email as senderEmail, 
-                   m.sender_role as senderRole, m.text, m.is_internal as isInternal, 
+            SELECT m.id, m.ticket_id as ticketId, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail,
+                   m.sender_role as senderRole, m.image_url as imageUrl, m.text, m.is_internal as isInternal,
                    m.created_at as createdAt, u.name as senderName, u.avatar_url as senderAvatarUrl
             FROM ticket_messages m
             LEFT JOIN users u ON m.sender_email = u.email
@@ -318,8 +322,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      newMessages,
-      newTicketMessages,
+      newMessages: newMessages.map(withAttachmentMetadata),
+      newTicketMessages: newTicketMessages.map(withAttachmentMetadata),
       isOtherPartyTyping,
       partnerPresence,
       ticketMeta: typeof ticketMeta !== 'undefined' ? ticketMeta : null
@@ -335,13 +339,16 @@ export async function GET(request) {
  */
 export async function POST(request) {
   try {
-    const { roomType = 'ticket', roomId, role = 'customer', email = '', isTyping = true } = await request.json();
+    const { roomType = 'ticket', roomId, isTyping = true } = await request.json();
 
     if (!roomId) {
       return NextResponse.json({ error: 'roomId fehlt.' }, { status: 400 });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    const user = await getSessionUser();
+    if (!await canAccessRoom(roomType,roomId,user)) return NextResponse.json({error:'Kein Zugriff.'},{status:403});
+    const role = user?.role || 'customer';
+    const cleanEmail = user?.email?.toLowerCase() || '';
     const storeKey = `${roomType}:${roomId}:${role}:${cleanEmail}`;
 
     if (isTyping) {

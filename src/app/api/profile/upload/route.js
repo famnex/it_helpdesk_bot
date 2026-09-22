@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+import { saveAttachment, uploadRoot } from '@/lib/uploads';
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import db from '@/lib/db';
@@ -29,22 +31,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Die Datei ist zu groß (maximal 10 MB).' }, { status: 400 });
     }
 
-    // Datei einlesen
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    // Pfad für Upload-Ordner sicherstellen
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'avatars');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    // Dateiname erzeugen (avatar-[user-id].[ext])
-    const fileExtension = file.name.split('.').pop() || 'png';
-    const filename = `avatar-${user.id}.${fileExtension}`;
-    const filePath = path.join(uploadsDir, filename);
-
-    // Datei auf Server schreiben
-    fs.writeFileSync(filePath, buffer);
+    const saved = await saveAttachment(file,{user});
+    const stored = saved.split('/').pop();
+    const uploadsDir = path.join(uploadRoot(),'avatars');
+    fs.mkdirSync(uploadsDir,{recursive:true});
+    const filename = `${randomUUID()}${path.extname(stored)}`;
+    fs.renameSync(path.join(uploadRoot(),'private',stored),path.join(uploadsDir,filename));
+    db.prepare('DELETE FROM private_uploads WHERE id=?').run(stored);
 
     // avatar_url in Datenbank speichern
     const relativeUrl = `/uploads/avatars/${filename}?t=${Date.now()}`; // Timestamp verhindert Browser-Caching

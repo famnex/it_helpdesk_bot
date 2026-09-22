@@ -14,6 +14,24 @@ export default function CustomerTicketsPage() {
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
   const router = useRouter();
 
+  async function loadTickets(currentUser) {
+    try {
+      const res = await fetch('/api/tickets?status=all');
+      if (res.ok) {
+        const data = await res.json();
+        const myTickets = (data.tickets || []).filter(t => t.creatorEmail === currentUser?.email);
+        setTickets(myTickets);
+        if (data.counts) {
+          setTicketCounts(data.counts);
+        }
+      }
+    } catch (err) {
+      console.error('Fehler beim Laden der Tickets:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   useEffect(() => {
     // Session prüfen
     const sessionId = localStorage.getItem('it_helpdesk_session_uuid') || '';
@@ -38,23 +56,7 @@ export default function CustomerTicketsPage() {
       });
   }, []);
 
-  const loadTickets = async (currentUser) => {
-    try {
-      const res = await fetch('/api/tickets?status=all');
-      if (res.ok) {
-        const data = await res.json();
-        const myTickets = (data.tickets || []).filter(t => t.creatorEmail === currentUser?.email);
-        setTickets(myTickets);
-        if (data.counts) {
-          setTicketCounts(data.counts);
-        }
-      }
-    } catch (err) {
-      console.error('Fehler beim Laden der Tickets:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   const handleLogout = async () => {
     try {
@@ -98,7 +100,7 @@ export default function CustomerTicketsPage() {
           </a>
           <div>
             <h1 className="text-base font-bold text-white">Mein Ticket-Portal</h1>
-            <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Kunden-Bereich</p>
+            <p className="text-xs text-sky-400 font-bold uppercase tracking-wider">Kunden-Bereich</p>
           </div>
         </div>
         
@@ -193,12 +195,12 @@ export default function CustomerTicketsPage() {
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <span className="text-xs font-mono font-bold text-slate-500 group-hover:text-slate-400">{tk.id}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
                     </div>
                     <h3 className="font-bold text-sm text-white group-hover:text-sky-400 transition-colors line-clamp-1">{tk.title}</h3>
                   </div>
 
-                  <div className="border-t border-slate-800/50 mt-4 pt-4 flex justify-between items-center text-[10px] text-slate-500">
+                  <div className="border-t border-slate-800/50 mt-4 pt-4 flex justify-between items-center text-xs text-slate-500">
                     <span>
                       <i className="fa-regular fa-clock mr-1"></i>
                       Erstellt: {new Date(tk.createdAt).toLocaleDateString('de-DE')}
@@ -206,7 +208,7 @@ export default function CustomerTicketsPage() {
                     
                     {tk.status === 'closed' ? (
                       <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                        <i className="fa-solid fa-lock text-[9px] text-emerald-500"></i>
+                        <i className="fa-solid fa-lock text-xs text-emerald-500"></i>
                         <span>
                           {tk.closedByName 
                             ? `Geschlossen von ${tk.closedByName}` 

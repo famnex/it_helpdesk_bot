@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
+import { migrateSecurity } from './migrations';
 
 // Datenbank-Datei im Hauptverzeichnis des Projekts platzieren
-const dbPath = path.resolve(process.cwd(), 'database.db');
+const dataDir = process.env.HELPDESK_DATA_DIR || process.cwd();
+fs.mkdirSync(dataDir, { recursive: true });
+const dbPath = path.resolve(dataDir, 'database.db');
 const db = new Database(dbPath);
 
 // Sicherstellen, dass Foreign Keys aktiviert sind
@@ -790,6 +794,8 @@ export function isSetupRequired() {
     return true;
   }
 }
+
+migrateSecurity(db);
 
 // 5-Minuten Cronjob für Bot-Chat-Kategorisierung beim Server-Start initiieren
 try {

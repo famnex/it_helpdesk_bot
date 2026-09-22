@@ -14,7 +14,7 @@ export async function queueTicketNotification({ ticketId, recipientEmail, recipi
     const existing = db.prepare(`
       SELECT id, messages_summary 
       FROM pending_ticket_notifications 
-      WHERE ticket_id = ? AND recipient_email = ? AND sent_at IS NULL
+      WHERE ticket_id = ? AND recipient_email = ? AND sent_at IS NULL AND processing_until IS NULL AND attempts < 5
     `).get(ticketId, recipientEmail);
 
     const newMsgItem = {
@@ -72,7 +72,7 @@ export async function flushPendingNotifications() {
              recipient_role as recipientRole, messages_summary as messagesSummary, 
              created_at as createdAt 
       FROM pending_ticket_notifications 
-      WHERE sent_at IS NULL AND scheduled_send_at <= CURRENT_TIMESTAMP
+      WHERE sent_at IS NULL AND attempts < 5 AND (processing_until IS NULL OR processing_until < CURRENT_TIMESTAMP) AND scheduled_send_at <= CURRENT_TIMESTAMP
     `).all();
 
     if (pendingList.length === 0) return;
@@ -117,6 +117,8 @@ export async function flushTicketNotificationsNow(ticketId) {
  * Hilfsfunktion zum Versenden einer einzelnen gepufferten Benachrichtigung.
  */
 async function processAndSendNotificationItem(item) {
+  const claimed = db.prepare("UPDATE pending_ticket_notifications SET processing_until=datetime('now','+5 minutes'), attempts=attempts+1 WHERE id=? AND sent_at IS NULL AND attempts<5 AND (processing_until IS NULL OR processing_until<CURRENT_TIMESTAMP)").run(item.id);
+  if (!claimed.changes) return;
   try {
     let msgItems = [];
     try {
@@ -157,12 +159,14 @@ async function processAndSendNotificationItem(item) {
       </div>
     `;
 
-    await sendMail({ to: item.recipientEmail, subject, html, text });
+    const sent = await sendMail({ to: item.recipientEmail, subject, html, text });
+    if (!sent) throw new Error('SMTP-Versand fehlgeschlagen.');
 
     // Als versendet markieren
-    db.prepare('UPDATE pending_ticket_notifications SET sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(item.id);
+    db.prepare('UPDATE pending_ticket_notifications SET sent_at = CURRENT_TIMESTAMP, processing_until=NULL, last_error=NULL WHERE id = ?').run(item.id);
     console.log(`[Notification-Queue] Zusammengefasste E-Mail für Ticket ${item.ticketId} erfolgreich an ${item.recipientEmail} gesendet.`);
   } catch (sendErr) {
+    db.prepare("UPDATE pending_ticket_notifications SET processing_until=NULL, last_error=?, scheduled_send_at=datetime('now', '+' || (60 * (1 << attempts)) || ' seconds') WHERE id=?").run(String(sendErr.message).slice(0,500),item.id);
     console.error(`[Notification-Queue] Fehler beim Senden an ${item.recipientEmail}:`, sendErr);
   }
 }

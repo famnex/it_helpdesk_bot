@@ -22,7 +22,7 @@ export async function POST(request, { params }) {
     }
 
     // Ticket laden
-    const ticket = db.prepare('SELECT title, status, creator_email as creatorEmail FROM tickets WHERE id = ?').get(id);
+    const ticket = db.prepare('SELECT ai_enabled, title, status, creator_email as creatorEmail FROM tickets WHERE id = ?').get(id);
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
     }
@@ -82,7 +82,7 @@ export async function POST(request, { params }) {
     // --- KI Wissens-Extraktion & Deduplizierung NUR wenn learnBotKnowledge === true ---
     let savedChunks = [];
     let computedContext = null;
-    if (learnBotKnowledge === true) {
+    if (learnBotKnowledge === true && ticket.ai_enabled === 1) {
       const messages = db.prepare('SELECT sender_role, text FROM ticket_messages WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC').all(id);
       
       let ticketHistoryText = `TICKET: ${id}\nTHEMA: ${ticket.title}\n\nVERLAUF:\n`;

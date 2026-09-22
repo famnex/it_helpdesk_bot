@@ -2,27 +2,8 @@ import nodemailer from 'nodemailer';
 import db from './db.js';
 import { generateMagicLinkToken } from './auth.js';
 
-/**
- * Ermittelt die Basis-URL des Helpdesks für E-Mail-Links.
- */
-export function getBaseAppUrl() {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
-  }
-  try {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('idp_config');
-    if (row && row.value) {
-      const parsed = JSON.parse(row.value);
-      if (parsed.appUrl) return parsed.appUrl.replace(/\/$/, '');
-    }
-  } catch (e) {}
-
-  // Standard für Produktivumgebung an der MSO
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://cloud.mso-hef.de/helpdesk';
-  }
-  return 'http://localhost:3000';
-}
+import { getBaseAppUrl } from './appUrl';
+export { getBaseAppUrl };
 
 /**
  * Formatiert den Absender sauber (inklusive optionalem Anzeigenamen).
@@ -81,7 +62,7 @@ export async function sendMail({ to, subject, html, text }, overrideConfig = nul
       pass: config.pass
     } : undefined,
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: true
     },
     connectionTimeout: 8000,
     greetingTimeout: 8000,

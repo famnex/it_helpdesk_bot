@@ -1,61 +1,38 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-
-/**
- * Dynamischer File-Server API Route
- * Ersetzt das statische Next.js Public-Serving für zur Laufzeit hochgeladene Dateien.
- * Garantiert 100% Zuverlässigkeit ohne 404-Fehler in Production Mode (next start).
- */
+import db from '@/lib/db';
+import { getSessionUser } from '@/lib/auth';
+import { canAccessChat, canAccessTicket, isStaff } from '@/lib/access';
+import { uploadRoot } from '@/lib/uploads';
 export async function GET(request, { params }) {
-  try {
-    const resolvedParams = await params;
-    const pathSegments = resolvedParams.path || [];
-    const relativePath = pathSegments.join('/');
-
-    // Schutz vor Pfad-Traversal (Security Check)
-    if (relativePath.includes('..')) {
-      return new NextResponse('Verboten', { status: 403 });
+  const parts = (await params).path || [];
+  if (parts.length !== 2 || parts.some(p => !p || p === '.' || p === '..' || /[\\/\x00]/.test(p))) return new NextResponse(null,{status:404});
+  const [scope,name] = parts;
+  const privateScope = ['private','chat','tickets'].includes(scope);
+  if (!privateScope && !['avatars','attachments'].includes(scope)) return new NextResponse(null,{status:404});
+  let mime, filename = name;
+  if (privateScope) {
+    const user = await getSessionUser();
+    const urls = [`/api/uploads/${scope}/${name}`,`/uploads/${scope}/${name}`,`/helpdesk/api/uploads/${scope}/${name}`,`/helpdesk/uploads/${scope}/${name}`];
+    const messages = db.prepare('SELECT ticket_id,is_internal FROM ticket_messages WHERE image_url IN (?,?,?,?)').all(...urls);
+    const chats = db.prepare('SELECT chat_id FROM chat_messages WHERE image_url IN (?,?,?,?)').all(...urls);
+    let allowed = false;
+    for (const m of messages) if ((!m.is_internal || isStaff(user)) && await canAccessTicket(m.ticket_id,user)) allowed = true;
+    // An internal attachment must never be exposed through a second public reference.
+    if (messages.some(m => m.is_internal) && !isStaff(user)) return new NextResponse(null,{status:403});
+    for (const m of chats) if (await canAccessChat(m.chat_id,user)) allowed = true;
+    const upload = scope === 'private' ? db.prepare('SELECT * FROM private_uploads WHERE id=?').get(name) : null;
+    if (upload) {
+      mime = upload.mime; filename = upload.filename;
+      // Before sending, only the uploader can preview it.
+      if (!messages.length && !chats.length && user && upload.owner_user_id === user.id) allowed = true;
     }
-
-    // Pfade auf dem Server prüfen (public/uploads/ vs uploads/)
-    let filePath = path.join(process.cwd(), 'public', 'uploads', relativePath);
-    if (!fs.existsSync(filePath)) {
-      filePath = path.join(process.cwd(), 'uploads', relativePath);
-    }
-
-    if (!fs.existsSync(filePath)) {
-      return new NextResponse('Datei nicht gefunden', { status: 404 });
-    }
-
-    const fileBuffer = fs.readFileSync(filePath);
-    const ext = path.extname(filePath).toLowerCase();
-
-    const contentTypeMap = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.svg': 'image/svg+xml',
-      '.pdf': 'application/pdf',
-      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      '.xls': 'application/vnd.ms-excel',
-      '.cer': 'application/x-x509-ca-cert',
-      '.txt': 'text/plain'
-    };
-
-    const contentType = contentTypeMap[ext] || 'application/octet-stream';
-
-    return new NextResponse(fileBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable'
-      }
-    });
-  } catch (err) {
-    console.error('Fehler beim dynamischen Ausliefern der Upload-Datei:', err);
-    return new NextResponse('Server-Fehler', { status: 500 });
+    if (!allowed) return new NextResponse(null,{status:403});
   }
+  const candidates = privateScope ? [path.join(uploadRoot(),scope,name)] : [path.join(uploadRoot(),scope,name),path.join(process.cwd(),'public','uploads',scope,name)];
+  const file = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+  if (!file) return new NextResponse(null,{status:404});
+  mime ||= ({'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'})[path.extname(name).toLowerCase()] || 'application/octet-stream';
+  return new NextResponse(fs.readFileSync(file), {headers:{'Content-Type':mime,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox",'Content-Disposition':`${mime.startsWith('image/') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(filename)}`,'Cache-Control':privateScope ? 'private, no-store' : 'public, max-age=3600'}});
 }

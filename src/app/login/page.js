@@ -9,6 +9,16 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const router = useRouter();
 
+  function redirectUser(role) {
+    if (role === 'admin') {
+      router.push('/admin');
+    } else if (role === 'agent') {
+      router.push('/agent');
+    } else {
+      router.push('/');
+    }
+  }
+
   useEffect(() => {
     // 1. Erst-Einrichtung (Setup) prüfen
     fetch('/api/setup')
@@ -40,15 +50,7 @@ export default function LoginPage() {
       .catch(err => console.error('Fehler beim Setup-Check:', err));
   }, []);
 
-  const redirectUser = (role) => {
-    if (role === 'admin') {
-      router.push('/admin');
-    } else if (role === 'agent') {
-      router.push('/agent');
-    } else {
-      router.push('/');
-    }
-  };
+
 
   // IdP Redirect auslösen
   const handleIdpLogin = () => {

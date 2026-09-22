@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title IT-Helpdesk Testumgebung
 echo ===================================================
 echo   Schul-Support KI - Testumgebung starten
@@ -8,11 +9,11 @@ echo.
 :: Check if node_modules exist, if not run npm install
 if not exist "node_modules\" (
     echo [INFO] node_modules nicht gefunden. Installiere Abhaengigkeiten...
-    call npm install
-    if %errorlevel% neq 0 (
+    call npm ci
+    if errorlevel 1 (
         echo [FEHLER] Fehler bei npm install. Bitte manuell ausfuehren!
         pause
-        exit /b %errorlevel%
+        exit /b 1
     )
 )
 
@@ -32,7 +33,7 @@ echo Warte kurz auf Initialisierung der Server (ca. 6 Sekunden)...
 timeout /t 6 /nobreak >nul
 
 echo Oeffne Web-Oberflaechen im Browser...
-start http://localhost:3000
+start http://localhost:3000/helpdesk
 start http://localhost:1080
 
 echo.
@@ -40,7 +41,7 @@ echo ===================================================
 echo   Testumgebung erfolgreich initiiert!
 echo ===================================================
 echo   - Maildev Web-Oberflaeche: http://localhost:1080
-echo   - IT-Helpdesk Anwendung:   http://localhost:3000
+echo   - IT-Helpdesk Anwendung:   http://localhost:3000/helpdesk
 echo ===================================================
 echo.
 pause

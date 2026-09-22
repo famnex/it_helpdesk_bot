@@ -1,4 +1,9 @@
 'use client';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { notify } from '@/lib/feedback';
+import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment, isImageAttachment } from '@/lib/attachments';
+import AttachmentView from '@/components/AttachmentView';
+import Dialog from '@/components/Dialog';
  
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -61,6 +66,7 @@ export default function CustomerChatPage() {
 
   const handleAcceptConsent = () => {
     localStorage.setItem('it_helpdesk_bot_consent', 'true');
+    setIsChatbotDisabled(false);
     setShowConsentModal(false);
   };
 
@@ -105,9 +111,13 @@ export default function CustomerChatPage() {
   const [showTicketPrompt, setShowTicketPrompt] = useState(false);
 
   // Photo Upload States
+  const [sendError, setSendError] = useState('');
+  const sendId = useRef(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const fileInputRef = useRef(null);
+  useUnsavedChanges(!!inputValue.trim() || !!selectedPhoto);
+  const [sendStatus, setSendStatus] = useState('');
 
   // Flagging Message States
   const [showFlagModal, setShowFlagModal] = useState(false);
@@ -161,7 +171,7 @@ export default function CustomerChatPage() {
     // DSGVO-Einwilligung prüfen
     const consent = localStorage.getItem('it_helpdesk_bot_consent');
     if (consent !== 'true') {
-      setShowConsentModal(true);
+      queueMicrotask(() => setShowConsentModal(true));
     }
 
     // 1. Erst-Einrichtung (Setup) prüfen
@@ -223,10 +233,10 @@ export default function CustomerChatPage() {
     // Prüfen, ob bereits ein aktiver Chat in der aktuellen Browser-Sitzung existiert (oder neuen erstellen)
     let activeChatId = sessionStorage.getItem('support_chat_id');
     if (!activeChatId) {
-      activeChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
+      activeChatId = `chat-${crypto.randomUUID()}`;
       sessionStorage.setItem('support_chat_id', activeChatId);
     }
-    setChatId(activeChatId);
+    queueMicrotask(() => setChatId(activeChatId));
 
     // Persistente Sitzungs-ID für Missbrauchsnachverfolgung generieren
     let persistentSessionId = localStorage.getItem('it_helpdesk_session_uuid');
@@ -237,7 +247,6 @@ export default function CustomerChatPage() {
     sessionStorage.setItem('it_helpdesk_session_uuid', persistentSessionId);
  
     // Chatverlauf laden (für den aktiven Chat)
-    setIsLoadingInitialCheck(true);
     fetch(`/api/chat?chatId=${activeChatId}`, {
       headers: {
         'X-User-Session-Id': persistentSessionId,
@@ -246,7 +255,7 @@ export default function CustomerChatPage() {
     })
       .then(async res => {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 403 || data.isIpBanned) {
+        if (data.isIpBanned) {
           setIsIpBanned(true);
           if (data.bannedUntil) setBannedUntil(data.bannedUntil);
         }
@@ -257,6 +266,15 @@ export default function CustomerChatPage() {
         }
         if (data.isAbusive) {
           setIsChatAborted(true);
+        }
+        if (data.accessDenied) {
+          const newId = `chat-${crypto.randomUUID()}`; setChatId(newId); sessionStorage.setItem('support_chat_id',newId);
+          setSendError('Der alte Verlauf ist nicht mehr zugänglich. Ein neuer Chat wurde geöffnet.');
+        }
+        if (data.aiEnabled === false) {
+          setIsChatbotDisabled(true); setDirectTicketStep(2);
+          setDirectTicketTexts((data.messages || []).filter(m => m.sender==='user' && !m.text?.startsWith('[SYSTEM_EVENT:')).map(m => m.text || ''));
+          setDirectTicketPhotos((data.messages || []).filter(m => m.sender==='user' && m.imageUrl).map(m => m.imageUrl));
         }
         if (data.messages && data.messages.length > 0) {
           setMessages(data.messages);
@@ -313,17 +331,7 @@ export default function CustomerChatPage() {
       });
   }, []);
 
-  // Begrüßung aktualisieren, sobald Benutzerdaten geladen sind
-  useEffect(() => {
-    if (messages.length === 1 && messages[0].sender === 'bot') {
-      setMessages([
-        {
-          sender: 'bot',
-          text: getGreetingText(user)
-        }
-      ]);
-    }
-  }, [user]);
+
  
   // Live-Sync Polling (1,5 Sekunden Intervall für Support-Agenten Tipp-Indikator & Live-Nachrichten)
   useEffect(() => {
@@ -351,18 +359,20 @@ export default function CustomerChatPage() {
               const newChatItems = data.newMessages.map(m => ({
                 id: m.id,
                 sender: m.sender,
-                text: m.text,
-                imageUrl: m.imageUrl,
+                text: m.text, imageUrl: m.imageUrl || null, attachmentName: m.attachmentName,
                 isFlagged: m.isFlagged,
                 createdAt: m.createdAt
               }));
 
               setMessages(prev => {
-                const existingIds = new Set(prev.map(p => p.id));
-                const existingTexts = new Set(prev.map(p => (p.text || '').trim()));
-                const toAdd = newChatItems.filter(m => !existingIds.has(m.id) && !existingTexts.has((m.text || '').trim()));
-                if (toAdd.length === 0) return prev;
-                return [...prev, ...toAdd];
+                const merged = [...prev];
+                for (const incoming of newChatItems) {
+                  if (merged.some(m => m.id === incoming.id)) continue;
+                  const pending = merged.findIndex(m => m.localId && !m.id && m.sender === incoming.sender && m.text === incoming.text);
+                  if (pending >= 0) merged[pending] = {...merged[pending],...incoming};
+                  else merged.push(incoming);
+                }
+                return merged;
               });
             }
 
@@ -375,7 +385,7 @@ export default function CustomerChatPage() {
                 const formattedTicketMsgs = data.newTicketMessages
                   .filter(m => {
                     // System-Events, interne Notizen und Kunden-Chat-Duplikate überspringen
-                    if (m.isInternal) return false;
+                    if (m.isInternal || m.sourceChatMessageId) return false;
                     if (m.senderRole === 'customer') return false;
                     if (m.senderRole === 'system') return false;
                     if (m.text && (
@@ -400,16 +410,14 @@ export default function CustomerChatPage() {
                       senderRole: m.senderRole,
                       senderName: isHumanAgent ? m.senderName : 'Support-Team',
                       senderAvatarUrl: m.senderAvatarUrl || null,
-                      text: m.text,
-                      imageUrl: m.imageUrl || null,
+                      text: m.text, imageUrl: m.imageUrl || null, attachmentName: m.attachmentName,
                       createdAt: m.createdAt
                     };
                   });
 
                 setMessages(prev => {
                   const existingIds = new Set(prev.map(p => p.id));
-                  const existingTexts = new Set(prev.map(p => (p.text || '').trim()));
-                  const toAdd = formattedTicketMsgs.filter(m => !existingIds.has(m.id) && !existingTexts.has((m.text || '').trim()));
+                  const toAdd = formattedTicketMsgs.filter(m => !existingIds.has(m.id));
                   if (toAdd.length === 0) return prev;
                   return [...prev, ...toAdd];
                 });
@@ -436,34 +444,33 @@ export default function CustomerChatPage() {
     }
   };
 
+  function scrollToBottom(force = false) {
+    if (force || isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping, isAgentTyping, showTicketPrompt]);
  
-  const scrollToBottom = (force = false) => {
-    if (force || isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+
  
-  const handlePhotoSelect = (e) => {
-    const file = e.target.files[0];
+  const selectPhoto = (file) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Das Foto darf maximal 10 MB groß sein.');
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      alert('Es sind nur Bilddateien erlaubt.');
-      return;
-    }
+    const error = attachmentError(file);
+    if (error) { setSendError(error); return; }
+    if (selectedPhoto && !window.confirm('Den bereits gewählten Anhang ersetzen?')) return;
+    setSendError('');
+    sendId.current = null;
     setSelectedPhoto(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    if (isImageAttachment(file.name)) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPhotoPreview(reader.result);
+      reader.readAsDataURL(file);
+    } else setPhotoPreview(null);
   };
+  const handlePhotoSelect = e => selectPhoto(e.target.files?.[0]);
 
   const handleDiscardPhoto = () => {
     setSelectedPhoto(null);
@@ -477,6 +484,7 @@ export default function CustomerChatPage() {
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputValue(val);
+    sendId.current = null;
 
     const now = Date.now();
     if (now - lastTypedTimeRef.current > 2000) {
@@ -509,58 +517,39 @@ export default function CustomerChatPage() {
     const currentPhoto = selectedPhoto;
     const currentPreview = photoPreview;
 
-    setInputValue('');
-    handleDiscardPhoto();
+    setSendError('');
+    sendId.current ||= crypto.randomUUID();
+    const draftId = sendId.current;
     
     // User-Nachricht lokal im Chat anzeigen
     setMessages(prev => [...prev, { 
-      sender: 'user', 
+      localId: draftId, sender: 'user',
       text: userText,
-      imageUrl: currentPreview 
+      imageUrl: currentPreview, attachmentName: currentPhoto?.name
     }]);
 
-    // Wenn der Chatbot deaktiviert ist, sammeln wir Nachrichten & Bilder für das Ticket
     if (isChatbotDisabled) {
-      if (userText.trim()) {
-        setDirectTicketTexts(prev => [...prev, userText]);
-      }
-      if (currentPhoto) {
-        // Foto hochladen (mit skip_bot = true)
-        setIsTyping(true);
-        try {
-          const formData = new FormData();
-          formData.append('chatId', chatId);
-          formData.append('photo', currentPhoto);
-          formData.append('skip_bot', 'true');
-          
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            body: formData
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.imageUrl || currentPreview) {
-              setDirectTicketPhotos(prev => [...prev, getCleanImageUrl(data.imageUrl || currentPreview)]);
-            }
-          }
-        } catch (err) {
-          console.error('Fehler beim Bild-Upload:', err);
-        } finally {
-          setIsTyping(false);
-        }
-      } else if (userText.trim()) {
-        // Textnachricht an Chat-API spiegeln (mit skip_bot = true)
-        try {
-          await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId, text: userText, skip_bot: true })
-          });
-        } catch (err) {
-          console.error('Fehler beim Nachricht-Spiegeln:', err);
-        }
-      }
-      return;
+      setIsTyping(true);
+      try {
+        const form = new FormData();
+        form.append('chatId',chatId); form.append('text',userText);
+        form.append('skip_bot','true'); form.append('aiEnabled','false');
+        if (currentPhoto) form.append('photo',currentPhoto);
+        const res = await fetch('/api/chat',{method:'POST',headers:{'Idempotency-Key':sendId.current},body:form});
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Senden fehlgeschlagen.');
+        if (userText.trim()) setDirectTicketTexts(prev => [...prev,userText]);
+        if (data.imageUrl) setDirectTicketPhotos(prev => [...prev,data.imageUrl]);
+        const sentId = sendId.current;
+        setMessages(prev => prev.map(m => m.localId === sentId ? {...m,id:data.userMessageId,imageUrl:data.imageUrl || null} : m));
+        setInputValue(''); handleDiscardPhoto(); sendId.current = null; setSendStatus('Gesendet');
+        return true;
+      } catch (err) {
+        const failedId = sendId.current;
+        setMessages(prev => prev.filter(m => m.localId !== failedId));
+        setSendError(err.message + ' Dein Entwurf ist erhalten. Bitte erneut senden.');
+        return false;
+      } finally { setIsTyping(false); }
     }
 
     setIsTyping(true);
@@ -569,6 +558,7 @@ export default function CustomerChatPage() {
       const formData = new FormData();
       formData.append('chatId', chatId);
       formData.append('text', userText);
+      formData.append('aiEnabled', 'true');
       if (currentPhoto) {
         formData.append('photo', currentPhoto);
       }
@@ -578,6 +568,7 @@ export default function CustomerChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
+          'Idempotency-Key': sendId.current,
           'X-User-Session-Id': persistentSessionId,
           'X-Device-Fingerprint': getOrCreateDeviceFingerprint()
         },
@@ -610,8 +601,7 @@ export default function CustomerChatPage() {
         } else {
           setMessages(prev => [...prev, { sender: 'bot', text: errData.error || 'Zugriff verweigert.' }]);
         }
-        setIsTyping(false);
-        return;
+        throw new Error(errData.error || 'Zugriff verweigert.');
       }
 
       if (!res.ok) {
@@ -624,6 +614,9 @@ export default function CustomerChatPage() {
       }
 
       const data = await res.json();
+      const sentId = sendId.current;
+      setMessages(prev => prev.map(m => m.localId === sentId ? {...m,id:data.userMessageId,imageUrl:data.imageUrl || null} : m));
+      setInputValue(''); handleDiscardPhoto(); sendId.current = null; setSendStatus('Gesendet');
 
       if (data.isIpBanned) {
         setIsIpBanned(true);
@@ -660,16 +653,16 @@ export default function CustomerChatPage() {
             if (chatData.messages && chatData.messages.length > 0) {
               setMessages(chatData.messages);
             } else {
-              setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+              setMessages(prev => prev.some(m => m.id === data.botMessageId) ? prev : [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
             }
           }
         } catch (e) {
           console.error('Fehler beim Laden des zusammengeführten Chats:', e);
-          setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+          setMessages(prev => prev.some(m => m.id === data.botMessageId) ? prev : [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
         }
       } else if (data.text) {
         // Bot-Nachricht hinzufügen (nur wenn Antwort-Text vorhanden ist)
-        setMessages(prev => [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
+        setMessages(prev => prev.some(m => m.id === data.botMessageId) ? prev : [...prev, { id: data.botMessageId, sender: 'bot', text: data.text, isFlagged: false }]);
       }
 
       setIsTyping(false);
@@ -693,6 +686,9 @@ export default function CustomerChatPage() {
         }
       }
     } catch (err) {
+      const failedId = sendId.current;
+      setMessages(prev => prev.filter(m => m.localId !== failedId));
+      setSendError(err.message + ' Dein Entwurf ist erhalten. Bitte erneut senden.');
       console.error('Chat-Fehler:', err);
       const isAdmin = user && user.role === 'admin';
       const displayMsg = (isAdmin && err.message && err.message !== 'API-Fehler')
@@ -704,7 +700,9 @@ export default function CustomerChatPage() {
   };
 
   const handleStartNewChat = () => {
-    const newChatId = `chat-${Math.floor(100000 + Math.random() * 900000)}`;
+    if ((inputValue.trim() || selectedPhoto) && !window.confirm('Neuen Chat starten und diesen Entwurf verwerfen?')) return;
+    handleDiscardPhoto();
+    const newChatId = `chat-${crypto.randomUUID()}`;
     setChatId(newChatId);
     sessionStorage.setItem('support_chat_id', newChatId);
     setIsChatAborted(false);
@@ -805,20 +803,11 @@ export default function CustomerChatPage() {
  
   // Direktes Ticket absenden im Deaktiviert-Modus
   const submitDirectTicket = async () => {
-    if (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim()) return;
-
-    if (inputValue.trim()) {
-      const pendingText = inputValue;
-      setInputValue('');
-      setDirectTicketTexts(prev => [...prev, pendingText]);
-      setMessages(prev => [...prev, { sender: 'user', text: pendingText }]);
-      try {
-        await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatId, text: pendingText, skip_bot: true })
-        });
-      } catch (e) {}
+    if (isTyping || ticketCreationLoading) return;
+    if (!directTicketTexts.length && !directTicketPhotos.length && !inputValue.trim() && !selectedPhoto) return;
+    if (inputValue.trim() || selectedPhoto) {
+      const sent = await handleSend();
+      if (!sent) return;
     }
 
     setTicketCreationLoading(true);
@@ -854,39 +843,35 @@ export default function CustomerChatPage() {
         setDirectTicketTitle('');
         setDirectTicketTexts([]);
         setDirectTicketPhotos([]);
-        setIsChatbotDisabled(false);
+        setIsChatbotDisabled(true);
       }
     } catch (err) {
       console.error(err);
-      alert('Fehler beim Erstellen des Tickets.');
+      notify('Fehler beim Erstellen des Tickets.');
     } finally {
       setTicketCreationLoading(false);
     }
   };
 
   // Chatbot Toggle Handler
-  const handleChatbotToggle = (checked) => {
-    setIsChatbotDisabled(checked);
+  const handleChatbotToggle = async (checked) => {
+    if (isTyping) return;
     if (checked) {
-      setDirectTicketStep(2);
-      setDirectTicketTitle('');
-      setDirectTicketTexts([]);
-      setDirectTicketPhotos([]);
-      setMessages([
-        {
-          sender: 'bot',
-          text: 'Der KI-Assistent wurde deaktiviert. Du kommunizierst nun direkt mit unserem IT-Admin-Team.\n\nBitte beschreibe hier dein IT-Problem (du kannst auch Fotos/Screenshots hochladen). Wenn du fertig bist, klicke unten auf **"Ticket jetzt einsenden"**.'
-        }
-      ]);
-    } else {
-      setDirectTicketStep(0);
-      setMessages([
-        {
-          sender: 'bot',
-          text: getGreetingText(user)
-        }
-      ]);
+      try {
+        const res = await fetch('/api/chat',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({chatId,aiEnabled:false})});
+        if (!res.ok) throw new Error('Modus konnte nicht geändert werden. Bitte erneut versuchen.');
+      } catch(e) { setSendError(e.message); return; }
     }
+    if (!checked) {
+      if (!window.confirm('KI-Unterstützung startet einen neuen, getrennten Chat. Der bisherige Verlauf bleibt ohne KI. Fortfahren?')) return;
+      const nextId = `chat-${crypto.randomUUID()}`;
+      setChatId(nextId); sessionStorage.setItem('support_chat_id',nextId);
+      setMessages([{sender:'bot',text:getGreetingText(user)}]);
+      setDirectTicketTexts([]); setDirectTicketPhotos([]);
+      setShowConsentModal(true);
+    }
+    setIsChatbotDisabled(checked);
+    setDirectTicketStep(checked ? 2 : 0);
   };
 
   // Ticket als Gast erstellen (nach E-Mail-Eingabe)
@@ -896,17 +881,6 @@ export default function CustomerChatPage() {
  
     setTicketCreationLoading(true);
     try {
-      // Falls wir im Direktmodus sind und der Chat noch nicht in der DB gespiegelt wurde
-      if (isChatbotDisabled && directTicketTexts.length > 0) {
-        for (const txt of directTicketTexts) {
-          await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId, text: txt, skip_bot: true })
-          });
-        }
-      }
-
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -940,12 +914,12 @@ export default function CustomerChatPage() {
           await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
         }
       } else {
-        alert(data.error || 'Fehler beim Erstellen.');
+        notify(data.error || 'Fehler beim Erstellen.');
       }
     } catch (err) {
       console.error(err);
       setTicketCreationLoading(false);
-      alert('Ticket konnte nicht erstellt werden.');
+      notify('Ticket konnte nicht erstellt werden.');
     }
   };
  
@@ -1025,7 +999,7 @@ export default function CustomerChatPage() {
 
           {bannedUntil && (
             <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-xs space-y-1">
-              <span className="text-slate-400 block text-[11px] font-bold uppercase tracking-wider">Sperre aktiv bis:</span>
+              <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Sperre aktiv bis:</span>
               <strong className="text-red-300 font-mono text-sm block">
                 {new Date(bannedUntil).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr am {new Date(bannedUntil).toLocaleDateString('de-DE')}
               </strong>
@@ -1037,10 +1011,10 @@ export default function CustomerChatPage() {
               <i className="fa-solid fa-circle-info text-sky-400"></i>
               <span>Warum ist das Gerät gesperrt?</span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               Unser IT-Helpdesk schützt sich automatisch vor Beleidigungen, Spam und Trolling. Die Sperre gilt gerätebezogen für 24 Stunden ab dem letzten Verstoß.
             </p>
-            <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-[11px]">
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-500">Device ID:</span>
               <span className="font-mono text-violet-300 font-semibold">{getOrCreateDeviceFingerprint()}</span>
             </div>
@@ -1049,7 +1023,7 @@ export default function CustomerChatPage() {
           <div className="pt-2">
             <Link 
               href="/login" 
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 px-4 py-2.5 rounded-xl transition-all border border-slate-700"
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl transition-all border border-slate-700"
             >
               <i className="fa-solid fa-right-to-bracket text-sky-400"></i>
               <span>Mitarbeiter-Login (Staff Bypass)</span>
@@ -1073,7 +1047,7 @@ export default function CustomerChatPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-xs sm:text-lg font-bold text-white tracking-tight leading-tight">IT-Helpdesk / Ticketsystem</h1>
               {partnerPresence && (
-                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-800 text-[10px] sm:text-[11px] font-medium shadow-inner shrink-0">
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-800 text-xs sm:text-xs font-medium shadow-inner shrink-0">
                   <span className={`w-2 h-2 rounded-full ${
                     partnerPresence.isOnline 
                       ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]' 
@@ -1085,7 +1059,7 @@ export default function CustomerChatPage() {
                 </div>
               )}
             </div>
-            <p className="text-[8px] sm:text-[10px] text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
+            <p className="text-xs sm:text-xs text-sky-400 font-semibold tracking-wider uppercase">KI Support Assistent</p>
           </div>
         </div>
 
@@ -1102,7 +1076,7 @@ export default function CustomerChatPage() {
         <div className="hidden md:flex items-center gap-3 text-sm">
           <Link 
             href="/knowledge"
-            className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+            className="bg-slate-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
           >
             <i className="fa-solid fa-book-open text-sky-400"></i>
             <span>Wissensdatenbank</span>
@@ -1150,7 +1124,7 @@ export default function CustomerChatPage() {
             <Link 
               href="/knowledge"
               onClick={() => setMobileMenuOpen(false)}
-              className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
             >
               <i className="fa-solid fa-book-open text-sky-400"></i>
               <span>Wissensdatenbank</span>
@@ -1171,7 +1145,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/tickets"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-ticket text-sky-400"></i>
                     <span>Meine Tickets ({activeTickets.length} offen)</span>
@@ -1182,7 +1156,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/agent"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-ticket text-violet-400"></i>
                     <span>Agenten-Portal</span>
@@ -1193,7 +1167,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/admin"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-gears text-purple-400"></i>
                     <span>Admin-Bereich</span>
@@ -1204,7 +1178,7 @@ export default function CustomerChatPage() {
                   <Link 
                     href="/profile"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-id-badge text-emerald-400"></i>
                     <span>Mein Profil</span>
@@ -1224,7 +1198,7 @@ export default function CustomerChatPage() {
               <div className="flex flex-col gap-3 pt-2 border-t border-slate-800">
                 {/* Magic Link Form */}
                 <form onSubmit={(e) => { setMobileMenuOpen(false); handleMagicLink(e); }} className="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
+                  <label className="text-xs font-bold text-slate-500 px-1">TICKETS PER MAIL ABRUFEN</label>
                   <div className="flex gap-2">
                     <input 
                       type="email" 
@@ -1288,7 +1262,7 @@ export default function CustomerChatPage() {
         {/* Chat History */}
         <div onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
           <div className="flex justify-center">
-            <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
+            <span className="text-xs sm:text-xs text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
               Verschlüsselte KI-Sitzung
             </span>
           </div>
@@ -1306,7 +1280,7 @@ export default function CustomerChatPage() {
                   {showDateDivider && (
                     <div className="flex items-center gap-4 py-2 justify-center my-2">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                         {getDateDividerLabel(msg.createdAt)}
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -1338,7 +1312,7 @@ export default function CustomerChatPage() {
                   {showDateDivider && (
                     <div className="flex items-center gap-4 py-2 justify-center my-2">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                         {getDateDividerLabel(msg.createdAt)}
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -1358,7 +1332,7 @@ export default function CustomerChatPage() {
                             {ticketId}
                           </a>
                         </div>
-                        <p className="text-xs text-slate-350 mt-2">
+                        <p className="text-xs text-slate-300 mt-2">
                           Dein Anliegen wurde erfolgreich eskaliert. Unsere IT-Admins wurden benachrichtigt.
                           <br />
                           <a 
@@ -1366,7 +1340,7 @@ export default function CustomerChatPage() {
                             className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold mt-2 transition-colors"
                           >
                             <span>Ticket anzeigen</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                           </a>
                         </p>
                       </div>
@@ -1392,7 +1366,7 @@ export default function CustomerChatPage() {
                   {showDateDivider && (
                     <div className="flex items-center gap-4 py-2 justify-center my-2">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                         {getDateDividerLabel(msg.createdAt)}
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -1412,7 +1386,7 @@ export default function CustomerChatPage() {
                 {showDateDivider && (
                   <div className="flex items-center gap-4 py-2 justify-center my-2">
                     <div className="h-px bg-slate-800 flex-1"></div>
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                    <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                       {getDateDividerLabel(msg.createdAt)}
                     </span>
                     <div className="h-px bg-slate-800 flex-1"></div>
@@ -1453,14 +1427,7 @@ export default function CustomerChatPage() {
                       <div 
                         className="bg-sky-600 text-white rounded-tr-none p-4 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed flex flex-col gap-2"
                       >
-                        {msg.imageUrl && (
-                          <img 
-                            src={getCleanImageUrl(msg.imageUrl)} 
-                            alt="Hochgeladenes Bild" 
-                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
-                            className="max-w-xs max-h-48 rounded-xl object-contain border border-white/20 shadow-sm cursor-pointer" 
-                          />
-                        )}
+                        <AttachmentView url={msg.imageUrl} name={msg.attachmentName} />
                         {msg.text && <span>{msg.text}</span>}
                       </div>
                     ) : (
@@ -1471,14 +1438,7 @@ export default function CustomerChatPage() {
                             ? 'bg-slate-900 border-violet-500/30' 
                             : 'bg-slate-900 border-slate-800'
                       }`}>
-                        {msg.imageUrl && (
-                          <img 
-                            src={getCleanImageUrl(msg.imageUrl)} 
-                            alt="Bild" 
-                            onClick={() => window.open(getCleanImageUrl(msg.imageUrl), '_blank')}
-                            className="max-w-xs max-h-48 rounded-xl object-contain border border-slate-800 shadow-sm cursor-pointer" 
-                          />
-                        )}
+                        <AttachmentView url={msg.imageUrl} name={msg.attachmentName} />
                         <div 
                           className="markdown-content"
                           dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }} 
@@ -1486,7 +1446,7 @@ export default function CustomerChatPage() {
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-1 mx-1">
-                      <span className="text-[9px] text-slate-500">
+                      <span className="text-xs text-slate-500">
                         {isUser 
                           ? (user?.name || 'Du') 
                           : isAgent 
@@ -1500,7 +1460,7 @@ export default function CustomerChatPage() {
                           type="button"
                           onClick={() => handleFlagMessage(msg.id, index)}
                           disabled={msg.isFlagged}
-                          className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
+                          className={`text-xs flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
                           title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
                         >
                           <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
@@ -1525,18 +1485,18 @@ export default function CustomerChatPage() {
                             <Link 
                               key={tk.id} 
                               href={`/tickets/${tk.id}`}
-                              className="flex items-center justify-between gap-2 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/50 p-2.5 rounded-xl transition-all w-full text-left min-w-0 overflow-hidden"
+                              className="flex items-center justify-between gap-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 p-2.5 rounded-xl transition-all w-full text-left min-w-0 overflow-hidden"
                             >
-                              <span className="truncate text-[11px] md:text-xs font-semibold text-slate-300 min-w-0 flex-1 block">
+                              <span className="truncate text-xs md:text-xs font-semibold text-slate-300 min-w-0 flex-1 block">
                                 <span className="text-sky-400 font-mono font-bold">{tk.id}</span>: {tk.title}
                               </span>
-                              <i className="fa-solid fa-arrow-right text-sky-500 text-[10px] shrink-0"></i>
+                              <i className="fa-solid fa-arrow-right text-sky-500 text-xs shrink-0"></i>
                             </Link>
                           ))}
                           <button 
                             type="button"
                             onClick={() => setShowTicketPrompt(false)}
-                            className="w-full py-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-350 rounded-xl text-xs font-semibold mt-1 transition-all"
+                            className="w-full py-2 bg-slate-800 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-semibold mt-1 transition-all"
                           >
                             Ein anderes / neues Problem beschreiben
                           </button>
@@ -1552,14 +1512,14 @@ export default function CustomerChatPage() {
           {/* Schnell-Vorschläge (falls vorhanden) */}
           {messages.length === 1 && !isTyping && !showTicketPrompt && (
             <div className="space-y-2 pt-2 animate-fade-in max-w-2xl mx-auto">
-              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Häufige Themen:</p>
+              <p className="text-xs uppercase font-bold text-slate-500 tracking-wider">Häufige Themen:</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => handleSuggestionClick(s)}
-                    className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/30 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow text-slate-300 hover:text-white cursor-pointer"
+                    className="bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/30 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow text-slate-300 hover:text-white cursor-pointer"
                   >
                     {s.label}
                   </button>
@@ -1615,9 +1575,9 @@ export default function CustomerChatPage() {
                 {bannedUntil ? ` (gesperrt bis ${new Date(bannedUntil).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr am ${new Date(bannedUntil).toLocaleDateString('de-DE')})` : ''}.
               </p>
               
-              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-[11px] text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
+              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
                 <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <i className="fa-solid fa-desktop text-[10px]"></i>
+                  <i className="fa-solid fa-desktop text-xs"></i>
                 </div>
                 <div>
                   <strong className="text-slate-200 block font-semibold mb-0.5">Sitzt du an einem gemeinsam genutzten Schul-PC?</strong>
@@ -1637,9 +1597,9 @@ export default function CustomerChatPage() {
                 {securityMessage || 'Der Zugriff über diese Netzwerkverbindung ist aus Sicherheitsgründen blockiert.'}
               </p>
               
-              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-[11px] text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
+              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 max-w-lg mx-auto text-left flex items-start gap-2.5 shadow-inner">
                 <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <i className="fa-solid fa-lightbulb text-[10px]"></i>
+                  <i className="fa-solid fa-lightbulb text-xs"></i>
                 </div>
                 <div>
                   <strong className="text-slate-200 block font-semibold mb-0.5">Was kann ich tun?</strong>
@@ -1667,7 +1627,7 @@ export default function CustomerChatPage() {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-amber-300">Gespräch beendet</h4>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-xs text-slate-300">
                     Dieses Gespräch wurde wegen eines Richtlinienverstoßes beendet. Du kannst ein neues Gespräch für sachliche IT-Anfragen starten.
                   </p>
                 </div>
@@ -1693,8 +1653,8 @@ export default function CustomerChatPage() {
                     className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-sky-500"
                   />
                   <div className="flex flex-col">
-                    <span className="text-[11px] sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-500 hidden sm:inline">
+                    <span className="text-xs sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
+                    <span className="text-xs sm:text-xs text-slate-500 hidden sm:inline">
                       Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
                     </span>
                   </div>
@@ -1703,7 +1663,7 @@ export default function CustomerChatPage() {
                   <button
                     type="button"
                     onClick={submitDirectTicket}
-                    disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim())}
+                    disabled={ticketCreationLoading || (directTicketTexts.length === 0 && directTicketPhotos.length === 0 && !inputValue.trim() && !selectedPhoto)}
                     className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <i className="fa-solid fa-paper-plane"></i>
@@ -1712,24 +1672,28 @@ export default function CustomerChatPage() {
                 )}
               </div>
 
+              <p role="status" className="text-sm text-slate-300">{isTyping ? 'Wird gesendet …' : sendError ? 'Senden fehlgeschlagen' : sendStatus}</p>
+              {sendError && <p role="alert" className="max-w-4xl mx-auto p-3 text-sm text-amber-300">{sendError}</p>}
+              {selectedPhoto && !isImageAttachment(selectedPhoto.name) && <p className="text-sm text-slate-300">Diese Datei wird an den Support weitergegeben. Der Bot wertet Dokumente nicht aus.</p>}
               <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-1.5 sm:p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
                 
                 {/* Foto-Vorschau */}
-                {photoPreview && (
+                {selectedPhoto && (
                   <div className="flex items-center gap-2.5 p-1.5 border-b border-slate-900 pb-1.5 mb-1.5 animate-fade-in">
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
-                      <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" />
+                      {photoPreview ? <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" /> : <span aria-hidden="true">📎</span>}
                       <button 
                         type="button" 
                         onClick={handleDiscardPhoto}
-                        className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] transition-colors cursor-pointer"
+                        aria-label="Anhang entfernen"
+                        className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-xs transition-colors cursor-pointer"
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Foto gewählt</p>
-                      <p className="text-[11px] text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Anhang gewählt</p>
+                      <p className="text-xs text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
                     </div>
                   </div>
                 )}
@@ -1739,9 +1703,9 @@ export default function CustomerChatPage() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isChatAborted || isIpBanned}
-                    className="p-2 sm:p-3 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shadow-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Foto anhängen"
+                    disabled={isChatAborted || isIpBanned || isTyping}
+                    className="p-2 sm:p-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-colors rounded-xl shrink-0 w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shadow-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Datei oder Bild anhängen"
                   >
                     <i className="fa-solid fa-paperclip text-xs sm:text-sm"></i>
                   </button>
@@ -1749,15 +1713,17 @@ export default function CustomerChatPage() {
                   <input 
                     type="file"
                     ref={fileInputRef}
+                    disabled={isTyping}
                     onChange={handlePhotoSelect}
-                    accept="image/*"
+                    accept={ATTACHMENT_ACCEPT}
                     className="hidden"
                   />
 
                   <textarea 
                     value={inputValue}
                     onChange={handleInputChange}
-                    disabled={isChatAborted || isIpBanned}
+                    onPaste={e => pasteAttachment(e,selectPhoto,setSendError)}
+                    disabled={isChatAborted || isIpBanned || isTyping}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -1785,7 +1751,7 @@ export default function CustomerChatPage() {
 
       {/* Modal Ticket Bestätigung (für angemeldete Nutzer, global positioniert) */}
       {showConfirmTicket && (
-        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <Dialog title="Ticket erstellen" onClose={() => setShowConfirmTicket(false)}>
           <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl text-sky-500">
@@ -1793,12 +1759,12 @@ export default function CustomerChatPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">Support-Ticket erstellen?</h3>
-                <p className="text-[10px] text-slate-400">Bestätige die Erstellung des IT-Tickets.</p>
+                <p className="text-xs text-slate-400">Bestätige die Erstellung des IT-Tickets.</p>
               </div>
             </div>
-            <p className="text-xs text-slate-350 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+            <p className="text-xs text-slate-300 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
               Möchtest du ein Ticket mit folgendem Betreff für dich erstellen?<br/>
-              <strong className="text-white mt-1.5 block">"{pendingTicketTitle}"</strong>
+              <strong className="text-white mt-1.5 block">&quot;{pendingTicketTitle}&quot;</strong>
             </p>
             <div className="flex gap-2">
               <button 
@@ -1829,12 +1795,12 @@ export default function CustomerChatPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* Modal E-Mail Prompt bei Ticket-Erstellung (Gäste, global positioniert) */}
       {showEmailPrompt && (
-        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <Dialog title="Kontakt für das Ticket" onClose={() => setShowEmailPrompt(false)}>
           <form onSubmit={handleCreateGuestTicket} className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl text-amber-500">
@@ -1842,7 +1808,7 @@ export default function CustomerChatPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">E-Mail für IT-Ticket benötigt</h3>
-                <p className="text-[10px] text-slate-400">Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.</p>
+                <p className="text-xs text-slate-400">Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.</p>
               </div>
             </div>
 
@@ -1860,7 +1826,7 @@ export default function CustomerChatPage() {
                 <button 
                   type="button" 
                   onClick={() => setShowEmailPrompt(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold"
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
                   disabled={ticketCreationLoading}
                 >
                   Abbrechen
@@ -1882,11 +1848,11 @@ export default function CustomerChatPage() {
               </div>
             </div>
           </form>
-        </div>
+        </Dialog>
       )}
       {/* Modal zum Melden einer Antwort (global positioniert) */}
       {showFlagModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <Dialog title="Antwort melden" onClose={() => setShowFlagModal(false)}>
           <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-red-500 animate-pulse">
@@ -1894,19 +1860,19 @@ export default function CustomerChatPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">Antwort melden</h3>
-                <p className="text-[10px] text-slate-400">Hilf uns, den IT-Helpdesk-Bot zu verbessern. Was ist an dieser Antwort falsch oder unpassend?</p>
+                <p className="text-xs text-slate-400">Hilf uns, den IT-Helpdesk-Bot zu verbessern. Was ist an dieser Antwort falsch oder unpassend?</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1">Problembeschreibung (Optional)</label>
+                <label className="text-xs text-slate-400 font-bold block mb-1">Problembeschreibung (Optional)</label>
                 <textarea 
                   value={flagReasonText}
                   onChange={(e) => setFlagReasonText(e.target.value)}
                   placeholder="z.B. Die genannte Tastenkombination ist falsch, die Lösung passt nicht zu meinem Drucker-Problem, etc."
                   rows="3"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:border-red-500 transition-colors"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-red-500 transition-colors"
                 />
               </div>
               
@@ -1917,27 +1883,27 @@ export default function CustomerChatPage() {
                     setShowFlagModal(false);
                     setFlagReasonText('');
                   }}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
                 >
                   Abbrechen
                 </button>
                 <button 
                   type="button"
                   onClick={submitFlagMessage}
-                  className="flex-1 py-2 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                 >
-                  <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                  <i className="fa-solid fa-paper-plane text-xs"></i>
                   <span>Meldung absenden</span>
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* DSGVO Consent Modal */}
       {showConsentModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <Dialog title="Supportweg wählen" onClose={() => { setIsChatbotDisabled(true); setDirectTicketStep(2); setShowConsentModal(false); }}>
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
             <div className="flex items-center gap-3 text-sky-400">
               <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
@@ -1950,8 +1916,8 @@ export default function CustomerChatPage() {
               <p>
                 Dieser Support-Assistent nutzt ein <strong>künstliches Intelligenzsystem (LLM)</strong>, um dir automatisiert bei IT-Problemen zu helfen.
               </p>
-              <p className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-slate-400">
-                <strong className="text-slate-350 block mb-1">⚠️ Wichtiger Hinweis zur Datenverarbeitung:</strong>
+              <p className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-slate-400">
+                <strong className="text-slate-300 block mb-1">⚠️ Wichtiger Hinweis zur Datenverarbeitung:</strong>
                 Die von dir eingegebenen Anfragen werden zur Beantwortung an KI-Modelle übertragen. Dabei können Daten an Server <strong>außerhalb der Europäischen Union (EU)</strong> gesendet werden. Die dortige Verarbeitung ist nicht durch europäische Stellen kontrollierbar.
               </p>
               <p className="text-red-400 font-bold bg-red-950/20 border border-red-500/20 p-2.5 rounded-xl">
@@ -1975,6 +1941,7 @@ export default function CustomerChatPage() {
                 </span>
               </label>
               
+              <button type="button" onClick={() => { setIsChatbotDisabled(true); setDirectTicketStep(2); setShowConsentModal(false); }} className="w-full rounded-xl border border-slate-500 p-3 text-sm">Direkt an die IT schreiben · ohne KI</button>
               <button
                 type="button"
                 disabled={!consentCheckbox}
@@ -1986,7 +1953,7 @@ export default function CustomerChatPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       )}
     </div>
   );

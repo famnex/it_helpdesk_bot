@@ -1,6 +1,9 @@
+import { randomUUID } from 'crypto';
+import { getBaseAppUrl } from '@/lib/appUrl';
 import { NextResponse } from 'next/server';
 import { verifyIdpJwt, createSession } from '@/lib/auth';
 import db from '@/lib/db';
+import { getSchoolAffiliations } from '@/lib/chatUserContext';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -32,7 +35,7 @@ export async function GET(request) {
         role = 'customer';
       }
       
-      const userId = decoded.id || `usr-${Math.floor(100000 + Math.random() * 900000)}`;
+      const userId = `usr-${randomUUID()}`;
       db.prepare('INSERT INTO users (id, email, role, name) VALUES (?, ?, ?, ?)').run(userId, email, role, displayName);
       user = { id: userId, email, role, name: displayName };
     } else {
@@ -44,10 +47,15 @@ export async function GET(request) {
     }
 
     // Interne Session erstellen
-    await createSession(user);
+    await createSession({
+      ...user,
+      authMethod: 'idp',
+      // School affiliation is profile context, never a Helpdesk permission.
+      schoolAffiliations: getSchoolAffiliations(decoded.groups)
+    });
 
     // Weiterleiten basierend auf der Rolle
-    const host = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const host = getBaseAppUrl();
     if (user.role === 'admin') {
       return NextResponse.redirect(`${host}/admin`);
     } else if (user.role === 'agent') {

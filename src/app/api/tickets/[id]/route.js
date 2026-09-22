@@ -1,3 +1,7 @@
+import { withAttachmentMetadata } from '@/lib/uploads';
+import { idempotent } from '@/lib/idempotency';
+import { mayAttach } from '@/lib/uploads';
+import { canAccessChat, canAccessTicket, recordTicketIdentity } from '@/lib/access';
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
@@ -19,18 +23,14 @@ export async function GET(request, { params }) {
   try {
     // Ticket laden
     const ticket = db.prepare(`
-      SELECT t.id, t.title, t.status, t.creator_email as creatorEmail, 
+      SELECT t.id, t.ai_enabled as aiEnabled, t.title, t.status, t.creator_email as creatorEmail,
              t.assigned_agent_id as assignedAgentId, u.email as assignedAgentEmail,
              t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
              t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
              t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
              t.solution, t.created_at as createdAt, t.updated_at as updatedAt,
              COALESCE(cu.name, ch.user_name) as creatorName,
-             (CASE 
-                WHEN t.is_authenticated_creator = 1 THEN 1
-                WHEN cu.id IS NOT NULL AND (cu.role IN ('agent', 'admin') OR cu.id LIKE 'usr-%' OR cu.id LIKE 'user-%') THEN 1
-                ELSE 0 
-              END) as isRegisteredUser
+             t.auth_method as creatorAuthMethod, (CASE WHEN t.auth_method IN ('idp','email') THEN 1 ELSE 0 END) as isRegisteredUser
       FROM tickets t
       LEFT JOIN users u ON t.assigned_agent_id = u.id
       LEFT JOIN users cu ON LOWER(t.creator_email) = LOWER(cu.email)
@@ -43,7 +43,7 @@ export async function GET(request, { params }) {
     }
 
     // Rechteprüfung: Kunden dürfen nur ihre eigenen Tickets sehen
-    if (user.role === 'customer' && ticket.creatorEmail !== user.email) {
+    if (!await canAccessTicket(id,user)) {
       return NextResponse.json({ error: 'Keine Berechtigung für dieses Ticket.' }, { status: 403 });
     }
 
@@ -60,7 +60,7 @@ export async function GET(request, { params }) {
     let messages;
     if (user.role === 'customer') {
       messages = db.prepare(`
-        SELECT m.id, m.sender_email as senderEmail, m.sender_role as senderRole, 
+        SELECT m.id, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail, m.sender_role as senderRole,
                m.text, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
@@ -70,7 +70,7 @@ export async function GET(request, { params }) {
       `).all(id);
     } else {
       messages = db.prepare(`
-        SELECT m.id, m.sender_email as senderEmail, m.sender_role as senderRole, 
+        SELECT m.id, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail, m.sender_role as senderRole,
                m.text, m.is_internal as isInternal, m.image_url as imageUrl, m.created_at as createdAt,
                u.name as senderName, u.avatar_url as senderAvatarUrl
         FROM ticket_messages m
@@ -87,7 +87,7 @@ export async function GET(request, { params }) {
       return m;
     });
 
-    return NextResponse.json({ ticket, messages: messagesWithPrefix });
+    return NextResponse.json({ ticket, messages: messagesWithPrefix.map(withAttachmentMetadata) });
   } catch (err) {
     console.error('Fehler beim Abrufen des Tickets:', err);
     return NextResponse.json({ error: 'Interner Serverfehler.' }, { status: 500 });
@@ -97,7 +97,7 @@ export async function GET(request, { params }) {
 /**
  * POST: Nachricht an Ticket senden
  */
-export async function POST(request, { params }) {
+async function createMessage(request, { params }) {
   const { id } = await params;
   const user = await getSessionUser();
 
@@ -108,19 +108,20 @@ export async function POST(request, { params }) {
   try {
     const { text, is_internal, imageUrl, image_url } = await request.json();
     const finalImageUrl = imageUrl || image_url || null;
+    if (!mayAttach(finalImageUrl,user,id)) return NextResponse.json({error:'Ungültiger Anhang.'},{status:400});
 
     if (!text && !finalImageUrl) {
       return NextResponse.json({ error: 'Nachrichtentext oder Dateianhang fehlt.' }, { status: 400 });
     }
 
     // Ticket laden
-    const ticket = db.prepare('SELECT title, creator_email, assigned_agent_id FROM tickets WHERE id = ?').get(id);
+    const ticket = db.prepare('SELECT ai_enabled, title, creator_email, assigned_agent_id FROM tickets WHERE id = ?').get(id);
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
     }
 
     // Rechteprüfung: Kunden dürfen nur auf ihre eigenen Tickets antworten
-    if (user.role === 'customer' && ticket.creator_email !== user.email) {
+    if (!await canAccessTicket(id,user)) {
       return NextResponse.json({ error: 'Keine Berechtigung.' }, { status: 403 });
     }
 
@@ -181,7 +182,7 @@ export async function POST(request, { params }) {
     // Prüfen, ob der Kunde mitteilt, dass sich das Ticket erledigt hat / storniert werden soll
     if (user.role === 'customer' && text) {
       try {
-        const resolutionCheck = await checkSelfResolutionIntent(text);
+        const resolutionCheck = ticket.ai_enabled ? await checkSelfResolutionIntent(text) : { isResolved: false };
         if (resolutionCheck.isResolved) {
           const resolutionNote = `Vom Kunden als erledigt/storniert gemeldet: "${text}"`;
           const autoBotReply = "Vielen Dank für die Rückmeldung! Das Ticket wurde als erledigt geschlossen. Solltest du später erneut Hilfe benötigen, kannst du dich jederzeit wieder bei uns melden.";
@@ -349,3 +350,5 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: 'Serverfehler beim Aktualisieren.' }, { status: 500 });
   }
 }
+
+export const POST = idempotent(createMessage);

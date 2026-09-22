@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+import { uploadRoot } from '@/lib/uploads';
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import db from '@/lib/db';
@@ -58,7 +60,7 @@ export async function POST(request, { params }) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Pfad für Upload-Ordner sicherstellen
-    const attachmentsDir = path.join(process.cwd(), 'public', 'uploads', 'attachments');
+    const attachmentsDir = path.join(uploadRoot(), 'attachments');
     if (!fs.existsSync(attachmentsDir)) {
       fs.mkdirSync(attachmentsDir, { recursive: true });
     }
@@ -66,7 +68,7 @@ export async function POST(request, { params }) {
     // Eindeutigen Dateinamen erzeugen, um Überschreiben zu verhindern
     const timestamp = Date.now();
     const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filename = `${id}-${timestamp}-${sanitizedFilename}`;
+    const filename = `${randomUUID()}-${sanitizedFilename}`;
     const filePath = path.join(attachmentsDir, filename);
 
     // Datei auf Server schreiben

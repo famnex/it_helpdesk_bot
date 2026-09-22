@@ -1,3 +1,7 @@
+import { withAttachmentMetadata } from '@/lib/uploads';
+import { cookies, headers } from 'next/headers';
+import { getSessionUser, validateSessionToken } from '@/lib/auth';
+import { canAccessRoom, isStaff, guestHash } from '@/lib/access';
 import db from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -41,8 +45,12 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const roomType = searchParams.get('roomType') || 'ticket'; // 'ticket', 'chat', 'dashboard'
   const roomId = searchParams.get('roomId') || '';
-  const myRole = searchParams.get('myRole') || 'customer';
-  const myEmail = (searchParams.get('myEmail') || '').toLowerCase().trim();
+  const initialUser = await getSessionUser();
+  const sessionToken = (await cookies()).get('session')?.value || (await headers()).get('authorization')?.replace(/^Bearer /,'');
+  const guest = await guestHash();
+  if (!(roomType === 'dashboard' ? isStaff(initialUser) : await canAccessRoom(roomType,roomId,initialUser))) return new Response(null,{status:403});
+  let myRole = initialUser?.role || 'customer';
+  let myEmail = initialUser?.email?.toLowerCase() || '';
 
   let lastMsgId = parseInt(searchParams.get('lastMsgId') || '0', 10);
   let lastTicketMsgId = parseInt(searchParams.get('lastTicketMsgId') || '0', 10);
@@ -50,20 +58,29 @@ export async function GET(request) {
 
   const encoder = new TextEncoder();
 
+  let interval;
   const stream = new ReadableStream({
+    cancel() { clearInterval(interval); },
     start(controller) {
       // 1. Initiales Connection-Event senden
       const initialEvent = `event: connected\ndata: ${JSON.stringify({ status: 'connected', time: Date.now() })}\n\n`;
       controller.enqueue(encoder.encode(initialEvent));
 
       // 2. Heartbeat & Event-Ticker (alle 1.5 Sekunden)
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (request.signal.aborted) {
           clearInterval(interval);
           return;
         }
 
         try {
+          const user = sessionToken ? validateSessionToken(sessionToken) : null;
+          const chat = roomType === 'chat' ? db.prepare('SELECT * FROM chats WHERE id=?').get(roomId) : null;
+          const ticket = roomType === 'ticket' ? db.prepare('SELECT * FROM tickets WHERE id=?').get(roomId) : roomType === 'chat' ? db.prepare('SELECT * FROM tickets WHERE chat_id=?').get(roomId) : null;
+          const guestChat = ticket?.chat_id ? db.prepare('SELECT guest_secret_hash FROM chats WHERE id=?').get(ticket.chat_id) : chat;
+          const allowed = isStaff(user) || (user && (chat?.owner_user_id === user.id || ticket?.creator_email?.toLowerCase() === user.email.toLowerCase())) || (!sessionToken && guestChat && guest && guestChat.guest_secret_hash === guest);
+          if (!allowed || (sessionToken && !user)) { clearInterval(interval); controller.close(); return; }
+          myRole = user?.role || 'customer'; myEmail = user?.email?.toLowerCase() || '';
           // Heartbeat für Online-Präsenz
           if (myRole && myEmail) {
             try {
@@ -74,19 +91,19 @@ export async function GET(request) {
           if (roomType === 'ticket' && roomId) {
             // Neue Ticket-Nachrichten abfragen
             const rows = db.prepare(`
-              SELECT m.id, m.ticket_id as ticketId, m.sender_email as senderEmail, 
+              SELECT m.id, m.ticket_id as ticketId, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail,
                      m.sender_role as senderRole, m.text, m.is_internal as isInternal, 
                      m.image_url as imageUrl, m.created_at as createdAt,
                      u.name as senderName, u.avatar_url as senderAvatarUrl
               FROM ticket_messages m
               LEFT JOIN users u ON m.sender_email = u.email
-              WHERE m.ticket_id = ? AND m.id > ?
+              WHERE m.ticket_id = ? AND m.id > ? AND (m.is_internal=0 OR ?)
               ORDER BY m.id ASC
-            `).all(roomId, lastMsgId);
+            `).all(roomId, lastMsgId, isStaff(user) ? 1 : 0);
 
             if (rows.length > 0) {
               lastMsgId = Math.max(...rows.map(r => r.id));
-              const eventMsg = `event: messages\ndata: ${JSON.stringify({ newMessages: rows })}\n\n`;
+              const eventMsg = `event: messages\ndata: ${JSON.stringify({ newMessages: rows.map(withAttachmentMetadata) })}\n\n`;
               controller.enqueue(encoder.encode(eventMsg));
             }
 
@@ -143,6 +160,13 @@ export async function GET(request) {
             const eventSync = `event: sync\ndata: ${JSON.stringify({ isOtherPartyTyping, partnerPresence })}\n\n`;
             controller.enqueue(encoder.encode(eventSync));
 
+          } else if (roomType === 'chat') {
+            const newMessages = db.prepare('SELECT id,sender,text,image_url as imageUrl,created_at as createdAt,is_flagged as isFlagged FROM chat_messages WHERE chat_id=? AND id>? ORDER BY id').all(roomId,lastMsgId);
+            const linked = db.prepare('SELECT id FROM tickets WHERE chat_id=? ORDER BY created_at DESC LIMIT 1').get(roomId);
+            const newTicketMessages = linked ? db.prepare('SELECT id,chat_message_id as sourceChatMessageId,sender_email as senderEmail,sender_role as senderRole,text,image_url as imageUrl,created_at as createdAt FROM ticket_messages WHERE ticket_id=? AND id>? AND is_internal=0 ORDER BY id').all(linked.id,lastTicketMsgId) : [];
+            if (newMessages.length) lastMsgId = newMessages.at(-1).id;
+            if (newTicketMessages.length) lastTicketMsgId = newTicketMessages.at(-1).id;
+            controller.enqueue(encoder.encode(`event: messages\ndata: ${JSON.stringify({newMessages:newMessages.map(withAttachmentMetadata),newTicketMessages:newTicketMessages.map(withAttachmentMetadata)})}\n\n`));
           } else if (roomType === 'dashboard') {
             // Dashboard Heartbeat & Zähler
             const pingEvent = `event: ping\ndata: ${JSON.stringify({ time: Date.now() })}\n\n`;

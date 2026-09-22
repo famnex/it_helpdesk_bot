@@ -1,3 +1,4 @@
+import Feedback from '@/components/Feedback';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -19,8 +20,6 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -49,7 +48,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-slate-50" suppressHydrationWarning>{children}</body>
+      <body className="min-h-full flex flex-col bg-slate-50" suppressHydrationWarning>{children}<Feedback /></body>
     </html>
   );
 }

@@ -63,7 +63,8 @@ export async function POST(request) {
 
     if (action === 'generate-context') {
       // Ticket laden
-      const ticket = db.prepare('SELECT title, solution FROM tickets WHERE id = ?').get(ticketId);
+      const ticket = db.prepare('SELECT ai_enabled, title, solution FROM tickets WHERE id = ?').get(ticketId);
+      if (ticket && !ticket.ai_enabled) return NextResponse.json({error:'KI-Verarbeitung ist für dieses Ticket deaktiviert.'},{status:409});
       if (!ticket) {
         return NextResponse.json({ error: 'Ticket nicht gefunden.' }, { status: 404 });
       }

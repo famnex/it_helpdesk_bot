@@ -1,4 +1,7 @@
 'use client';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import Dialog from '@/components/Dialog';
+import { notify } from '@/lib/feedback';
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
@@ -52,13 +55,11 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
 
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  let accumulatedOffset = 0;
 
   const segments = breakdown.map((item, idx) => {
     const colorScheme = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
     const segmentLength = (item.percentage / 100) * circumference;
-    const strokeDashoffset = -accumulatedOffset;
-    accumulatedOffset += segmentLength;
+    const strokeDashoffset = -breakdown.slice(0,idx).reduce((sum,entry) => sum + entry.percentage / 100 * circumference,0);
 
     return {
       ...item,
@@ -71,7 +72,7 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
   const activeItem = activeCategory ? segments.find(s => s.category === activeCategory) : null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-slate-950/70 border border-slate-850 p-6 rounded-2xl">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-slate-950/70 border border-slate-800 p-6 rounded-2xl">
       {/* Donut Graphic */}
       <div className="lg:col-span-5 flex flex-col items-center justify-center relative py-2">
         <div className="relative w-52 h-52 flex items-center justify-center">
@@ -107,32 +108,32 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
             {activeItem ? (
               <>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate max-w-[120px]">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider truncate max-w-[120px]">
                   {activeItem.category}
                 </span>
                 <span className={`text-2xl font-black ${activeItem.colorScheme.text} mt-0.5`}>
                   {activeItem.count}
                 </span>
-                <span className="text-[10px] font-semibold text-slate-400 font-mono">
+                <span className="text-xs font-semibold text-slate-400 font-mono">
                   {activeItem.percentage}% aller Chats
                 </span>
               </>
             ) : (
               <>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Analysiert
                 </span>
                 <span className="text-3xl font-black text-white mt-0.5">
                   {totalChats}
                 </span>
-                <span className="text-[10px] text-violet-400 font-semibold">
+                <span className="text-xs text-violet-400 font-semibold">
                   {segments.length} {segments.length === 1 ? 'Kategorie' : 'Kategorien'}
                 </span>
               </>
             )}
           </div>
         </div>
-        <p className="text-[10px] text-slate-500 mt-2 text-center">
+        <p className="text-xs text-slate-500 mt-2 text-center">
           <i className="fa-solid fa-hand-pointer mr-1 text-slate-400"></i>
           Fahre mit der Maus über ein Segment für Details
         </p>
@@ -145,7 +146,7 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
             <i className="fa-solid fa-chart-pie text-violet-400"></i>
             <span>Verteilung nach Themen</span>
           </span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Anteil</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Anteil</span>
         </div>
 
         <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
@@ -159,7 +160,7 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
                 className={`p-3 rounded-xl border transition-all cursor-pointer ${
                   isHovered 
                     ? 'bg-slate-900 border-violet-500/60 shadow-lg scale-[1.01]' 
-                    : 'bg-slate-950/60 border-slate-850 hover:bg-slate-900/60 hover:border-slate-800'
+                    : 'bg-slate-950/60 border-slate-800 hover:bg-slate-900/60 hover:border-slate-800'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3 text-xs mb-1.5">
@@ -173,15 +174,15 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono text-xs font-bold text-white">
-                      {seg.count} <span className="text-[10px] text-slate-500 font-normal">Chats</span>
+                      {seg.count} <span className="text-xs text-slate-500 font-normal">Chats</span>
                     </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seg.colorScheme.badge}`}>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${seg.colorScheme.badge}`}>
                       {seg.percentage}%
                     </span>
                   </div>
                 </div>
 
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-850">
+                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
                   <div
                     className="h-1.5 rounded-full transition-all duration-500"
                     style={{ 
@@ -202,6 +203,12 @@ function BotCategoryDonutChart({ breakdown = [], totalChats = 0 }) {
 export default function AdminDashboardPage() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [presenceNow, setPresenceNow] = useState(0);
+  useEffect(() => {
+    queueMicrotask(() => setPresenceNow(Date.now()));
+    const tick = setInterval(() => setPresenceNow(Date.now()), 15000);
+    return () => clearInterval(tick);
+  },[]);
   const [activeTab, setActiveTab] = useState('knowledge'); // 'knowledge', 'private_knowledge', 'solutions', 'import', 'settings', 'users', 'statistics', 'flagged', 'abusive', 'proxycheck', 'update', 'export'
   const router = useRouter();
 
@@ -321,6 +328,9 @@ export default function AdminDashboardPage() {
   const [proxycheckCacheSearch, setProxycheckCacheSearch] = useState('');
   const [proxycheckCacheFilter, setProxycheckCacheFilter] = useState('all'); // 'all' | 'proxies' | 'clean' | 'high_risk'
   const [selectedRawResponse, setSelectedRawResponse] = useState(null);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  useUnsavedChanges(settingsDirty);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [logoutLabel, setLogoutLabel] = useState('Abmelden');
@@ -553,7 +563,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleLoadExportPreview = async (overrideSince = null, overrideUntil = null) => {
+  async function handleLoadExportPreview(overrideSince = null, overrideUntil = null) {
     setIsExportLoading(true);
     try {
       const s = overrideSince !== null ? overrideSince : exportSinceDate;
@@ -580,7 +590,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsExportLoading(false);
     }
-  };
+  }
 
   const handleDownloadExportJson = async () => {
     setIsExporting(true);
@@ -615,13 +625,13 @@ export default function AdminDashboardPage() {
       document.body.removeChild(a);
     } catch (err) {
       console.error('Fehler beim Download:', err);
-      alert('Fehler beim Herunterladen der Export-Datei: ' + err.message);
+      notify('Fehler beim Herunterladen der Export-Datei: ' + err.message);
     } finally {
       setIsExporting(false);
     }
   };
 
-  const loadUsers = async () => {
+  async function loadUsers() {
     setUsersLoading(true);
     setUsersError('');
     try {
@@ -638,9 +648,9 @@ export default function AdminDashboardPage() {
     } finally {
       setUsersLoading(false);
     }
-  };
+  }
 
-  const loadFlaggedMessages = async () => {
+  async function loadFlaggedMessages() {
     setIsFlaggedLoading(true);
     try {
       const res = await fetch('/api/admin/flagged');
@@ -653,7 +663,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsFlaggedLoading(false);
     }
-  };
+  }
 
   const handleResolveFlagged = async (messageId) => {
     try {
@@ -670,7 +680,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const loadAbusiveChats = async () => {
+  async function loadAbusiveChats() {
     setIsAbusiveLoading(true);
     try {
       const res = await fetch('/api/admin/abusive');
@@ -683,9 +693,9 @@ export default function AdminDashboardPage() {
     } finally {
       setIsAbusiveLoading(false);
     }
-  };
+  }
 
-  const loadIpBans = async () => {
+  async function loadIpBans() {
     setIsBansLoading(true);
     try {
       const res = await fetch('/api/admin/bans');
@@ -699,7 +709,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsBansLoading(false);
     }
-  };
+  }
 
   const handleCreateBan = async (e) => {
     e.preventDefault();
@@ -722,7 +732,7 @@ export default function AdminDashboardPage() {
         loadAbusiveChats();
       } else {
         const err = await res.json();
-        alert(err.error || 'Fehler beim Erstellen der IP-Sperre.');
+        notify(err.error || 'Fehler beim Erstellen der IP-Sperre.');
       }
     } catch (e) {
       console.error('Fehler beim Erstellen der IP-Sperre:', e);
@@ -808,7 +818,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const loadProxycheckCache = async () => {
+  async function loadProxycheckCache() {
     setIsProxycheckCacheLoading(true);
     try {
       const res = await fetch('/api/admin/proxycheck/cache');
@@ -822,7 +832,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsProxycheckCacheLoading(false);
     }
-  };
+  }
 
   const handleDeleteCacheIp = async (ip) => {
     if (!confirm(`Möchtest du den Cache-Eintrag für IP ${ip} wirklich löschen? Bei der nächsten Anfrage wird die IP erneut frisch bewertet.`)) return;
@@ -835,11 +845,11 @@ export default function AdminDashboardPage() {
       if (res.ok) {
         loadProxycheckCache();
       } else {
-        alert('Fehler beim Löschen des Cache-Eintrags.');
+        notify('Fehler beim Löschen des Cache-Eintrags.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -856,14 +866,14 @@ export default function AdminDashboardPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`${data.count || 0} Cache-Einträge wurden gelöscht.`);
+        notify(`${data.count || 0} Cache-Einträge wurden gelöscht.`);
         loadProxycheckCache();
       } else {
-        alert('Fehler beim Bereinigen des Caches.');
+        notify('Fehler beim Bereinigen des Caches.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -882,13 +892,13 @@ export default function AdminDashboardPage() {
           whitelistedIps: data.whitelistedIps || (prev.whitelistedIps ? `${prev.whitelistedIps}\n${ip}` : ip)
         }));
         loadProxycheckCache();
-        alert(`IP ${ip} wurde erfolgreich zur Whitelist hinzugefügt!`);
+        notify(`IP ${ip} wurde erfolgreich zur Whitelist hinzugefügt!`);
       } else {
-        alert('Fehler beim Hinzufügen zur Whitelist.');
+        notify('Fehler beim Hinzufügen zur Whitelist.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -910,17 +920,17 @@ export default function AdminDashboardPage() {
           whitelistedAsns: data.whitelistedAsns || (prev.whitelistedAsns ? `${prev.whitelistedAsns}, ${cleanAsn}` : cleanAsn)
         }));
         loadProxycheckCache();
-        alert(`AS-Nummer ${cleanAsn} wurde erfolgreich zur Whitelist hinzugefügt!`);
+        notify(`AS-Nummer ${cleanAsn} wurde erfolgreich zur Whitelist hinzugefügt!`);
       } else {
-        alert('Fehler beim Hinzufügen der AS-Nummer zur Whitelist.');
+        notify('Fehler beim Hinzufügen der AS-Nummer zur Whitelist.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
-  const loadSolutions = async () => {
+  async function loadSolutions() {
     setSolutionsLoading(true);
     try {
       const res = await fetch('/api/admin/solutions');
@@ -933,7 +943,7 @@ export default function AdminDashboardPage() {
     } finally {
       setSolutionsLoading(false);
     }
-  };
+  }
 
   const handleForgetSolution = async (ticketId) => {
     if (!confirm('Möchtest du diese gespeicherte Lösung wirklich aus der Wissensbasis löschen ("vergessen")?')) return;
@@ -946,11 +956,11 @@ export default function AdminDashboardPage() {
       if (res.ok) {
         setSolutions(prev => prev.filter(sol => sol.id !== ticketId));
       } else {
-        alert('Fehler beim Vergessen der Lösung.');
+        notify('Fehler beim Vergessen der Lösung.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -966,17 +976,17 @@ export default function AdminDashboardPage() {
         const data = await res.json();
         setSolutions(prev => prev.map(sol => sol.id === ticketId ? { ...sol, solutionContext: data.solutionContext } : sol));
       } else {
-        alert('Fehler beim Generieren der Zusammenfassung.');
+        notify('Fehler beim Generieren der Zusammenfassung.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     } finally {
       setGeneratingContextId(null);
     }
   };
 
-  const loadStatistics = async () => {
+  async function loadStatistics() {
     setStatisticsLoading(true);
     try {
       const res = await fetch('/api/admin/statistics');
@@ -991,7 +1001,7 @@ export default function AdminDashboardPage() {
     } finally {
       setStatisticsLoading(false);
     }
-  };
+  }
 
   const handleCategorizeAllChats = async (modeOverride) => {
     const selectedMode = modeOverride || categorizeMode;
@@ -1021,7 +1031,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const loadChats = async () => {
+  async function loadChats() {
     setChatsLoading(true);
     try {
       const res = await fetch('/api/admin/chats');
@@ -1034,7 +1044,7 @@ export default function AdminDashboardPage() {
     } finally {
       setChatsLoading(false);
     }
-  };
+  }
 
   const loadChatDetails = async (chatId) => {
     setChatDetailsLoading(true);
@@ -1078,11 +1088,11 @@ export default function AdminDashboardPage() {
         }
       } else {
         const err = await res.json();
-        alert(err.error || 'Fehler beim Ändern des Missbrauchs-Status.');
+        notify(err.error || 'Fehler beim Ändern des Missbrauchs-Status.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler beim Ändern des Missbrauchs-Status.');
+      notify('Verbindungsfehler beim Ändern des Missbrauchs-Status.');
     }
   };
 
@@ -1097,7 +1107,7 @@ export default function AdminDashboardPage() {
 
   const formatCustomerPresenceText = (lastActiveAt) => {
     if (!lastActiveAt) return 'Kunde offline';
-    const diffMs = Date.now() - parseUtcDate(lastActiveAt).getTime();
+    const diffMs = presenceNow - parseUtcDate(lastActiveAt).getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
@@ -1111,7 +1121,7 @@ export default function AdminDashboardPage() {
 
   const isCustomerOnline = (lastActiveAt) => {
     if (!lastActiveAt) return false;
-    const diffMs = Date.now() - parseUtcDate(lastActiveAt).getTime();
+    const diffMs = presenceNow - parseUtcDate(lastActiveAt).getTime();
     return Math.floor(diffMs / 60000) < 2;
   };
 
@@ -1130,7 +1140,7 @@ export default function AdminDashboardPage() {
     // 1. Ersteller ermitteln (E-Mail der Person, die den Chat geführt hat)
     const creatorEmail = getKnownChatEmail(chat, selectedChatIdentityTrace);
     if (!creatorEmail) {
-      alert('Eine Umwandlung in ein Support-Ticket ist nur möglich, wenn mindestens eine E-Mail-Adresse bekannt ist.');
+      notify('Eine Umwandlung in ein Support-Ticket ist nur möglich, wenn mindestens eine E-Mail-Adresse bekannt ist.');
       return;
     }
 
@@ -1190,11 +1200,11 @@ export default function AdminDashboardPage() {
         router.push(`/agent/tickets/${data.ticketId}`);
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Fehler beim Erstellen des Tickets.');
+        notify(errData.error || 'Fehler beim Erstellen des Tickets.');
       }
     } catch (e) {
       console.error('Fehler bei Chat-in-Ticket Umwandlung:', e);
-      alert('Verbindungsfehler beim Erstellen des Tickets.');
+      notify('Verbindungsfehler beim Erstellen des Tickets.');
     } finally {
       setIsConvertingTicket(false);
     }
@@ -1299,12 +1309,12 @@ export default function AdminDashboardPage() {
         setChatAnalysis(data.analysis);
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler bei der Analyse des Chats.');
+        notify(data.error || 'Fehler bei der Analyse des Chats.');
         setQualityAnalysisModal(null);
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler bei der Chat-Analyse.');
+      notify('Verbindungsfehler bei der Chat-Analyse.');
       setQualityAnalysisModal(null);
     } finally {
       setIsAnalyzingChat(false);
@@ -1323,11 +1333,11 @@ export default function AdminDashboardPage() {
           setShowMobileChatModal(false);
         }
       } else {
-        alert('Löschen fehlgeschlagen.');
+        notify('Löschen fehlgeschlagen.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -1357,10 +1367,10 @@ export default function AdminDashboardPage() {
         loadUsers();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Ändern der Rolle.');
+        notify(data.error || 'Fehler beim Ändern der Rolle.');
       }
     } catch (e) {
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
@@ -1377,11 +1387,11 @@ export default function AdminDashboardPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Speichern der Zuständigkeiten.');
+        notify(data.error || 'Fehler beim Speichern der Zuständigkeiten.');
       }
     } catch (e) {
       console.error(e);
-      alert('Verbindungsfehler beim Speichern der Zuständigkeiten.');
+      notify('Verbindungsfehler beim Speichern der Zuständigkeiten.');
     }
   };
 
@@ -1395,16 +1405,16 @@ export default function AdminDashboardPage() {
         loadUsers();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Löschen des Benutzers.');
+        notify(data.error || 'Fehler beim Löschen des Benutzers.');
       }
     } catch (e) {
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     }
   };
 
   const handleGenerateDescription = async () => {
     if (!chunkTitle.trim() || !chunkFact.trim()) {
-      alert('Bitte füllen Sie zuerst den Titel und den Fakt aus.');
+      notify('Bitte füllen Sie zuerst den Titel und den Fakt aus.');
       return;
     }
     setIsGeneratingDesc(true);
@@ -1419,16 +1429,16 @@ export default function AdminDashboardPage() {
         setChunkDescription(data.description || '');
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Generieren der Beschreibung.');
+        notify(data.error || 'Fehler beim Generieren der Beschreibung.');
       }
     } catch (e) {
-      alert('Verbindungsfehler.');
+      notify('Verbindungsfehler.');
     } finally {
       setIsGeneratingDesc(false);
     }
   };
 
-  const loadAllData = async () => {
+  async function loadAllData() {
     try {
       const [knowledgeRes, settingsRes] = await Promise.all([
         fetch('/api/admin/knowledge'),
@@ -1460,7 +1470,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleLogout = async () => {
     try {
@@ -1655,7 +1665,7 @@ export default function AdminDashboardPage() {
   const handleTestSmtp = async (e) => {
     e.preventDefault();
     if (!testRecipient) {
-      alert('Bitte geben Sie eine Empfänger-E-Mail-Adresse ein.');
+      notify('Bitte geben Sie eine Empfänger-E-Mail-Adresse ein.');
       return;
     }
 
@@ -1761,6 +1771,7 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     setSettingsSuccess(false);
     setSettingsError('');
+    setSettingsSaving(true);
 
     try {
       const res = await fetch('/api/admin/settings', {
@@ -1777,6 +1788,7 @@ export default function AdminDashboardPage() {
 
       if (res.ok) {
         setSettingsSuccess(true);
+        setSettingsDirty(false);
         loadAllData();
       } else {
         const data = await res.json();
@@ -1784,7 +1796,7 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       setSettingsError('Verbindungsfehler.');
-    }
+    } finally { setSettingsSaving(false); }
   };
 
   // --- Git Update ---
@@ -1816,7 +1828,7 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       setUpdateLoading(false);
-      alert('Fehler beim Ausführen des Updates.');
+      notify('Fehler beim Ausführen des Updates.');
     }
   };
 
@@ -1887,7 +1899,7 @@ export default function AdminDashboardPage() {
           </div>
           <div>
             <h1 className="text-xs sm:text-sm md:text-base font-bold text-white leading-tight">System-Administration</h1>
-            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Admin Control Center</p>
+            <p className="text-xs md:text-xs text-violet-400 font-bold uppercase tracking-wider">Admin Control Center</p>
           </div>
         </div>
 
@@ -1909,7 +1921,7 @@ export default function AdminDashboardPage() {
             
             {/* Kategorie 1: WISSENSMANAGEMENT */}
             <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
                 Wissensmanagement
               </span>
               
@@ -1926,7 +1938,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Öffentliches Wissen</span>
                 </div>
                 {knowledge.filter(k => !k.isPrivate).length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     activeTab === 'knowledge' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
                   }`}>
                     {knowledge.filter(k => !k.isPrivate).length}
@@ -1947,7 +1959,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Internes Wissen</span>
                 </div>
                 {knowledge.filter(k => k.isPrivate).length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     activeTab === 'private_knowledge' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
                   }`}>
                     {knowledge.filter(k => k.isPrivate).length}
@@ -1968,7 +1980,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Gelöste Lösungen</span>
                 </div>
                 {solutions.length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     activeTab === 'solutions' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
                   }`}>
                     {solutions.length}
@@ -1993,7 +2005,7 @@ export default function AdminDashboardPage() {
 
             {/* Kategorie 2: BENUTZER & ANALYSE */}
             <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
                 Benutzer & Analyse
               </span>
 
@@ -2010,7 +2022,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Benutzerverwaltung</span>
                 </div>
                 {usersList.length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     activeTab === 'users' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
                   }`}>
                     {usersList.length}
@@ -2045,7 +2057,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Chat-Protokolle</span>
                 </div>
                 {chatsList.length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     activeTab === 'chats' ? 'bg-white/20 text-white' : 'bg-slate-950 text-slate-400'
                   }`}>
                     {chatsList.length}
@@ -2056,7 +2068,7 @@ export default function AdminDashboardPage() {
 
             {/* Kategorie 3: MODERATION & SICHERHEIT */}
             <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
                 Moderation & Sicherheit
               </span>
 
@@ -2073,7 +2085,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Geflaggte Antworten</span>
                 </div>
                 {flaggedMessages.length > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     {flaggedMessages.length}
                   </span>
                 )}
@@ -2092,7 +2104,7 @@ export default function AdminDashboardPage() {
                   <span className="truncate">Missbrauchserkennung</span>
                 </div>
                 {abusiveChats.length > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
                     {abusiveChats.length}
                   </span>
                 )}
@@ -2111,11 +2123,11 @@ export default function AdminDashboardPage() {
                   <span className="truncate">IP-Sperren</span>
                 </div>
                 {ipBansStats.activeBans > 0 ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/30">
                     {ipBansStats.activeBans}
                   </span>
                 ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-slate-950 text-slate-500 border border-slate-800">
+                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-slate-950 text-slate-500 border border-slate-800">
                     {ipBans.length}
                   </span>
                 )}
@@ -2133,7 +2145,7 @@ export default function AdminDashboardPage() {
                   <i className={`fa-solid fa-shield-halved text-sm w-4 shrink-0 ${activeTab === 'proxycheck' ? 'text-white' : 'text-emerald-400 group-hover:text-emerald-300'}`}></i>
                   <span className="truncate">ProxyCheck.io</span>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
+                <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold border ${
                   proxycheckConfig.enabled 
                     ? (activeTab === 'proxycheck' ? 'bg-white/20 text-white border-white/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30')
                     : (activeTab === 'proxycheck' ? 'bg-white/10 text-white/70 border-white/20' : 'bg-slate-950 text-slate-500 border-slate-800')
@@ -2145,7 +2157,7 @@ export default function AdminDashboardPage() {
 
             {/* Kategorie 4: SYSTEM & DATEN */}
             <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider px-3 mb-1.5 block">
                 System & Daten
               </span>
 
@@ -2215,7 +2227,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Sidebar Footer */}
-          <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-[10px] text-slate-500 text-center font-medium">
+          <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-xs text-slate-500 text-center font-medium">
             Schul-Support KI • v1.0
           </div>
         </aside>
@@ -2265,7 +2277,7 @@ export default function AdminDashboardPage() {
 
             {/* Category Tabs */}
             {publicKnowledge.length > 0 && (
-              <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-[10px] font-bold scrollbar-none">
+              <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-xs font-bold scrollbar-none">
                 {['Alle', ...new Set(publicKnowledge.map(k => k.category || 'Sonstiges'))].map(cat => (
                   <button
                     key={cat}
@@ -2297,7 +2309,7 @@ export default function AdminDashboardPage() {
                 <form onSubmit={handleSaveChunk} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
+                      <label className="text-xs text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
                       <input 
                         type="text" 
                         value={chunkTitle}
@@ -2309,7 +2321,7 @@ export default function AdminDashboardPage() {
                     </div>
                     {!chunkIsPrivate && (
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
+                        <label className="text-xs text-slate-400 font-bold block mb-1">Kategorie (z. B. WLAN, Hardware, Drucker, Software)</label>
                         <input 
                           type="text" 
                           value={chunkCategory}
@@ -2329,16 +2341,16 @@ export default function AdminDashboardPage() {
                             setChunkIsPrivate(isPriv);
                             if (isPriv) setChunkCategory('Intern');
                           }}
-                          className="w-4 h-4 rounded border-slate-850 bg-slate-950 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
+                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
-                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
+                          <span className="text-xs text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
                         </div>
                       </label>
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
+                      <label className="text-xs text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
                       <textarea 
                         value={chunkDescription}
                         onChange={(e) => setChunkDescription(e.target.value)}
@@ -2350,11 +2362,11 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Dateianhänge-Verwaltung */}
-                    <div className="border-t border-slate-850 pt-4 mt-2 space-y-3">
+                    <div className="border-t border-slate-800 pt-4 mt-2 space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] text-violet-400 font-bold uppercase tracking-wider block">Dateianhänge (PDF, DOCX, ZIP, Bilder - max. 5 MB)</label>
+                        <label className="text-xs text-violet-400 font-bold uppercase tracking-wider block">Dateianhänge (PDF, DOCX, ZIP, Bilder - max. 5 MB)</label>
                         {editingChunk && (
-                          <label className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 text-[10px] font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center gap-1">
+                          <label className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center gap-1">
                             <i className="fa-solid fa-paperclip text-violet-400"></i>
                             <span>{uploadingAttachment ? 'Lade hoch...' : 'Datei anhängen'}</span>
                             <input 
@@ -2368,19 +2380,19 @@ export default function AdminDashboardPage() {
                       </div>
 
                       {attachmentError && (
-                        <p className="text-[10px] text-red-400 font-semibold">{attachmentError}</p>
+                        <p className="text-xs text-red-400 font-semibold">{attachmentError}</p>
                       )}
 
                       {editingChunk ? (
                         editingChunk.attachments && editingChunk.attachments.length > 0 ? (
                           <div className="grid gap-2 sm:grid-cols-2">
                             {editingChunk.attachments.map(att => (
-                              <div key={att.id} className="flex justify-between items-center bg-slate-950/70 border border-slate-850 p-2.5 rounded-xl text-xs" onClick={(e) => e.stopPropagation()}>
+                              <div key={att.id} className="flex justify-between items-center bg-slate-950/70 border border-slate-800 p-2.5 rounded-xl text-xs" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <i className="fa-solid fa-file text-slate-500 shrink-0"></i>
                                   <div className="flex flex-col min-w-0">
                                     <span className="truncate max-w-[150px] text-slate-250 font-medium">{att.filename}</span>
-                                    <span className="text-[9px] text-slate-500">({(att.fileSize / 1024).toFixed(1)} KB)</span>
+                                    <span className="text-xs text-slate-500">({(att.fileSize / 1024).toFixed(1)} KB)</span>
                                   </div>
                                 </div>
                                 <button
@@ -2395,10 +2407,10 @@ export default function AdminDashboardPage() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-[10px] text-slate-500 italic">Noch keine Dateianhänge hochgeladen.</p>
+                          <p className="text-xs text-slate-500 italic">Noch keine Dateianhänge hochgeladen.</p>
                         )
                       ) : (
-                        <p className="text-[10px] text-slate-500 bg-slate-950/30 p-2 rounded-lg border border-dashed border-slate-850">
+                        <p className="text-xs text-slate-500 bg-slate-950/30 p-2 rounded-lg border border-dashed border-slate-800">
                           Dateianhänge können hochgeladen werden, sobald der Wissenschunk das erste Mal gespeichert wurde.
                         </p>
                       )}
@@ -2455,7 +2467,7 @@ export default function AdminDashboardPage() {
                     setChunkIsPrivate(!!k.isPrivate);
                     setIsCreatingChunk(false);
                   }}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-850/30 transition-all cursor-pointer select-none animate-fade-in"
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-800/30 transition-all cursor-pointer select-none animate-fade-in"
                 >
                   {/* Actions */}
                   <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2473,10 +2485,10 @@ export default function AdminDashboardPage() {
 
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase">
+                      <span className="text-xs font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase">
                         {k.source === 'ticket' ? 'Aus Ticket' : k.source === 'url' ? 'Webseite' : k.source === 'file' ? 'Datei' : 'Manuell'}
                       </span>
-                      <span className="text-[10px] font-bold text-sky-400 bg-sky-600/10 px-2 py-0.5 rounded-full uppercase">
+                      <span className="text-xs font-bold text-sky-400 bg-sky-600/10 px-2 py-0.5 rounded-full uppercase">
                         {k.category || 'Sonstiges'}
                       </span>
                     </div>
@@ -2484,7 +2496,7 @@ export default function AdminDashboardPage() {
                     <h4 className="text-sm font-bold text-white">{k.title}</h4>
                     
                     <div className="space-y-1">
-                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
+                      <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
                       <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans line-clamp-4 whitespace-pre-wrap">{k.description || k.fact}</p>
                     </div>
                   </div>
@@ -2530,7 +2542,7 @@ export default function AdminDashboardPage() {
 
             {/* Category Tabs */}
             {privateKnowledge.length > 0 && (
-              <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-[10px] font-bold scrollbar-none">
+              <div className="flex bg-slate-900/40 p-1.5 border border-slate-800/60 rounded-xl overflow-x-auto gap-2 text-xs font-bold scrollbar-none">
                 {['Alle', ...new Set(privateKnowledge.map(k => k.category || 'Sonstiges'))].map(cat => (
                   <button
                     key={cat}
@@ -2562,7 +2574,7 @@ export default function AdminDashboardPage() {
                 <form onSubmit={handleSaveChunk} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
+                      <label className="text-xs text-slate-400 font-bold block mb-1">Titel / Problembeschreibung *</label>
                       <input 
                         type="text" 
                         value={chunkTitle}
@@ -2585,12 +2597,12 @@ export default function AdminDashboardPage() {
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-slate-200">Internes Wissen (Privat)</span>
-                          <span className="text-[10px] text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
+                          <span className="text-xs text-slate-500">Dieser Wissenseintrag wird in der öffentlichen Wissensdatenbank ausgeblendet, steht aber der KI für Chats zur Verfügung. (Kategorie: Intern)</span>
                         </div>
                       </label>
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
+                      <label className="text-xs text-slate-400 font-bold block mb-1">Beschreibung & Anleitung * (Markdown möglich)</label>
                       <textarea 
                         value={chunkDescription}
                         onChange={(e) => setChunkDescription(e.target.value)}
@@ -2602,11 +2614,11 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Dateianhänge-Verwaltung */}
-                    <div className="border-t border-slate-850 pt-4 mt-2 space-y-3">
+                    <div className="border-t border-slate-800 pt-4 mt-2 space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] text-violet-400 font-bold uppercase tracking-wider block">Dateianhänge (PDF, DOCX, ZIP, Bilder - max. 5 MB)</label>
+                        <label className="text-xs text-violet-400 font-bold uppercase tracking-wider block">Dateianhänge (PDF, DOCX, ZIP, Bilder - max. 5 MB)</label>
                         {editingChunk && (
-                          <label className="bg-slate-950 hover:bg-slate-850 text-slate-300 border border-slate-800 text-[10px] font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center gap-1">
+                          <label className="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center gap-1">
                             <i className="fa-solid fa-paperclip text-violet-400"></i>
                             <span>{uploadingAttachment ? 'Lade hoch...' : 'Datei anhängen'}</span>
                             <input 
@@ -2620,19 +2632,19 @@ export default function AdminDashboardPage() {
                       </div>
 
                       {attachmentError && (
-                        <p className="text-[10px] text-red-400 font-semibold">{attachmentError}</p>
+                        <p className="text-xs text-red-400 font-semibold">{attachmentError}</p>
                       )}
 
                       {editingChunk ? (
                         editingChunk.attachments && editingChunk.attachments.length > 0 ? (
                           <div className="grid gap-2 sm:grid-cols-2">
                             {editingChunk.attachments.map(att => (
-                              <div key={att.id} className="flex justify-between items-center bg-slate-950/70 border border-slate-850 p-2.5 rounded-xl text-xs" onClick={(e) => e.stopPropagation()}>
+                              <div key={att.id} className="flex justify-between items-center bg-slate-950/70 border border-slate-800 p-2.5 rounded-xl text-xs" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <i className="fa-solid fa-file text-slate-500 shrink-0"></i>
                                   <div className="flex flex-col min-w-0">
                                     <span className="truncate max-w-[150px] text-slate-250 font-medium">{att.filename}</span>
-                                    <span className="text-[9px] text-slate-500">({(att.fileSize / 1024).toFixed(1)} KB)</span>
+                                    <span className="text-xs text-slate-500">({(att.fileSize / 1024).toFixed(1)} KB)</span>
                                   </div>
                                 </div>
                                 <button
@@ -2647,10 +2659,10 @@ export default function AdminDashboardPage() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-[10px] text-slate-500 italic">Noch keine Dateianhänge hochgeladen.</p>
+                          <p className="text-xs text-slate-500 italic">Noch keine Dateianhänge hochgeladen.</p>
                         )
                       ) : (
-                        <p className="text-[10px] text-slate-500 bg-slate-950/30 p-2 rounded-lg border border-dashed border-slate-850">
+                        <p className="text-xs text-slate-500 bg-slate-950/30 p-2 rounded-lg border border-dashed border-slate-800">
                           Dateianhänge können hochgeladen werden, sobald der Wissenschunk das erste Mal gespeichert wurde.
                         </p>
                       )}
@@ -2712,7 +2724,7 @@ export default function AdminDashboardPage() {
                       setChunkIsPrivate(true);
                       setIsCreatingChunk(false);
                     }}
-                    className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-850/30 transition-all cursor-pointer select-none animate-fade-in"
+                    className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/50 hover:bg-slate-800/30 transition-all cursor-pointer select-none animate-fade-in"
                   >
                     {/* Actions */}
                     <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2730,14 +2742,14 @@ export default function AdminDashboardPage() {
 
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase">
+                        <span className="text-xs font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase">
                           {k.source === 'ticket' ? 'Aus Ticket' : k.source === 'url' ? 'Webseite' : k.source === 'file' ? 'Datei' : 'Manuell'}
                         </span>
-                        <span className="text-[10px] font-bold text-sky-400 bg-sky-600/10 px-2 py-0.5 rounded-full uppercase">
+                        <span className="text-xs font-bold text-sky-400 bg-sky-600/10 px-2 py-0.5 rounded-full uppercase">
                           {k.category || 'Sonstiges'}
                         </span>
-                        <span className="text-[10px] font-bold text-red-400 bg-red-650/15 border border-red-500/20 px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
-                          <i className="fa-solid fa-user-lock text-[9px]"></i>
+                        <span className="text-xs font-bold text-red-400 bg-red-600/15 border border-red-500/20 px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                          <i className="fa-solid fa-user-lock text-xs"></i>
                           <span>Intern</span>
                         </span>
                       </div>
@@ -2745,7 +2757,7 @@ export default function AdminDashboardPage() {
                       <h4 className="text-sm font-bold text-white">{k.title}</h4>
                       
                       <div className="space-y-1">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
+                        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Beschreibung / Lösung:</div>
                         <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans line-clamp-4 whitespace-pre-wrap">{k.description || k.fact}</p>
                       </div>
                     </div>
@@ -2808,7 +2820,7 @@ export default function AdminDashboardPage() {
                   type="file"
                   accept=".txt,.md"
                   onChange={(e) => setImportFile(e.target.files[0])}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400 file:mr-4 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-violet-650 file:text-white hover:file:bg-violet-700"
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400 file:mr-4 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-violet-650 file:text-white hover:file:bg-violet-700"
                   required
                   disabled={importLoading}
                 />
@@ -2837,19 +2849,19 @@ export default function AdminDashboardPage() {
                   <span>Import-Ergebnis</span>
                 </h4>
                 
-                <p className="text-xs text-slate-300 font-medium bg-slate-950 p-3 rounded-lg border border-slate-850">{importResult}</p>
+                <p className="text-xs text-slate-300 font-medium bg-slate-950 p-3 rounded-lg border border-slate-800">{importResult}</p>
 
                 {importChunksList.length > 0 && (
                   <div className="space-y-3">
-                    <h5 className="text-[10px] font-bold text-slate-400 uppercase">Verarbeitete Chunks:</h5>
+                    <h5 className="text-xs font-bold text-slate-400 uppercase">Verarbeitete Chunks:</h5>
                     <div className="divide-y divide-slate-800 max-h-60 overflow-y-auto pr-2">
                       {importChunksList.map((c, i) => (
                         <div key={i} className="py-2.5 flex justify-between items-start gap-4">
                           <div>
-                            <span className="text-[10px] font-bold text-white block">{c.title}</span>
-                            <span className="text-[9px] text-slate-500 block truncate max-w-md mt-0.5">{c.fact}</span>
+                            <span className="text-xs font-bold text-white block">{c.title}</span>
+                            <span className="text-xs text-slate-500 block truncate max-w-md mt-0.5">{c.fact}</span>
                           </div>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${c.isNew ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${c.isNew ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
                             {c.isNew ? 'Neu' : 'Duplikat'}
                           </span>
                         </div>
@@ -2865,8 +2877,9 @@ export default function AdminDashboardPage() {
 
         {/* Tab 3: System-Einstellungen */}
         {activeTab === 'settings' && (
-          <form onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl mx-auto">
+          <form onChange={() => { setSettingsDirty(true); setSettingsSuccess(false); }} onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl mx-auto">
             
+            <p role="status" className="text-sm text-slate-300">{settingsSaving ? 'Wird gespeichert …' : settingsDirty ? 'Ungespeicherte Änderungen' : 'Einstellungen gespeichert'}</p>
             {settingsSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex items-center gap-2">
                 <i className="fa-solid fa-circle-check text-emerald-400"></i>
@@ -2890,16 +2903,16 @@ export default function AdminDashboardPage() {
 
               <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-3.5 space-y-2 text-xs text-sky-200">
                 <p className="font-bold flex items-center gap-1.5"><i className="fa-solid fa-circle-info text-sky-400"></i> Wichtige Hinweise für Microsoft 365, Outlook.com & Gmail:</p>
-                <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px] leading-relaxed">
-                  <li><strong>Port & Verbindung:</strong> Verwende in der Regel Port <strong className="text-white">587</strong> und lasse die Option <em>"Sichere Verbindung (SSL/TLS) nutzen"</em> <strong>deaktiviert</strong>. Die Mail-Bibliothek schützt die Verbindung stattdessen automatisch per <strong className="text-white">STARTTLS</strong>.</li>
+                <ul className="list-disc pl-4 space-y-1 text-slate-300 text-xs leading-relaxed">
+                  <li><strong>Port & Verbindung:</strong> Verwende in der Regel Port <strong className="text-white">587</strong> und lasse die Option <em>&quot;Sichere Verbindung (SSL/TLS) nutzen&quot;</em> <strong>deaktiviert</strong>. Die Mail-Bibliothek schützt die Verbindung stattdessen automatisch per <strong className="text-white">STARTTLS</strong>.</li>
                   <li><strong>Zwei-Faktor-Authentifizierung (2FA):</strong> Wenn für dein E-Mail-Konto 2FA aktiv ist, musst du zwingend ein eigenes <strong>App-Passwort</strong> in den Sicherheitseinstellungen deines Microsoft- oder Google-Kontos erstellen und dieses hier eintragen. Das normale Anmelde-Passwort wird vom Mailserver abgelehnt.</li>
-                  <li><strong>SMTP-Auth aktivieren:</strong> Stelle bei Microsoft 365 sicher, dass die <em>"SMTP-Authentifizierung"</em> (SMTP AUTH) für das betreffende Postfach im Microsoft 365 Admin Center unter <em>Aktive Benutzer → [Dein Postfach] → E-Mail → E-Mail-Apps verwalten</em> explizit aktiviert ist.</li>
+                  <li><strong>SMTP-Auth aktivieren:</strong> Stelle bei Microsoft 365 sicher, dass die <em>&quot;SMTP-Authentifizierung&quot;</em> (SMTP AUTH) für das betreffende Postfach im Microsoft 365 Admin Center unter <em>Aktive Benutzer → [Dein Postfach] → E-Mail → E-Mail-Apps verwalten</em> explizit aktiviert ist.</li>
                 </ul>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="sm:col-span-2 md:col-span-2">
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">SMTP-Host</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">SMTP-Host</label>
                   <input 
                     type="text" 
                     placeholder="z.B. smtp.office365.com oder mail.schule.de"
@@ -2909,7 +2922,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Port</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Port</label>
                   <input 
                     type="number" 
                     placeholder="587 oder 465"
@@ -2919,7 +2932,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Benutzername</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Benutzername</label>
                   <input 
                     type="text" 
                     placeholder="z.B. support@schule.de"
@@ -2929,7 +2942,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Passwort / App-Passwort</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Passwort / App-Passwort</label>
                   <input 
                     type="password" 
                     placeholder="••••••••"
@@ -2939,7 +2952,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Absender Anzeigename</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Absender Anzeigename</label>
                   <input 
                     type="text" 
                     placeholder="z.B. IT-Helpdesk oder Schul-Support"
@@ -2949,7 +2962,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div className="sm:col-span-2 md:col-span-3">
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Absender E-Mail-Adresse</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Absender E-Mail-Adresse</label>
                   <input 
                     type="text" 
                     placeholder="z.B. support@schule.de"
@@ -2957,13 +2970,13 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setSmtpConfig({ ...smtpConfig, sender: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     E-Mails werden versendet als: <span className="font-mono text-slate-400">{smtpConfig.sender_name ? `"${smtpConfig.sender_name}" <${smtpConfig.sender || 'support@schule.de'}>` : (smtpConfig.sender || 'support@schule.de')}</span>
                   </p>
                 </div>
               </div>
               
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-450 cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer select-none">
                 <input 
                   type="checkbox" 
                   checked={smtpConfig.secure}
@@ -2974,14 +2987,14 @@ export default function AdminDashboardPage() {
               </label>
 
               <div className="border-t border-slate-800/80 pt-4 mt-4 space-y-4">
-                <h4 className="text-xs font-bold text-slate-350 flex items-center gap-2">
+                <h4 className="text-xs font-bold text-slate-300 flex items-center gap-2">
                   <i className="fa-solid fa-paper-plane text-violet-500"></i>
                   <span>Verbindung & E-Mail-Versand testen</span>
                 </h4>
                 
                 <div className="flex flex-col sm:flex-row gap-3 items-end">
                   <div className="flex-1">
-                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Empfänger-E-Mail für Testnachricht</label>
+                    <label className="text-xs text-slate-400 font-bold block mb-1">Empfänger-E-Mail für Testnachricht</label>
                     <input 
                       type="email" 
                       value={testRecipient}
@@ -2994,7 +3007,7 @@ export default function AdminDashboardPage() {
                     type="button"
                     onClick={handleTestSmtp}
                     disabled={testSmtpLoading}
-                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-750 text-slate-250 border border-slate-700/80 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-250 border border-slate-700/80 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40"
                   >
                     {testSmtpLoading ? (
                       <>
@@ -3025,7 +3038,7 @@ export default function AdminDashboardPage() {
                         <div className="text-red-400 bg-red-500/10 p-1.5 rounded-lg shrink-0 mt-0.5"><i className="fa-solid fa-triangle-exclamation"></i></div>
                         <div className="w-full overflow-hidden">
                           <strong className="text-red-400 block mb-0.5">Fehler beim Verbindungstest:</strong>
-                          <pre className="mt-1 text-[10px] font-mono leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 overflow-x-auto whitespace-pre-wrap max-h-48">
+                          <pre className="mt-1 text-xs font-mono leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 overflow-x-auto whitespace-pre-wrap max-h-48">
                             {testSmtpResult.error}
                           </pre>
                         </div>
@@ -3045,7 +3058,7 @@ export default function AdminDashboardPage() {
 
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">JWT Secret / Public Key (für Signaturprüfung)</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">JWT Secret / Public Key (für Signaturprüfung)</label>
                   <input 
                     type="password" 
                     value={idpConfig.jwtSecret}
@@ -3054,7 +3067,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">IdP Redirect Login URL</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">IdP Redirect Login URL</label>
                   <input 
                     type="url" 
                     value={idpConfig.redirectUrl}
@@ -3063,7 +3076,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Abmelden-Button Text (Alternativtext für SSO)</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Abmelden-Button Text (Alternativtext für SSO)</label>
                   <input 
                     type="text" 
                     value={idpConfig.logoutText || ''}
@@ -3073,7 +3086,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">IdP Redirect Logout URL (nach Abmeldung)</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">IdP Redirect Logout URL (nach Abmeldung)</label>
                   <input 
                     type="url" 
                     value={idpConfig.logoutRedirectUrl || ''}
@@ -3096,7 +3109,7 @@ export default function AdminDashboardPage() {
                   type="button"
                   onClick={() => handleFetchGeminiModels(false)}
                   disabled={isLoadingGeminiModels}
-                  className="self-start sm:self-auto text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/80 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  className="self-start sm:self-auto text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                   title="Aktuelle Modell-Liste von Google Gemini API abrufen"
                 >
                   <i className={`fa-solid fa-arrows-rotate ${isLoadingGeminiModels ? 'animate-spin text-violet-400' : 'text-slate-400'}`}></i>
@@ -3105,7 +3118,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {geminiModelsStatus && (
-                <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${geminiModelsStatus.success ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20' : 'bg-red-950/40 text-red-300 border border-red-500/20'}`}>
+                <div className={`text-xs p-2.5 rounded-lg flex items-center gap-2 ${geminiModelsStatus.success ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20' : 'bg-red-950/40 text-red-300 border border-red-500/20'}`}>
                   <i className={`fa-solid ${geminiModelsStatus.success ? 'fa-circle-check text-emerald-400' : 'fa-triangle-exclamation text-red-400'}`}></i>
                   <span>{geminiModelsStatus.message}</span>
                 </div>
@@ -3113,7 +3126,7 @@ export default function AdminDashboardPage() {
 
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Google Gemini API Key</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Google Gemini API Key</label>
                   <input 
                     type="password" 
                     value={geminiConfig.apiKey || ''}
@@ -3125,11 +3138,11 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">Chat-Modell</label>
+                      <label className="text-xs text-slate-400 font-bold block">Chat-Modell</label>
                       <button 
                         type="button" 
                         onClick={() => setCustomChatModelInput(!customChatModelInput)} 
-                        className="text-[10px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
+                        className="text-xs text-violet-400 hover:text-violet-300 underline cursor-pointer"
                       >
                         {customChatModelInput ? 'Aus Liste wählen' : 'Manuell eingeben'}
                       </button>
@@ -3169,11 +3182,11 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">Wissens-/Deduplizierungs-Modell</label>
+                      <label className="text-xs text-slate-400 font-bold block">Wissens-/Deduplizierungs-Modell</label>
                       <button 
                         type="button" 
                         onClick={() => setCustomExtractionModelInput(!customExtractionModelInput)} 
-                        className="text-[10px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
+                        className="text-xs text-violet-400 hover:text-violet-300 underline cursor-pointer"
                       >
                         {customExtractionModelInput ? 'Aus Liste wählen' : 'Manuell eingeben'}
                       </button>
@@ -3214,7 +3227,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                  <label className="text-xs text-slate-400 font-bold block mb-1">
                     <i className="fa-solid fa-bell text-amber-500 mr-1.5"></i>
                     Warn-E-Mail bei Gemini-Störungen (Optional)
                   </label>
@@ -3225,20 +3238,20 @@ export default function AdminDashboardPage() {
                     placeholder="z.B. it-admin@schule.de"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Erhält automatisch eine Warnmeldung, falls Google Gemini ausfällt oder Fehler meldet und dadurch Benutzeranfragen oder Ticket-Erstellungen fehlschlagen.
                   </p>
                 </div>
 
                 <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-800/80">
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-xs text-slate-400">
                     Überprüft die Gültigkeit des API-Keys und die Erreichbarkeit der konfigurierten Modelle.
                   </span>
                   <button
                     type="button"
                     onClick={handleTestGemini}
                     disabled={testGeminiLoading}
-                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700/80 font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40 shrink-0 cursor-pointer"
+                    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-40 shrink-0 cursor-pointer"
                   >
                     {testGeminiLoading ? (
                       <>
@@ -3265,8 +3278,8 @@ export default function AdminDashboardPage() {
                           <strong className="text-emerald-400 block font-bold">Verbindung erfolgreich!</strong>
                           <p className="text-emerald-300/90">{testGeminiResult.message}</p>
                           {testGeminiResult.reply && (
-                            <p className="text-[11px] text-emerald-400/80 mt-1">
-                              Antwort von Google: <span className="font-mono bg-emerald-900/50 px-1.5 py-0.5 rounded text-white font-semibold">"{testGeminiResult.reply}"</span>
+                            <p className="text-xs text-emerald-400/80 mt-1">
+                              Antwort von Google: <span className="font-mono bg-emerald-900/50 px-1.5 py-0.5 rounded text-white font-semibold">&quot;{testGeminiResult.reply}&quot;</span>
                             </p>
                           )}
                         </div>
@@ -3282,7 +3295,7 @@ export default function AdminDashboardPage() {
                             <p className="text-red-300 font-medium">{testGeminiResult.hint}</p>
                           )}
                           {testGeminiResult.details && (
-                            <div className="mt-2 bg-black/40 border border-red-500/20 p-2.5 rounded-lg text-[11px] font-mono text-red-300/90 break-all space-y-1">
+                            <div className="mt-2 bg-black/40 border border-red-500/20 p-2.5 rounded-lg text-xs font-mono text-red-300/90 break-all space-y-1">
                               {testGeminiResult.status && (
                                 <div className="text-red-400 font-bold">HTTP Status: {testGeminiResult.status} {testGeminiResult.errorStatus ? `(${testGeminiResult.errorStatus})` : ''}</div>
                               )}
@@ -3306,7 +3319,7 @@ export default function AdminDashboardPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Repository URL</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Repository URL</label>
                   <input 
                     type="url" 
                     value={githubConfig.repoUrl}
@@ -3315,7 +3328,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Branch</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Branch</label>
                   <input 
                     type="text" 
                     value={githubConfig.branch}
@@ -3382,27 +3395,27 @@ export default function AdminDashboardPage() {
                 {updateLogs.error ? (
                   <div className="space-y-2">
                     <p className="text-xs text-red-400 font-bold">{updateLogs.error}</p>
-                    <pre className="bg-slate-950 p-4 rounded-xl border border-red-950 text-[10px] text-red-300 overflow-x-auto whitespace-pre-wrap">
+                    <pre className="bg-slate-950 p-4 rounded-xl border border-red-950 text-xs text-red-300 overflow-x-auto whitespace-pre-wrap">
                       {updateLogs.details || updateLogs.stderr}
                     </pre>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Git Pull Result:</span>
-                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[9px] font-mono text-slate-350 overflow-x-auto whitespace-pre">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Git Pull Result:</span>
+                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre">
                         {updateLogs.git}
                       </pre>
                     </div>
                     <div>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">NPM Install Result:</span>
-                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[9px] font-mono text-slate-350 overflow-x-auto whitespace-pre">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">NPM Install Result:</span>
+                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre">
                         {updateLogs.npm}
                       </pre>
                     </div>
                     <div>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Next Build Result:</span>
-                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[9px] font-mono text-slate-350 overflow-x-auto whitespace-pre">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Next Build Result:</span>
+                      <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre">
                         {updateLogs.build}
                       </pre>
                     </div>
@@ -3420,7 +3433,7 @@ export default function AdminDashboardPage() {
             <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl flex justify-between items-center gap-4">
               <div>
                 <h3 className="text-sm font-bold text-white mb-1">Gespeicherte Lösungen</h3>
-                <p className="text-xs text-slate-400">Hier sind alle Problemlösungen aufgeführt, die beim Schließen von IT-Tickets erfasst wurden. Nutze die "Vergessen"-Schaltfläche, um Einträge aus der Datenbank zu entfernen.</p>
+                <p className="text-xs text-slate-400">Hier sind alle Problemlösungen aufgeführt, die beim Schließen von IT-Tickets erfasst wurden. Nutze die &quot;Vergessen&quot;-Schaltfläche, um Einträge aus der Datenbank zu entfernen.</p>
               </div>
             </div>
 
@@ -3454,11 +3467,11 @@ export default function AdminDashboardPage() {
                     return s.title.toLowerCase().includes(term) || s.solution.toLowerCase().includes(term) || s.id.toLowerCase().includes(term);
                   })
                   .map(sol => (
-                    <div key={sol.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/30 hover:bg-slate-850/10 transition-all select-none animate-fade-in">
+                    <div key={sol.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between group relative hover:border-violet-500/30 hover:bg-slate-800/10 transition-all select-none animate-fade-in">
                       <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => handleForgetSolution(sol.id)}
-                          className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-[10px] px-2.5 py-1 rounded-xl transition-all"
+                          className="bg-red-950/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-2.5 py-1 rounded-xl transition-all"
                           title="Lösung vergessen (Löschen)"
                         >
                           <i className="fa-solid fa-eraser mr-1"></i>
@@ -3468,10 +3481,10 @@ export default function AdminDashboardPage() {
 
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase font-mono">
+                          <span className="text-xs font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded-full uppercase font-mono">
                             {sol.id}
                           </span>
-                          <span className="text-[10px] font-semibold text-slate-500">
+                          <span className="text-xs font-semibold text-slate-500">
                             Geschlossen: {sol.updatedAt ? new Date(sol.updatedAt).toLocaleDateString('de-DE') : 'Unbekannt'}
                           </span>
                         </div>
@@ -3480,7 +3493,7 @@ export default function AdminDashboardPage() {
 
                         {sol.solutionContext ? (
                           <div className="space-y-1">
-                            <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider">Problem-Kontext (KI-Zusammenfassung):</div>
+                            <div className="text-xs text-sky-400 font-bold uppercase tracking-wider">Problem-Kontext (KI-Zusammenfassung):</div>
                             <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/40 leading-relaxed font-sans italic">
                               {sol.solutionContext}
                             </p>
@@ -3491,7 +3504,7 @@ export default function AdminDashboardPage() {
                               type="button"
                               onClick={() => handleGenerateSolutionContext(sol.id)}
                               disabled={generatingContextId === sol.id}
-                              className="bg-sky-950/30 hover:bg-sky-900 border border-sky-500/20 text-sky-400 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-40"
+                              className="bg-sky-950/30 hover:bg-sky-900 border border-sky-500/20 text-sky-400 text-xs font-bold px-3 py-1.5 rounded-xl transition-all disabled:opacity-40"
                             >
                               {generatingContextId === sol.id ? (
                                 <>
@@ -3509,11 +3522,11 @@ export default function AdminDashboardPage() {
                         )}
 
                         <div className="space-y-1">
-                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Erfasste Problemlösung:</div>
-                          <p className="text-xs text-slate-350 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{sol.solution}</p>
+                          <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Erfasste Problemlösung:</div>
+                          <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/40 leading-relaxed font-sans">{sol.solution}</p>
                         </div>
                         
-                        <div className="text-[9px] text-slate-500">
+                        <div className="text-xs text-slate-500">
                           Erstellt durch: <span className="font-mono text-slate-400">{sol.creatorEmail}</span>
                         </div>
                       </div>
@@ -3552,7 +3565,7 @@ export default function AdminDashboardPage() {
 
               {/* Zeitraum Schnell-Filter */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-400 block">Schnellauswahl:</label>
+                <label className="text-xs font-bold text-slate-400 block">Schnellauswahl:</label>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -3638,9 +3651,9 @@ export default function AdminDashboardPage() {
               {/* Datums-Inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
                     <span>Exportieren ab Datum (Seit wann?):</span>
-                    <span className="text-[10px] text-slate-500 font-normal">Beginn (00:00 Uhr)</span>
+                    <span className="text-xs text-slate-500 font-normal">Beginn (00:00 Uhr)</span>
                   </label>
                   <input
                     type="date"
@@ -3654,9 +3667,9 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
                     <span>Bis Datum (Optional):</span>
-                    <span className="text-[10px] text-slate-500 font-normal">Ende (23:59 Uhr)</span>
+                    <span className="text-xs text-slate-500 font-normal">Ende (23:59 Uhr)</span>
                   </label>
                   <input
                     type="date"
@@ -3687,7 +3700,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-xs">
                       <span className="font-bold text-white block">Tickets & Nachrichten</span>
-                      <span className="text-[10px] text-slate-500">Status, Lösungen, Bewertungen</span>
+                      <span className="text-xs text-slate-500">Status, Lösungen, Bewertungen</span>
                     </div>
                   </label>
 
@@ -3700,7 +3713,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-xs">
                       <span className="font-bold text-white block">Live-Chats & Bot</span>
-                      <span className="text-[10px] text-slate-500">Gesamter Chat-Verlauf</span>
+                      <span className="text-xs text-slate-500">Gesamter Chat-Verlauf</span>
                     </div>
                   </label>
 
@@ -3713,7 +3726,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-xs">
                       <span className="font-bold text-white block">Wissensdatenbank</span>
-                      <span className="text-[10px] text-slate-500">Artikel & Kategorien</span>
+                      <span className="text-xs text-slate-500">Artikel & Kategorien</span>
                     </div>
                   </label>
 
@@ -3726,7 +3739,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-xs">
                       <span className="font-bold text-white block">Benutzer-Liste</span>
-                      <span className="text-[10px] text-slate-500">Admins, Agenten, Rollen</span>
+                      <span className="text-xs text-slate-500">Admins, Agenten, Rollen</span>
                     </div>
                   </label>
                 </div>
@@ -3777,7 +3790,7 @@ export default function AdminDashboardPage() {
                     <i className="fa-solid fa-chart-pie text-emerald-400"></i>
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gefundene Datensätze im gewählten Zeitraum</h4>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-xs text-slate-400 font-mono">
                     {exportPreview.exportMetadata?.filter?.since || 'alle'} bis {exportPreview.exportMetadata?.filter?.until || 'heute'}
                   </span>
                 </div>
@@ -3785,36 +3798,36 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-violet-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalTickets || 0}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Tickets</span>
+                    <span className="text-xs text-slate-400 font-medium">Tickets</span>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-violet-300 block font-mono">{exportPreview.exportMetadata?.statistics?.totalTicketMessages || 0}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Ticket-Nachrichten</span>
+                    <span className="text-xs text-slate-400 font-medium">Ticket-Nachrichten</span>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-sky-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalChats || 0}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Live-Chats</span>
+                    <span className="text-xs text-slate-400 font-medium">Live-Chats</span>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-sky-300 block font-mono">{exportPreview.exportMetadata?.statistics?.totalChatMessages || 0}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Chat-Nachrichten</span>
+                    <span className="text-xs text-slate-400 font-medium">Chat-Nachrichten</span>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-amber-400 block font-mono">
                       {exportPreview.exportMetadata?.statistics?.averageRating ? `${exportPreview.exportMetadata.statistics.averageRating} ★` : '-'}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium">Ø Bewertung ({exportPreview.exportMetadata?.statistics?.ratedTicketsCount || 0})</span>
+                    <span className="text-xs text-slate-400 font-medium">Ø Bewertung ({exportPreview.exportMetadata?.statistics?.ratedTicketsCount || 0})</span>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="text-lg font-bold text-emerald-400 block font-mono">{exportPreview.exportMetadata?.statistics?.totalKnowledgeEntries || 0}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Wissenseinträge</span>
+                    <span className="text-xs text-slate-400 font-medium">Wissenseinträge</span>
                   </div>
                 </div>
 
                 {/* JSON Preview Schnipsel */}
                 <div className="space-y-2 pt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">JSON-Struktur Vorschau:</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">JSON-Struktur Vorschau:</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -3822,7 +3835,7 @@ export default function AdminDashboardPage() {
                         setExportCopySuccess(true);
                         setTimeout(() => setExportCopySuccess(false), 2000);
                       }}
-                      className="text-[10px] font-bold text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 cursor-pointer"
+                      className="text-xs font-bold text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       {exportCopySuccess ? (
                         <>
@@ -3837,7 +3850,7 @@ export default function AdminDashboardPage() {
                       )}
                     </button>
                   </div>
-                  <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[10px] font-mono text-slate-300 max-h-60 overflow-y-auto overflow-x-auto whitespace-pre no-scrollbar">
+                  <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-slate-300 max-h-60 overflow-y-auto overflow-x-auto whitespace-pre no-scrollbar">
                     {JSON.stringify(exportPreview, null, 2)}
                   </pre>
                 </div>
@@ -3895,38 +3908,38 @@ export default function AdminDashboardPage() {
                           className={`p-3.5 border rounded-xl text-left cursor-pointer transition-all select-none flex flex-col gap-2 ${selectedChatDetails?.id === c.id ? 'bg-violet-650/10 border-violet-500 shadow-md' : 'bg-slate-900 border-slate-800/80 hover:border-slate-700'}`}
                         >
                           <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-mono font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded">
+                            <span className="text-xs font-mono font-bold text-violet-400 bg-violet-600/10 px-2 py-0.5 rounded">
                               {c.id}
                             </span>
-                            <span className="text-[9px] text-slate-500 font-mono">
+                            <span className="text-xs text-slate-500 font-mono">
                               {new Date(c.createdAt).toLocaleDateString('de-DE')}
                             </span>
                           </div>
                           
                           <div className="text-xs">
                             <strong className="text-slate-200 block truncate">{c.userName || c.userEmail || 'Gast'}</strong>
-                            {c.userEmail && <span className="text-[10px] text-slate-500 font-mono block truncate">{c.userEmail}</span>}
+                            {c.userEmail && <span className="text-xs text-slate-500 font-mono block truncate">{c.userEmail}</span>}
                           </div>
 
                           <div className="flex flex-wrap gap-1.5 items-center mt-1">
                             {c.ticketCreated === 1 && (
-                              <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
                                 Ticket erstellt
                               </span>
                             )}
                             {c.category && (
-                              <span className="text-[8px] font-bold uppercase tracking-wider bg-violet-500/10 text-violet-300 border border-violet-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-violet-500/10 text-violet-300 border border-violet-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
                                 <i className="fa-solid fa-tag text-[7px]"></i>
                                 {c.category}
                               </span>
                             )}
                             {c.isAbusive === 1 && (
-                              <span className="text-[8px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded">
                                 Missbrauch
                               </span>
                             )}
                             {c.userIp && (
-                              <span className="text-[8px] font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded">
+                              <span className="text-xs font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded">
                                 IP: {c.userIp}
                               </span>
                             )}
@@ -3960,7 +3973,7 @@ export default function AdminDashboardPage() {
                               ID: {selectedChatDetails.id}
                             </span>
                             {/* Online-Status Badge des Kunden */}
-                            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-medium shadow-sm">
+                            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium shadow-sm">
                               <span className={`w-2 h-2 rounded-full ${
                                 isCustomerOnline(selectedChatDetails.customerLastActiveAt || selectedChatDetails.lastActiveAt) 
                                   ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]' 
@@ -3970,11 +3983,11 @@ export default function AdminDashboardPage() {
                                 {formatCustomerPresenceText(selectedChatDetails.customerLastActiveAt || selectedChatDetails.lastActiveAt)}
                               </span>
                             </div>
-                            <span className="text-[11px] text-slate-400 font-mono">
+                            <span className="text-xs text-slate-400 font-mono">
                               Erstellt am: {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
                             </span>
                             {selectedChatIdentityTrace?.confidenceScore && (
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                              <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                                 selectedChatDetails.isAbusive === 1
                                   ? 'bg-red-500/20 text-red-300 border-red-500/40'
                                   : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
@@ -3983,7 +3996,7 @@ export default function AdminDashboardPage() {
                               </span>
                             )}
                             {selectedChatDetails.isAbusive === 1 && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 px-2 py-0.5 rounded flex items-center gap-1">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 px-2 py-0.5 rounded flex items-center gap-1">
                                 <i className="fa-solid fa-user-secret"></i>
                                 <span>Missbrauch</span>
                               </span>
@@ -4028,7 +4041,7 @@ export default function AdminDashboardPage() {
                               className={`p-2 rounded-xl transition-all flex items-center justify-center shrink-0 border shadow-sm ${
                                 selectedChatDetails.isAbusive === 1 
                                   ? 'bg-red-500/20 text-red-300 border-red-500/40 hover:bg-slate-800' 
-                                  : 'bg-red-950/40 text-red-400 border-red-500/30 hover:bg-red-650 hover:text-white'
+                                  : 'bg-red-950/40 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white'
                               }`}
                               title={selectedChatDetails.isAbusive === 1 ? 'Missbrauch-Markierung aufheben' : 'Als missbräuchlich markieren'}
                             >
@@ -4039,7 +4052,7 @@ export default function AdminDashboardPage() {
                             <button 
                               type="button"
                               onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                              className="p-2 rounded-xl bg-red-950/30 hover:bg-red-650 border border-red-500/20 text-red-400 hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
+                              className="p-2 rounded-xl bg-red-950/30 hover:bg-red-600 border border-red-500/20 text-red-400 hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
                               title="Diesen Chatverlauf dauerhaft löschen"
                             >
                               <i className="fa-solid fa-trash-can text-sm"></i>
@@ -4054,13 +4067,13 @@ export default function AdminDashboardPage() {
                               <i className="fa-solid fa-user text-violet-400 text-xs"></i>
                               <span>{selectedChatDetails.userName || 'Gast'}</span>
                               {selectedChatDetails.userEmail && (
-                                <span className="text-xs text-slate-350 font-mono font-medium">({selectedChatDetails.userEmail})</span>
+                                <span className="text-xs text-slate-300 font-mono font-medium">({selectedChatDetails.userEmail})</span>
                               )}
                             </h4>
 
                             {selectedChatIdentityTrace?.summary && (
-                              <span className="text-[11px] text-slate-300 font-medium bg-slate-900/90 border border-slate-800 px-2.5 py-1 rounded-lg">
-                                <i className="fa-solid fa-network-wired text-sky-400 mr-1.5 text-[10px]"></i>
+                              <span className="text-xs text-slate-300 font-medium bg-slate-900/90 border border-slate-800 px-2.5 py-1 rounded-lg">
+                                <i className="fa-solid fa-network-wired text-sky-400 mr-1.5 text-xs"></i>
                                 {selectedChatIdentityTrace.summary}
                               </span>
                             )}
@@ -4069,19 +4082,19 @@ export default function AdminDashboardPage() {
                           {/* Verknüpfte Benutzerkonten / E-Mails */}
                           {selectedChatIdentityTrace?.linkedIdentities && selectedChatIdentityTrace.linkedIdentities.length > 0 && (
                             <div className="pt-1 space-y-1">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten:</span>
+                              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Verknüpfte Benutzerkonten:</span>
                               <div className="flex flex-wrap gap-2">
                                 {selectedChatIdentityTrace.linkedIdentities.map((identity, idx) => (
-                                  <div key={idx} className="bg-slate-900/90 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 shadow-sm">
-                                    <i className="fa-solid fa-user-check text-emerald-400 text-[10px]"></i>
+                                  <div key={idx} className="bg-slate-900/90 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-2 shadow-sm">
+                                    <i className="fa-solid fa-user-check text-emerald-400 text-xs"></i>
                                     <strong className="text-white font-semibold">{identity.name}</strong>
-                                    <span className="text-slate-400 font-mono text-[10px]">({identity.email})</span>
-                                    <span className="text-[9px] bg-violet-900/40 text-violet-300 px-1.5 py-0.5 rounded font-mono">
+                                    <span className="text-slate-400 font-mono text-xs">({identity.email})</span>
+                                    <span className="text-xs bg-violet-900/40 text-violet-300 px-1.5 py-0.5 rounded font-mono">
                                       {identity.role}
                                     </span>
                                     <div className="flex gap-1">
                                       {identity.matchSources?.map((source, sIdx) => (
-                                        <span key={sIdx} className="text-[8px] bg-slate-950 border border-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">
+                                        <span key={sIdx} className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">
                                           {source}
                                         </span>
                                       ))}
@@ -4094,15 +4107,15 @@ export default function AdminDashboardPage() {
 
                           {/* Verknüpfte Tickets */}
                           {selectedChatIdentityTrace?.linkedTickets && selectedChatIdentityTrace.linkedTickets.length > 0 && (
-                            <div className="pt-1 flex flex-wrap items-center gap-2 text-[10px]">
+                            <div className="pt-1 flex flex-wrap items-center gap-2 text-xs">
                               <span className="text-slate-400 font-bold uppercase tracking-wider">Verknüpfte Support-Tickets:</span>
                               {selectedChatIdentityTrace.linkedTickets.map((ticket) => (
                                 <Link
                                   key={ticket.id}
                                   href={`/agent/tickets/${ticket.id}`}
-                                  className="bg-slate-900 hover:bg-slate-800 border border-slate-750 text-violet-300 hover:text-white px-2.5 py-1 rounded-lg font-mono flex items-center gap-1.5 transition-all shadow-sm"
+                                  className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-violet-300 hover:text-white px-2.5 py-1 rounded-lg font-mono flex items-center gap-1.5 transition-all shadow-sm"
                                 >
-                                  <i className="fa-solid fa-ticket text-violet-400 text-[9px]"></i>
+                                  <i className="fa-solid fa-ticket text-violet-400 text-xs"></i>
                                   <span>#{ticket.id}: {ticket.title}</span>
                                 </Link>
                               ))}
@@ -4110,7 +4123,7 @@ export default function AdminDashboardPage() {
                           )}
 
                           {/* IP & Session ID */}
-                          <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400 font-mono">
+                          <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-800/60 text-xs text-slate-400 font-mono">
                             {selectedChatDetails.userIp && (
                               <div>IP-Adresse: <strong className="text-white">{selectedChatDetails.userIp}</strong></div>
                             )}
@@ -4152,7 +4165,7 @@ export default function AdminDashboardPage() {
                             const isUser = msg.sender === 'user';
                             return (
                               <div key={msg.id} className="space-y-1">
-                                <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
+                                <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
                                   <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                     {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                   </span>
@@ -4161,7 +4174,7 @@ export default function AdminDashboardPage() {
                                   </span>
                                   {msg.baseKnowledge && (
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1 w-full">
-                                      <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                                      <span className="text-xs text-slate-400 font-bold flex items-center gap-1">
                                         <i className="fa-solid fa-brain text-violet-400"></i>
                                         <span>Herangezogene Wissens-Chunks:</span>
                                       </span>
@@ -4174,10 +4187,10 @@ export default function AdminDashboardPage() {
                                             key={cIdx}
                                             type="button"
                                             onClick={() => handleOpenChunkInEditorById(cleanId)}
-                                            className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                            className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
                                             title="Klicken, um diesen Wissenschunk in der Wissensdatenbank zu bearbeiten"
                                           >
-                                            <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                                            <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                                             <span>{found ? found.title : cleanId}</span>
                                           </button>
                                         );
@@ -4198,7 +4211,7 @@ export default function AdminDashboardPage() {
                                 )}
 
                                 <div 
-                                  className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 leading-relaxed"
+                                  className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/30 leading-relaxed"
                                   dangerouslySetInnerHTML={{ __html: safeParseMarkdown(msg.text || '') }}
                                 />
                               </div>
@@ -4220,7 +4233,7 @@ export default function AdminDashboardPage() {
 
             {/* Mobile Modal Inspector (Nur auf kleinen Bildschirmen < lg) */}
             {showMobileChatModal && (
-              <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-center animate-fade-in">
+              <Dialog title="Chatdetails" onClose={() => setShowMobileChatModal(false)}>
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg h-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex flex-col shadow-2xl overflow-hidden relative">
                   
                   {/* Modal Header */}
@@ -4233,7 +4246,7 @@ export default function AdminDashboardPage() {
                               <i className="fa-solid fa-comments text-violet-400"></i>
                               <span>{selectedChatDetails.userName || 'Gast'}</span>
                             </h4>
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[9px] font-medium shadow-sm">
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium shadow-sm">
                               <span className={`w-1.5 h-1.5 rounded-full ${
                                 isCustomerOnline(selectedChatDetails.lastActiveAt) 
                                   ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
@@ -4244,7 +4257,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </div>
                           </div>
-                          {selectedChatDetails.userEmail && <span className="text-[11px] text-slate-400 font-mono block">{selectedChatDetails.userEmail}</span>}
+                          {selectedChatDetails.userEmail && <span className="text-xs text-slate-400 font-mono block">{selectedChatDetails.userEmail}</span>}
                         </>
                       ) : (
                         <h4 className="text-sm font-bold text-white">Chat-Details</h4>
@@ -4275,10 +4288,10 @@ export default function AdminDashboardPage() {
                             : 'bg-slate-950/80 border-slate-800'
                         }`}>
                           <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-2">
-                            <span className="text-[10px] font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
+                            <span className="text-xs font-bold text-violet-400 font-mono bg-violet-600/10 px-2 py-0.5 rounded">
                               ID: {selectedChatDetails.id}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-xs text-slate-400 font-mono">
                               {parseUtcDate(selectedChatDetails.createdAt).toLocaleString('de-DE')} Uhr
                             </span>
                           </div>
@@ -4287,18 +4300,18 @@ export default function AdminDashboardPage() {
                             <div className="font-bold text-white flex items-center gap-1.5">
                               <i className="fa-solid fa-user text-slate-400 text-xs"></i>
                               <span>{selectedChatDetails.userName || 'Gast'}</span>
-                              {selectedChatDetails.userEmail && <span className="text-[10px] text-slate-400 font-mono">({selectedChatDetails.userEmail})</span>}
+                              {selectedChatDetails.userEmail && <span className="text-xs text-slate-400 font-mono">({selectedChatDetails.userEmail})</span>}
                             </div>
                             {selectedChatIdentityTrace?.summary && (
-                              <p className="text-[10px] text-slate-300 bg-slate-900 border border-slate-800 p-2 rounded-lg leading-relaxed">
-                                <i className="fa-solid fa-network-wired text-sky-400 mr-1 text-[9px]"></i>
+                              <p className="text-xs text-slate-300 bg-slate-900 border border-slate-800 p-2 rounded-lg leading-relaxed">
+                                <i className="fa-solid fa-network-wired text-sky-400 mr-1 text-xs"></i>
                                 {selectedChatIdentityTrace.summary}
                               </p>
                             )}
                           </div>
 
                           {/* IP & Session Info */}
-                          <div className="flex flex-wrap gap-3 pt-1 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
+                          <div className="flex flex-wrap gap-3 pt-1 border-t border-slate-800 text-xs text-slate-400 font-mono">
                             {selectedChatDetails.userIp && <div>IP: <strong className="text-white">{selectedChatDetails.userIp}</strong></div>}
                             {selectedChatDetails.userSessionId && <div>Session: <strong className="text-white">{selectedChatDetails.userSessionId}</strong></div>}
                           </div>
@@ -4332,7 +4345,7 @@ export default function AdminDashboardPage() {
                               const isUser = msg.sender === 'user';
                               return (
                                 <div key={msg.id} className="space-y-1">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
+                                  <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
                                     <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                       {isUser ? (selectedChatDetails.userName || 'Benutzer') : 'IT-Support-Bot'}
                                     </span>
@@ -4341,7 +4354,7 @@ export default function AdminDashboardPage() {
                                     </span>
                                     {msg.baseKnowledge && (
                                        <div className="flex flex-wrap items-center gap-1.5 mt-1 w-full">
-                                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                                         <span className="text-xs text-slate-400 font-bold flex items-center gap-1">
                                            <i className="fa-solid fa-brain text-violet-400"></i>
                                            <span>Herangezogene Wissens-Chunks:</span>
                                          </span>
@@ -4354,10 +4367,10 @@ export default function AdminDashboardPage() {
                                                key={cIdx}
                                                type="button"
                                                onClick={() => handleOpenChunkInEditorById(cleanId)}
-                                               className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                               className="bg-violet-950/60 hover:bg-violet-600 border border-violet-500/40 hover:border-violet-400 text-violet-300 hover:text-white font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
                                                title="Klicken, um diesen Wissenschunk in der Wissensdatenbank zu bearbeiten"
                                              >
-                                               <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                                               <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                                                <span>{found ? found.title : cleanId}</span>
                                              </button>
                                            );
@@ -4378,7 +4391,7 @@ export default function AdminDashboardPage() {
                                   )}
 
                                   <div 
-                                    className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/30 leading-relaxed"
+                                    className="markdown-content text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/30 leading-relaxed"
                                     dangerouslySetInnerHTML={{ __html: safeParseMarkdown(msg.text || '') }}
                                   />
                                 </div>
@@ -4449,7 +4462,7 @@ export default function AdminDashboardPage() {
                         <button 
                           type="button"
                           onClick={() => handleDeleteChat(selectedChatDetails.id)}
-                          className="bg-red-950/30 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs p-2.5 rounded-xl transition-all flex items-center justify-center shrink-0"
+                          className="bg-red-950/30 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs p-2.5 rounded-xl transition-all flex items-center justify-center shrink-0"
                           title="Chat löschen"
                         >
                           <i className="fa-solid fa-trash-can text-sm"></i>
@@ -4459,7 +4472,7 @@ export default function AdminDashboardPage() {
                   )}
 
                 </div>
-              </div>
+              </Dialog>
             )}
           </div>
         )}
@@ -4517,13 +4530,13 @@ export default function AdminDashboardPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/50">
                       {filteredUsersList.map((usr) => (
-                        <tr key={usr.id} className="hover:bg-slate-850/40 transition-colors">
+                        <tr key={usr.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {usr.avatarUrl ? (
-                                <img src={usr.avatarUrl} alt="Avatar" className="w-7 h-7 rounded-full object-cover border border-slate-850" />
+                                <img src={usr.avatarUrl} alt="Avatar" className="w-7 h-7 rounded-full object-cover border border-slate-800" />
                               ) : (
-                                <div className="w-7 h-7 rounded-full bg-slate-850 flex items-center justify-center border border-slate-800 text-[10px] text-slate-400">
+                                <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center border border-slate-800 text-xs text-slate-400">
                                   <i className="fa-solid fa-user"></i>
                                 </div>
                               )}
@@ -4551,7 +4564,7 @@ export default function AdminDashboardPage() {
                                 onBlur={() => handleSaveResponsibilities(usr.id, usr.responsibilities)}
                                 placeholder="z. B. Beamer, Netzwerk, Moodle..."
                                 rows="2"
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500 placeholder-slate-650 resize-y"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500 placeholder-slate-600 resize-y"
                               />
                             ) : (
                               <span className="text-slate-600 text-xs">-</span>
@@ -4564,7 +4577,7 @@ export default function AdminDashboardPage() {
                             <button
                               onClick={() => handleDeleteUser(usr.id)}
                               disabled={usr.id === user.id}
-                              className="bg-red-950/20 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="bg-red-950/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               Löschen
                             </button>
@@ -4600,7 +4613,7 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setCategorizeMode('uncategorized')}
-                      className={`px-3 py-1.5 rounded-lg transition-all text-[11px] ${categorizeMode === 'uncategorized' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                      className={`px-3 py-1.5 rounded-lg transition-all text-xs ${categorizeMode === 'uncategorized' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                       title="Nur Chats ohne Kategorie einkategorisieren"
                     >
                       Nur unkategorisierte ({botStatistics?.uncategorizedCount || 0})
@@ -4608,7 +4621,7 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setCategorizeMode('all')}
-                      className={`px-3 py-1.5 rounded-lg transition-all text-[11px] ${categorizeMode === 'all' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                      className={`px-3 py-1.5 rounded-lg transition-all text-xs ${categorizeMode === 'all' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                       title="Alle Chats komplett mit den neuen Schul-Kategorien neu analysieren"
                     >
                       Alle Chats ({botStatistics?.totalChats || 0})
@@ -4643,9 +4656,9 @@ export default function AdminDashboardPage() {
                       <i className="fa-solid fa-bolt text-amber-400 animate-bounce"></i>
                       <span>Highspeed-Parallel-Kategorisierung läuft...</span>
                     </span>
-                    <span className="text-slate-400 font-mono text-[10px]">30 Chats / KI-Prompt (Parallel-Batches)</span>
+                    <span className="text-slate-400 font-mono text-xs">30 Chats / KI-Prompt (Parallel-Batches)</span>
                   </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-850">
+                  <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
                     <div className="bg-gradient-to-r from-violet-600 via-sky-500 to-emerald-400 h-2.5 rounded-full animate-pulse w-full"></div>
                   </div>
                 </div>
@@ -4662,34 +4675,34 @@ export default function AdminDashboardPage() {
                 <div className="space-y-6">
                   {/* Top Stats Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                    <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
                       <div className="p-3 bg-violet-600/10 text-violet-400 border border-violet-500/20 rounded-xl text-lg">
                         <i className="fa-solid fa-comments"></i>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Gesamt Bot-Chats</div>
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gesamt Bot-Chats</div>
                         <div className="text-xl font-bold text-white mt-0.5">{botStatistics.totalChats}</div>
                       </div>
                     </div>
 
-                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                    <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
                       <div className="p-3 bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-lg">
                         <i className="fa-solid fa-tags"></i>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kategorisiert</div>
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Kategorisiert</div>
                         <div className="text-xl font-bold text-emerald-400 mt-0.5">
                           {botStatistics.categorizedCount} <span className="text-xs text-slate-500 font-normal">({botStatistics.totalChats > 0 ? ((botStatistics.categorizedCount / botStatistics.totalChats) * 100).toFixed(0) : 0}%)</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl flex items-center gap-3">
+                    <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
                       <div className="p-3 bg-amber-600/10 text-amber-400 border border-amber-500/20 rounded-xl text-lg">
                         <i className="fa-solid fa-clock"></i>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Unkategorisiert</div>
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Unkategorisiert</div>
                         <div className="text-xl font-bold text-amber-400 mt-0.5">{botStatistics.uncategorizedCount}</div>
                       </div>
                     </div>
@@ -4703,8 +4716,8 @@ export default function AdminDashboardPage() {
                         totalChats={botStatistics.totalChats} 
                       />
                     ) : (
-                      <p className="text-xs text-slate-500 italic bg-slate-950/30 p-4 rounded-xl border border-slate-850">
-                        Noch keine kategorisierten Chats vorhanden. Klicke oben auf "Alle bisherigen Chats jetzt einkategorisieren".
+                      <p className="text-xs text-slate-500 italic bg-slate-950/30 p-4 rounded-xl border border-slate-800">
+                        Noch keine kategorisierten Chats vorhanden. Klicke oben auf &quot;Alle bisherigen Chats jetzt einkategorisieren&quot;.
                       </p>
                     )}
                   </div>
@@ -4730,7 +4743,7 @@ export default function AdminDashboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-950 border-b border-slate-850 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 text-xs font-bold uppercase tracking-wider">
                         <th className="px-6 py-4">Mitarbeiter</th>
                         <th className="px-6 py-4">Rolle</th>
                         <th className="px-6 py-4 text-center">Aktive Tickets</th>
@@ -4741,17 +4754,17 @@ export default function AdminDashboardPage() {
                         <th className="px-6 py-4 text-center">Gesamt (All-Time)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-850">
+                    <tbody className="divide-y divide-slate-800">
                       {statistics.map(stat => (
-                        <tr key={stat.agentId} className="hover:bg-slate-850/20 transition-colors text-xs text-slate-200">
+                        <tr key={stat.agentId} className="hover:bg-slate-800/20 transition-colors text-xs text-slate-200">
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
                               <span className="font-semibold text-white">{stat.name}</span>
-                              <span className="text-[10px] text-slate-500 font-mono mt-0.5">{stat.email}</span>
+                              <span className="text-xs text-slate-500 font-mono mt-0.5">{stat.email}</span>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${stat.role === 'admin' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'}`}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase ${stat.role === 'admin' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'}`}>
                               {stat.role === 'admin' ? 'Admin' : 'Agent'}
                             </span>
                           </td>
@@ -4808,7 +4821,7 @@ export default function AdminDashboardPage() {
                             ></i>
                           ))}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                           {ratingStatistics.totalRatings} Bewertung{ratingStatistics.totalRatings === 1 ? '' : 'en'}
                         </div>
                       </div>
@@ -4819,7 +4832,7 @@ export default function AdminDashboardPage() {
                 {/* Rating Distribution Breakdown */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Left: Star Breakdown Bars */}
-                  <div className="bg-slate-950/50 border border-slate-850 p-4 rounded-xl space-y-2.5">
+                  <div className="bg-slate-950/50 border border-slate-800 p-4 rounded-xl space-y-2.5">
                     <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Sterne-Verteilung</h4>
                     {[5, 4, 3, 2, 1].map((stars) => {
                       const count = ratingStatistics.breakdown[`stars${stars}`] || 0;
@@ -4828,7 +4841,7 @@ export default function AdminDashboardPage() {
                         <div key={stars} className="flex items-center gap-3 text-xs">
                           <span className="w-14 font-bold text-slate-300 flex items-center gap-1">
                             <span>{stars}</span>
-                            <i className="fa-solid fa-star text-amber-400 text-[10px]"></i>
+                            <i className="fa-solid fa-star text-amber-400 text-xs"></i>
                           </span>
                           <div className="flex-1 bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
                             <div 
@@ -4836,8 +4849,8 @@ export default function AdminDashboardPage() {
                               style={{ width: `${percent}%` }}
                             ></div>
                           </div>
-                          <span className="w-12 text-right font-mono text-slate-400 text-[11px]">
-                            {count} <span className="text-[10px] text-slate-500">({percent}%)</span>
+                          <span className="w-12 text-right font-mono text-slate-400 text-xs">
+                            {count} <span className="text-xs text-slate-500">({percent}%)</span>
                           </span>
                         </div>
                       );
@@ -4845,7 +4858,7 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Right: Recent Feedbacks */}
-                  <div className="bg-slate-950/50 border border-slate-850 p-4 rounded-xl space-y-3">
+                  <div className="bg-slate-950/50 border border-slate-800 p-4 rounded-xl space-y-3">
                     <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Neueste Kunden-Feedbacks</h4>
                     {ratingStatistics.recentFeedbacks.length === 0 ? (
                       <p className="text-xs text-slate-500 italic py-4 text-center">Noch keine Kundenfeedbacks eingegangen.</p>
@@ -4853,20 +4866,20 @@ export default function AdminDashboardPage() {
                       <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
                         {ratingStatistics.recentFeedbacks.map((fb) => (
                           <div key={fb.id} className="p-2.5 bg-slate-900/70 border border-slate-800 rounded-xl space-y-1">
-                            <div className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="font-bold text-slate-200 truncate">{fb.title}</span>
-                              <div className="flex gap-0.5 text-amber-400 text-[10px] shrink-0">
+                              <div className="flex gap-0.5 text-amber-400 text-xs shrink-0">
                                 {[1, 2, 3, 4, 5].map((s) => (
                                   <i key={s} className={`fa-star ${s <= fb.rating ? 'fa-solid' : 'fa-regular opacity-30'}`}></i>
                                 ))}
                               </div>
                             </div>
                             {fb.ratingFeedback && (
-                              <p className="text-xs text-slate-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850/80 italic">
-                                "{fb.ratingFeedback}"
+                              <p className="text-xs text-slate-300 bg-slate-950/60 p-2 rounded-lg border border-slate-800/80 italic">
+                                &quot;{fb.ratingFeedback}&quot;
                               </p>
                             )}
-                            <div className="text-[10px] text-slate-500 flex justify-between items-center">
+                            <div className="text-xs text-slate-500 flex justify-between items-center">
                               <span>{fb.creatorEmail}</span>
                               <span>{parseUtcDate(fb.ratedAt).toLocaleDateString('de-DE')}</span>
                             </div>
@@ -4886,7 +4899,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-6">
             <div className="bg-slate-900/50 p-5 border border-slate-800 rounded-2xl">
               <h3 className="text-sm font-bold text-white mb-1">Geflaggte Bot-Antworten</h3>
-              <p className="text-xs text-slate-400">Hier werden fehlerhafte oder verdächtige Bot-Antworten gesammelt, die Kunden im Chat als "komisch" oder "falsch" gemeldet haben.</p>
+              <p className="text-xs text-slate-400">Hier werden fehlerhafte oder verdächtige Bot-Antworten gesammelt, die Kunden im Chat als &quot;komisch&quot; oder &quot;falsch&quot; gemeldet haben.</p>
             </div>
 
             {isFlaggedLoading ? (
@@ -4902,7 +4915,7 @@ export default function AdminDashboardPage() {
                 {flaggedMessages.map((msg) => (
                   <div key={msg.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
                     {/* Header */}
-                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-wrap justify-between items-center gap-2">
+                    <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2">
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-mono bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold px-2 py-0.5 rounded">
                           {msg.chatId}
@@ -4954,7 +4967,7 @@ export default function AdminDashboardPage() {
                             {msg.resolvedKnowledge.map(k => (
                               <div key={k.id} className="border-l-2 border-violet-500/40 pl-2">
                                 <span className="font-bold text-white block">{k.title}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">({k.id}) — {k.fact}</span>
+                                <span className="text-xs text-slate-400 font-mono">({k.id}) — {k.fact}</span>
                               </div>
                             ))}
                           </div>
@@ -4964,7 +4977,7 @@ export default function AdminDashboardPage() {
 
                     {/* Chatverlauf Context */}
                     <div className="p-5 space-y-4 bg-slate-900/25">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chat-Kontext (die letzten 5 Nachrichten):</p>
+                      <p className="text-xs uppercase font-bold text-slate-500 tracking-wider">Chat-Kontext (die letzten 5 Nachrichten):</p>
                       <div className="space-y-3 max-w-3xl border-l-2 border-slate-800 pl-4 py-1">
                         {msg.context.map((ctxMsg, ctxIdx) => {
                           const isUser = ctxMsg.sender === 'user';
@@ -4972,7 +4985,7 @@ export default function AdminDashboardPage() {
                           
                           return (
                             <div key={ctxIdx} className={`space-y-1 ${isTarget ? 'bg-red-500/5 border border-red-500/25 p-3 rounded-xl' : ''}`}>
-                              <div className="flex items-center gap-2 text-[10px] font-bold">
+                              <div className="flex items-center gap-2 text-xs font-bold">
                                 <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                   {isUser ? 'Benutzer' : 'IT-Helpdesk-Bot'}
                                 </span>
@@ -4985,7 +4998,7 @@ export default function AdminDashboardPage() {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
+                              <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
                                 {ctxMsg.text}
                               </p>
                             </div>
@@ -5016,7 +5029,7 @@ export default function AdminDashboardPage() {
 
               <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gesperrte Chats</span>
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block">Gesperrte Chats</span>
                   <span className="text-sm font-bold text-white">{abusiveChats.length}</span>
                 </div>
                 <button
@@ -5025,9 +5038,9 @@ export default function AdminDashboardPage() {
                   className="bg-red-950/40 hover:bg-red-900/50 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner transition-colors cursor-pointer"
                   title="Zur IP-Sperren-Verwaltung wechseln"
                 >
-                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block flex items-center gap-1 justify-center">
+                  <span className="text-xs text-red-400 font-bold uppercase tracking-wider block flex items-center gap-1 justify-center">
                     <span>IP-Sperren</span>
-                    <i className="fa-solid fa-arrow-right text-[9px]"></i>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
                   </span>
                   <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans} aktiv</span>
                 </button>
@@ -5058,7 +5071,7 @@ export default function AdminDashboardPage() {
                   return (
                     <div key={chat.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col">
                       {/* Header */}
-                      <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-850 flex flex-col gap-2">
+                      <div className="bg-slate-950/60 px-5 py-3 border-b border-slate-800 flex flex-col gap-2">
                         <div className="flex flex-wrap justify-between items-center gap-2">
                           <div className="flex items-center gap-3 text-xs flex-wrap">
                             <span className="font-mono bg-red-500/10 border border-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded">
@@ -5077,7 +5090,7 @@ export default function AdminDashboardPage() {
                               <span className="text-slate-400 flex items-center gap-1.5">
                                 IP: <strong className="text-slate-200 font-mono">{chat.userIp}</strong>
                                 {isIpCurrentlyBanned ? (
-                                  <span className="bg-red-500/20 text-red-300 border border-red-500/30 text-[9px] px-1.5 py-0.2 rounded font-semibold">
+                                  <span className="bg-red-500/20 text-red-300 border border-red-500/30 text-xs px-1.5 py-0.2 rounded font-semibold">
                                     🚫 Gesperrt
                                   </span>
                                 ) : null}
@@ -5133,7 +5146,7 @@ export default function AdminDashboardPage() {
                             )}
                             <button
                               onClick={() => handleResolveAbusive(chat.id)}
-                              className="bg-slate-950/20 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
+                              className="bg-slate-950/20 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800/80 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all"
                             >
                               <i className="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i>
                               Als gelöst markieren (Meldung löschen)
@@ -5142,7 +5155,7 @@ export default function AdminDashboardPage() {
                         </div>
 
                         {/* IP, Fingerprint und Session-ID Infos + rekonstruierte Anmeldungen */}
-                        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-850/60 text-[10px] text-slate-500">
+                        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/60 text-xs text-slate-500">
                           {chat.userFingerprint && (
                             <div>
                               Device Fingerprint: <span className="font-mono text-violet-300 font-semibold">{chat.userFingerprint}</span>
@@ -5161,7 +5174,7 @@ export default function AdminDashboardPage() {
                                   <strong className="text-red-400 font-bold text-xs">Identitäts-Spur rekonstruiert:</strong>
                                 </div>
                                 {chat.identityTrace.confidenceScore && (
-                                  <span className={`text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                  <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                                     chat.identityTrace.confidenceScore === 'high' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
                                     chat.identityTrace.confidenceScore === 'medium' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
                                     'bg-slate-800 text-slate-400 border-slate-700'
@@ -5171,17 +5184,17 @@ export default function AdminDashboardPage() {
                                 )}
                               </div>
                               
-                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                              <p className="text-xs text-slate-300 leading-relaxed">
                                 {chat.identityTrace.summary}
                               </p>
 
                               {chat.identityTrace.linkedIdentities && chat.identityTrace.linkedIdentities.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-0.5">
                                   {chat.identityTrace.linkedIdentities.map((identity, idIdx) => (
-                                    <span key={idIdx} className="bg-red-900/40 border border-red-500/30 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white flex items-center gap-1.5">
-                                      <i className="fa-solid fa-user text-[9px] text-red-300"></i>
+                                    <span key={idIdx} className="bg-red-900/40 border border-red-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5">
+                                      <i className="fa-solid fa-user text-xs text-red-300"></i>
                                       <span>{identity.name} ({identity.email})</span>
-                                      <span className="text-[8px] bg-red-950/60 px-1 py-0.2 rounded font-mono text-red-200">{identity.role}</span>
+                                      <span className="text-xs bg-red-950/60 px-1 py-0.2 rounded font-mono text-red-200">{identity.role}</span>
                                     </span>
                                   ))}
                                 </div>
@@ -5189,9 +5202,9 @@ export default function AdminDashboardPage() {
 
                               {chat.identityTrace.linkedTickets && chat.identityTrace.linkedTickets.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mt-1 pt-1 border-t border-red-900/30">
-                                  <span className="text-[9px] text-slate-400 font-bold">Tickets:</span>
+                                  <span className="text-xs text-slate-400 font-bold">Tickets:</span>
                                   {chat.identityTrace.linkedTickets.map((t) => (
-                                    <span key={t.id} className="text-[9px] text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded">
+                                    <span key={t.id} className="text-xs text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded">
                                       #{t.id}: {t.title}
                                     </span>
                                   ))}
@@ -5204,7 +5217,7 @@ export default function AdminDashboardPage() {
 
                       {/* Chatverlauf Context */}
                       <div className="p-5 space-y-4 bg-slate-900/25">
-                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vollständiger Chatverlauf:</p>
+                        <p className="text-xs uppercase font-bold text-slate-500 tracking-wider">Vollständiger Chatverlauf:</p>
                         <div className="space-y-3 max-w-3xl border-l-2 border-red-500/20 pl-4 py-1">
                           {chat.messages.map((ctxMsg, ctxIdx) => {
                             const isUser = ctxMsg.sender === 'user';
@@ -5216,13 +5229,13 @@ export default function AdminDashboardPage() {
                                 {showDateDivider && (
                                   <div className="flex items-center gap-3 py-1.5 justify-center my-1">
                                     <div className="h-px bg-slate-800 flex-1"></div>
-                                    <span className="text-[9px] bg-slate-950 border border-slate-800 text-slate-400 font-semibold px-2.5 py-0.5 rounded-full shadow-sm tracking-wide">
+                                    <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 font-semibold px-2.5 py-0.5 rounded-full shadow-sm tracking-wide">
                                       {getDateDividerLabel(ctxMsg.createdAt)}
                                     </span>
                                     <div className="h-px bg-slate-800 flex-1"></div>
                                   </div>
                                 )}
-                                <div className="flex items-center gap-2 text-[10px] font-bold">
+                                <div className="flex items-center gap-2 text-xs font-bold">
                                   <span className={isUser ? 'text-sky-400' : 'text-violet-400'}>
                                     {isUser ? (chat.userName || 'Benutzer') : 'IT-Helpdesk-Bot'}
                                   </span>
@@ -5230,7 +5243,7 @@ export default function AdminDashboardPage() {
                                     {parseUtcDate(ctxMsg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-350 whitespace-pre-wrap leading-relaxed">
+                                <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
                                   {ctxMsg.text}
                                 </p>
                               </div>
@@ -5263,15 +5276,15 @@ export default function AdminDashboardPage() {
 
               <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 <div className="bg-red-950/40 border border-red-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">Aktive IP-Sperren</span>
+                  <span className="text-xs text-red-400 font-bold uppercase tracking-wider block">Aktive IP-Sperren</span>
                   <span className="text-sm font-bold text-red-300">{ipBansStats.activeBans}</span>
                 </div>
                 <div className="bg-amber-950/40 border border-amber-500/30 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Verwarnungen</span>
+                  <span className="text-xs text-amber-400 font-bold uppercase tracking-wider block">Verwarnungen</span>
                   <span className="text-sm font-bold text-amber-300">{ipBansStats.warnings}</span>
                 </div>
                 <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center shadow-inner">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gesamt Einträge</span>
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block">Gesamt Einträge</span>
                   <span className="text-sm font-bold text-white">{ipBans.length}</span>
                 </div>
               </div>
@@ -5285,15 +5298,15 @@ export default function AdminDashboardPage() {
                     <i className="fa-solid fa-lock text-red-400 text-xs"></i>
                     <span>Manuelle IP-Sperre verhängen</span>
                   </h4>
-                  <p className="text-[11px] text-slate-400">Hier können Sie eine beliebige IP-Adresse sofort und gezielt für einen definierten Zeitraum für den Chat sperren.</p>
+                  <p className="text-xs text-slate-400">Hier können Sie eine beliebige IP-Adresse sofort und gezielt für einen definierten Zeitraum für den Chat sperren.</p>
                 </div>
                 <button
                   type="button"
                   onClick={loadIpBans}
                   disabled={isBansLoading}
-                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <i className={`fa-solid fa-rotate-right text-[11px] ${isBansLoading ? 'animate-spin' : ''}`}></i>
+                  <i className={`fa-solid fa-rotate-right text-xs ${isBansLoading ? 'animate-spin' : ''}`}></i>
                   <span>Aktualisieren</span>
                 </button>
               </div>
@@ -5301,7 +5314,7 @@ export default function AdminDashboardPage() {
               {/* Formular für manuelle Sperre */}
               <form onSubmit={handleCreateBan} className="bg-slate-950/60 p-4 border border-slate-800/80 rounded-xl flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">IP-Adresse</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">IP-Adresse</label>
                   <input
                     type="text"
                     value={newBanIp}
@@ -5312,7 +5325,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div className="w-[140px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dauer</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Dauer</label>
                   <select
                     value={newBanHours}
                     onChange={(e) => setNewBanHours(e.target.value)}
@@ -5326,7 +5339,7 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
                 <div className="flex-1 min-w-[220px]">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Begründung (optional)</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Begründung (optional)</label>
                   <input
                     type="text"
                     value={newBanReason}
@@ -5340,7 +5353,7 @@ export default function AdminDashboardPage() {
                   disabled={isCreatingBan || !newBanIp.trim()}
                   className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  <i className="fa-solid fa-lock text-[11px]"></i>
+                  <i className="fa-solid fa-lock text-xs"></i>
                   <span>{isCreatingBan ? 'Sperre...' : 'IP jetzt sperren'}</span>
                 </button>
               </form>
@@ -5351,14 +5364,14 @@ export default function AdminDashboardPage() {
                   <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
               ) : ipBans.length === 0 ? (
-                <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-8 text-center text-slate-500 text-xs">
+                <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                   Aktuell sind keine IP-Sperren oder Verwarnungen registriert.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase font-bold tracking-wider">
                         <th className="py-2.5 px-3">IP / Device Fingerprint</th>
                         <th className="py-2.5 px-3">Status / Typ</th>
                         <th className="py-2.5 px-3">Gesperrt bis</th>
@@ -5374,47 +5387,47 @@ export default function AdminDashboardPage() {
                         const isFingerprintBan = !!ban.fingerprint;
                         
                         return (
-                          <tr key={ban.id} className="hover:bg-slate-850/40 transition-colors">
+                          <tr key={ban.id} className="hover:bg-slate-800/40 transition-colors">
                             <td className="py-2.5 px-3 font-mono font-bold text-white">
                               <div>{ban.ip && ban.ip !== '0.0.0.0' ? ban.ip : 'Geräte-Sperre'}</div>
                               {ban.fingerprint && (
-                                <div className="text-[10px] text-violet-300 font-normal">
+                                <div className="text-xs text-violet-300 font-normal">
                                   <span>📱 {ban.fingerprint}</span>
                                 </div>
                               )}
                             </td>
                             <td className="py-2.5 px-3">
                               {isBanActive ? (
-                                <span className={`border px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1 ${
+                                <span className={`border px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1 ${
                                   isFingerprintBan ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'bg-red-500/20 text-red-300 border-red-500/40'
                                 }`}>
                                   <span>{isFingerprintBan ? '📱' : '🚫'}</span> {isFingerprintBan ? 'Geräte-Sperre aktiv' : '24h-IP-Sperre aktiv'}
                                 </span>
                               ) : isWarningOnly ? (
-                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>⚠️</span> 1. Verwarnung
                                 </span>
                               ) : (
-                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px]">
+                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-xs">
                                   Abgelaufen
                                 </span>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-slate-300">
                               {ban.bannedUntil ? (
-                                <span className="text-red-300 font-mono text-[11px]">
+                                <span className="text-red-300 font-mono text-xs">
                                   {parseUtcDate(ban.bannedUntil).toLocaleString('de-DE')} Uhr
                                 </span>
                               ) : (
                                 <span className="text-slate-500">—</span>
                               )}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                            <td className="py-2.5 px-3 text-slate-400 text-xs">
                               {parseUtcDate(ban.lastViolationAt).toLocaleString('de-DE')} Uhr
                             </td>
-                            <td className="py-2.5 px-3 text-slate-350 max-w-xs truncate text-[11px]" title={ban.reason || ''}>
+                            <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate text-xs" title={ban.reason || ''}>
                               {ban.reason || 'Keine Angabe'}
-                              {ban.userEmail && <span className="text-slate-500 block text-[10px]">E-Mail: {ban.userEmail}</span>}
+                              {ban.userEmail && <span className="text-slate-500 block text-xs">E-Mail: {ban.userEmail}</span>}
                             </td>
                             <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
                               {!isBanActive && (
@@ -5422,7 +5435,7 @@ export default function AdminDashboardPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleQuickBanFingerprint(ban.fingerprint, 24)}
-                                    className="bg-violet-950/60 hover:bg-violet-900/80 text-violet-300 border border-violet-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                    className="bg-violet-950/60 hover:bg-violet-900/80 text-violet-300 border border-violet-500/30 font-semibold text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                                     title="Gerät jetzt für 24h sperren"
                                   >
                                     + 24h Gerät
@@ -5431,7 +5444,7 @@ export default function AdminDashboardPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleQuickBan(ban.ip, 24)}
-                                    className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                    className="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-500/30 font-semibold text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                                     title="IP jetzt für 24h sperren"
                                   >
                                     + 24h IP
@@ -5441,10 +5454,10 @@ export default function AdminDashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => ban.fingerprint ? handleLiftFingerprintBan(ban.fingerprint) : handleLiftBan(ban.ip)}
-                                className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                className="bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 border border-slate-700 hover:border-emerald-500/40 font-semibold text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                                 title="Sperre / Verwarnung aufheben"
                               >
-                                <i className="fa-solid fa-unlock mr-1 text-[9px]"></i>
+                                <i className="fa-solid fa-unlock mr-1 text-xs"></i>
                                 Aufheben
                               </button>
                             </td>
@@ -5462,7 +5475,8 @@ export default function AdminDashboardPage() {
         {/* Tab 9: ProxyCheck.io IP-Sicherheit */}
         {activeTab === 'proxycheck' && (
           <div className="space-y-6 max-w-5xl mx-auto">
-            <form onSubmit={handleSaveSettings} className="space-y-6">
+            <form onChange={() => { setSettingsDirty(true); setSettingsSuccess(false); }} onSubmit={handleSaveSettings} className="space-y-6">
+            <p role="status" className="text-sm text-slate-300">{settingsSaving ? 'Wird gespeichert …' : settingsDirty ? 'Ungespeicherte Änderungen' : 'Einstellungen gespeichert'}</p>
             {settingsSuccess && (
               <div className="bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs p-3 rounded-xl flex items-center gap-2 shadow-lg animate-fade-in">
                 <i className="fa-solid fa-circle-check text-emerald-400 text-base"></i>
@@ -5489,7 +5503,7 @@ export default function AdminDashboardPage() {
                     Schützt den Schul-Chat vor unerwünschten Zugriffen über VPNs, TOR-Netzwerke, Proxies und auffällige IP-Adressen.
                   </p>
                 </div>
-                <span className={`text-[11px] font-bold px-3 py-1 rounded-full border shrink-0 ${proxycheckConfig.enabled ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                <span className={`text-xs font-bold px-3 py-1 rounded-full border shrink-0 ${proxycheckConfig.enabled ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
                   {proxycheckConfig.enabled ? '● Schutz aktiv' : '○ Deaktiviert'}
                 </span>
               </div>
@@ -5525,7 +5539,7 @@ export default function AdminDashboardPage() {
 
               {/* API Key & Test Button */}
               <div className="space-y-3">
-                <label className="text-[11px] text-slate-400 font-bold block uppercase tracking-wider">ProxyCheck.io API Key</label>
+                <label className="text-xs text-slate-400 font-bold block uppercase tracking-wider">ProxyCheck.io API Key</label>
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <div className="relative flex-1">
                     <input 
@@ -5574,22 +5588,22 @@ export default function AdminDashboardPage() {
                           <strong className="block text-emerald-300 font-bold text-xs">Verbindung zu ProxyCheck.io erfolgreich!</strong>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs text-slate-300">
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
+                              <span className="text-slate-400 block text-xs uppercase font-bold">Status</span>
                               <strong className="text-emerald-400 text-xs flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                                 <span>Aktiv ({testProxycheckResult.status?.toUpperCase()})</span>
                               </strong>
                             </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Tarif</span>
+                              <span className="text-slate-400 block text-xs uppercase font-bold">Tarif</span>
                               <strong className="text-white text-xs truncate block" title={testProxycheckResult.plan}>{testProxycheckResult.plan}</strong>
                             </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Tageslimit</span>
+                              <span className="text-slate-400 block text-xs uppercase font-bold">Tageslimit</span>
                               <strong className="text-white text-xs">{testProxycheckResult.dailyLimit} Abfragen</strong>
                             </div>
                             <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Antwortzeit</span>
+                              <span className="text-slate-400 block text-xs uppercase font-bold">Antwortzeit</span>
                               <strong className="text-sky-300 text-xs font-mono">{testProxycheckResult.queryTime}</strong>
                             </div>
                           </div>
@@ -5607,7 +5621,7 @@ export default function AdminDashboardPage() {
 
               {/* Blocking Rules Toggles */}
               <div className="space-y-3.5 border-t border-slate-800/80 pt-4">
-                <label className="text-[11px] text-slate-400 font-bold block uppercase tracking-wider">Gesperrte Kategorien & Filterregeln</label>
+                <label className="text-xs text-slate-400 font-bold block uppercase tracking-wider">Gesperrte Kategorien & Filterregeln</label>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="flex items-center gap-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl cursor-pointer hover:bg-slate-950 transition-colors">
@@ -5619,7 +5633,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-left">
                       <span className="text-xs font-semibold text-slate-200 block">VPN-Dienste blockieren</span>
-                      <span className="text-[11px] text-slate-500 block">z. B. NordVPN, Mullvad, ProtonVPN, Cloudflare WARP</span>
+                      <span className="text-xs text-slate-500 block">z. B. NordVPN, Mullvad, ProtonVPN, Cloudflare WARP</span>
                     </div>
                   </label>
 
@@ -5632,7 +5646,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-left">
                       <span className="text-xs font-semibold text-slate-200 block">TOR-Netzwerk blockieren</span>
-                      <span className="text-[11px] text-slate-500 block">Anonyme TOR Exit-Nodes und Onion-Router</span>
+                      <span className="text-xs text-slate-500 block">Anonyme TOR Exit-Nodes und Onion-Router</span>
                     </div>
                   </label>
 
@@ -5645,7 +5659,7 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-left">
                       <span className="text-xs font-semibold text-slate-200 block">Public / SOCKS / HTTP Proxies</span>
-                      <span className="text-[11px] text-slate-500 block">Öffentliche Web-Proxies & SOCKS4/5 Server</span>
+                      <span className="text-xs text-slate-500 block">Öffentliche Web-Proxies & SOCKS4/5 Server</span>
                     </div>
                   </label>
 
@@ -5658,14 +5672,14 @@ export default function AdminDashboardPage() {
                     />
                     <div className="text-left">
                       <span className="text-xs font-semibold text-slate-200 block">Kompromittierte IPs blockieren</span>
-                      <span className="text-[11px] text-slate-500 block">Bekannte Botnets, Malware-Hosts & auffällige Server (oft auch geteilte VPN-IPs)</span>
+                      <span className="text-xs text-slate-500 block">Bekannte Botnets, Malware-Hosts & auffällige Server (oft auch geteilte VPN-IPs)</span>
                     </div>
                   </label>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
                   <div>
-                    <label className="text-[11px] text-slate-400 font-bold block mb-1">Mindest-Risikobewertung (Risk Score 0–100)</label>
+                    <label className="text-xs text-slate-400 font-bold block mb-1">Mindest-Risikobewertung (Risk Score 0–100)</label>
                     <input 
                       type="number"
                       min="0"
@@ -5674,12 +5688,12 @@ export default function AdminDashboardPage() {
                       onChange={(e) => setProxycheckConfig({ ...proxycheckConfig, minRiskScore: parseInt(e.target.value, 10) || 67 })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
                     />
-                    <span className="text-[10px] text-slate-500 block mt-1">Standard: 67 (ab 67 gelten IPs als stark verdächtig)</span>
+                    <span className="text-xs text-slate-500 block mt-1">Standard: 67 (ab 67 gelten IPs als stark verdächtig)</span>
                   </div>
 
                   <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="text-[11px] text-slate-400 font-bold block mb-1">IP-Whitelist (Ausnahmen)</label>
+                      <label className="text-xs text-slate-400 font-bold block mb-1">IP-Whitelist (Ausnahmen)</label>
                       <input 
                         type="text"
                         value={proxycheckConfig.whitelistedIps || ''}
@@ -5687,12 +5701,12 @@ export default function AdminDashboardPage() {
                         placeholder="z. B. 192.168.1.50, 10.20.30.40 (kommagetrennt)"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
                       />
-                      <span className="text-[10px] text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
+                      <span className="text-xs text-slate-500 block mt-1">Diese IP-Adressen werden immer ohne ProxyCheck-Abfrage durchgelassen.</span>
                     </div>
 
                     <div className="bg-sky-950/20 border border-sky-500/20 rounded-xl p-3.5 space-y-2">
                       <div className="flex flex-wrap justify-between items-center gap-1.5">
-                        <label className="text-[11px] text-sky-400 font-bold block flex items-center gap-1.5">
+                        <label className="text-xs text-sky-400 font-bold block flex items-center gap-1.5">
                           <i className="fa-solid fa-shield-halved text-xs"></i>
                           <span>AS-Nummern Whitelist (Apple Private Relay / Provider)</span>
                         </label>
@@ -5709,9 +5723,9 @@ export default function AdminDashboardPage() {
                               return { ...prev, whitelistedAsns: tokens.join(', ') };
                             });
                           }}
-                          className="text-[10px] text-sky-300 hover:text-white bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 px-2 py-0.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                          className="text-xs text-sky-300 hover:text-white bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 px-2 py-0.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                         >
-                          <i className="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
+                          <i className="fa-solid fa-wand-magic-sparkles text-xs"></i>
                           <span>+ Apple Private Relay Standard-ASNs</span>
                         </button>
                       </div>
@@ -5722,7 +5736,7 @@ export default function AdminDashboardPage() {
                         placeholder="z. B. AS13335, AS54113, AS20940, AS396982 (kommagetrennt oder pro Zeile)"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
                       />
-                      <span className="text-[10px] text-slate-400 block">
+                      <span className="text-xs text-slate-400 block">
                         Erlaubt Zugriffe von diesen Autonomen Systemen (AS), selbst bei hohem Risk Score oder aktivem VPN. Perfekt für Apple Private Relay (Cloudflare AS13335, Fastly AS54113, Akamai AS20940).
                       </span>
                     </div>
@@ -5760,19 +5774,19 @@ export default function AdminDashboardPage() {
                   type="button"
                   onClick={loadProxycheckCache}
                   disabled={isProxycheckCacheLoading}
-                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <i className={`fa-solid fa-rotate-right text-[11px] ${isProxycheckCacheLoading ? 'animate-spin' : ''}`}></i>
+                  <i className={`fa-solid fa-rotate-right text-xs ${isProxycheckCacheLoading ? 'animate-spin' : ''}`}></i>
                   <span>Aktualisieren</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleClearCache('expired')}
                   disabled={isProxycheckCacheLoading}
-                  className="bg-slate-800 hover:bg-slate-750 text-amber-300 hover:text-amber-200 border border-amber-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-amber-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                   title="Löscht alle Einträge, deren 30-Tage-Ablaufdatum überschritten ist"
                 >
-                  <i className="fa-solid fa-broom text-[11px]"></i>
+                  <i className="fa-solid fa-broom text-xs"></i>
                   <span>Abgelaufene löschen</span>
                 </button>
                 <button
@@ -5782,7 +5796,7 @@ export default function AdminDashboardPage() {
                   className="bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                   title="Leert den gesamten Cache"
                 >
-                  <i className="fa-solid fa-trash-can text-[11px]"></i>
+                  <i className="fa-solid fa-trash-can text-xs"></i>
                   <span>Cache leeren</span>
                 </button>
               </div>
@@ -5791,23 +5805,23 @@ export default function AdminDashboardPage() {
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Gecachte IPs</span>
+                <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block">Gecachte IPs</span>
                 <span className="text-sm sm:text-base font-bold text-white">{proxycheckCacheStats.total}</span>
               </div>
               <div className="bg-red-950/30 border border-red-500/20 p-3 rounded-xl text-center">
-                <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider block">VPN & Proxies</span>
+                <span className="text-xs text-red-400 font-bold uppercase tracking-wider block">VPN & Proxies</span>
                 <span className="text-sm sm:text-base font-bold text-red-300">{proxycheckCacheStats.proxies}</span>
               </div>
               <div className="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-xl text-center">
-                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Regulär / Sauber</span>
+                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider block">Regulär / Sauber</span>
                 <span className="text-sm sm:text-base font-bold text-emerald-300">{proxycheckCacheStats.clean}</span>
               </div>
               <div className="bg-amber-950/30 border border-amber-500/20 p-3 rounded-xl text-center">
-                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Hohes Risiko (≥67)</span>
+                <span className="text-xs text-amber-400 font-bold uppercase tracking-wider block">Hohes Risiko (≥67)</span>
                 <span className="text-sm sm:text-base font-bold text-amber-300">{proxycheckCacheStats.highRisk}</span>
               </div>
               <div className="bg-sky-950/30 border border-sky-500/20 p-3 rounded-xl text-center col-span-2 sm:col-span-1">
-                <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider block">AS Whitelisted</span>
+                <span className="text-xs text-sky-400 font-bold uppercase tracking-wider block">AS Whitelisted</span>
                 <span className="text-sm sm:text-base font-bold text-sky-300">{proxycheckCacheStats.asnWhitelisted || 0}</span>
               </div>
             </div>
@@ -5889,7 +5903,7 @@ export default function AdminDashboardPage() {
                 <div className="w-8 h-8 border-3 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : filteredProxycheckCache.length === 0 ? (
-              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-8 text-center text-slate-500 text-xs">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                 {proxycheckCache.length === 0 
                   ? 'Der ProxyCheck-Cache ist noch leer. Sobald Nutzer den Chat besuchen, werden deren IP-Bewertungen hier gespeichert.'
                   : 'Keine Cache-Einträge gefunden, die den gewählten Filterkriterien entsprechen.'}
@@ -5898,7 +5912,7 @@ export default function AdminDashboardPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase font-bold tracking-wider">
                       <th className="py-2.5 px-3">IP-Adresse</th>
                       <th className="py-2.5 px-3">Erkannter Typ / Status</th>
                       <th className="py-2.5 px-3">Risk Score</th>
@@ -5918,7 +5932,7 @@ export default function AdminDashboardPage() {
                       const isAsnAllowed = item.isAsnWhitelisted;
 
                       return (
-                        <tr key={item.ip} className="hover:bg-slate-850/40 transition-colors">
+                        <tr key={item.ip} className="hover:bg-slate-800/40 transition-colors">
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-2">
                               <span className={`w-2 h-2 rounded-full shrink-0 ${isAsnAllowed ? 'bg-sky-400' : isProxy || isHighRisk ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
@@ -5928,23 +5942,23 @@ export default function AdminDashboardPage() {
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {isAsnAllowed ? (
-                                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>🍎</span> AS Whitelisted
                                 </span>
                               ) : isTor ? (
-                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>🧅</span> TOR Node
                                 </span>
                               ) : isVpn ? (
-                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>🔒</span> VPN
                                 </span>
                               ) : isProxy ? (
-                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>🌐</span> {item.proxyType || 'Proxy'}
                                 </span>
                               ) : (
-                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold text-[10px] inline-flex items-center gap-1">
+                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold text-xs inline-flex items-center gap-1">
                                   <span>🛡️</span> {item.proxyType || 'Regulär'}
                                 </span>
                               )}
@@ -5952,47 +5966,47 @@ export default function AdminDashboardPage() {
                           </td>
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-bold font-mono text-[11px] ${
+                              <span className={`font-bold font-mono text-xs ${
                                 isAsnAllowed ? 'text-sky-300' : isHighRisk ? 'text-red-400' : isMediumRisk ? 'text-amber-400' : 'text-emerald-400'
                               }`}>
                                 {item.riskScore}
                               </span>
-                              <span className="text-[10px] text-slate-500">/ 100</span>
+                              <span className="text-xs text-slate-500">/ 100</span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-300 max-w-[200px] truncate text-[11px]" title={`${item.country || 'Unbekannt'} - ${item.provider || 'Unbekannt'} ${item.asn ? `(${item.asn})` : ''}`}>
+                          <td className="py-2.5 px-3 text-slate-300 max-w-[200px] truncate text-xs" title={`${item.country || 'Unbekannt'} - ${item.provider || 'Unbekannt'} ${item.asn ? `(${item.asn})` : ''}`}>
                             <span className="font-semibold text-white block truncate">{item.country || 'Unbekannt'} {item.isocode ? `(${item.isocode})` : ''}</span>
-                            <span className="text-slate-400 text-[10px] block truncate">{item.provider || 'Unbekannt'} {item.asn ? `• ${item.asn}` : ''}</span>
+                            <span className="text-slate-400 text-xs block truncate">{item.provider || 'Unbekannt'} {item.asn ? `• ${item.asn}` : ''}</span>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-slate-400 text-xs whitespace-nowrap">
                             {parseUtcDate(item.checkedAt).toLocaleString('de-DE')} Uhr
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className={`text-[11px] font-mono ${item.isValid ? 'text-slate-300' : 'text-amber-400'}`}>
+                            <span className={`text-xs font-mono ${item.isValid ? 'text-slate-300' : 'text-amber-400'}`}>
                               {parseUtcDate(item.expiresAt).toLocaleDateString('de-DE')}
                             </span>
                             {!item.isValid && (
-                              <span className="text-[9px] text-amber-400 block">Abgelaufen</span>
+                              <span className="text-xs text-amber-400 block">Abgelaufen</span>
                             )}
                           </td>
                           <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => handleTransferToWhitelist(item.ip)}
-                              className="bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
+                              className="bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 font-semibold text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
                               title="IP auf die Whitelist übertragen (wird nie wieder blockiert)"
                             >
-                              <i className="fa-solid fa-plus text-[9px]"></i>
+                              <i className="fa-solid fa-plus text-xs"></i>
                               <span>IP Whitelist</span>
                             </button>
                             {item.asn && (
                               <button
                                 type="button"
                                 onClick={() => handleTransferToWhitelistAsn(item.asn)}
-                                className="bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 border border-sky-500/30 hover:border-sky-500/60 font-semibold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
+                                className="bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 border border-sky-500/30 hover:border-sky-500/60 font-semibold text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
                                 title={`AS-Nummer ${item.asn} whitelisten (z. B. für Apple Private Relay)`}
                               >
-                                <i className="fa-solid fa-shield-halved text-[9px]"></i>
+                                <i className="fa-solid fa-shield-halved text-xs"></i>
                                 <span>AS Whitelist</span>
                               </button>
                             )}
@@ -6000,19 +6014,19 @@ export default function AdminDashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedRawResponse(item)}
-                                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-semibold text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer"
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
                                 title="Rohdaten / JSON ansehen"
                               >
-                                <i className="fa-solid fa-code text-[9px]"></i>
+                                <i className="fa-solid fa-code text-xs"></i>
                               </button>
                             )}
                             <button
                               type="button"
                               onClick={() => handleDeleteCacheIp(item.ip)}
-                              className="bg-slate-800 hover:bg-red-900/60 text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-500/30 font-semibold text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer"
+                              className="bg-slate-800 hover:bg-red-900/60 text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-500/30 font-semibold text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
                               title="Aus dem Cache löschen"
                             >
-                              <i className="fa-solid fa-trash text-[9px]"></i>
+                              <i className="fa-solid fa-trash text-xs"></i>
                             </button>
                           </td>
                         </tr>
@@ -6030,7 +6044,7 @@ export default function AdminDashboardPage() {
 
       {/* ProxyCheck Raw JSON Modal Overlay */}
       {selectedRawResponse && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md p-4 flex items-center justify-center animate-fade-in">
+        <Dialog title="Sicherheitsprüfung" onClose={() => setSelectedRawResponse(null)}>
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-950/60">
               <div className="flex items-center gap-2">
@@ -6056,7 +6070,7 @@ export default function AdminDashboardPage() {
               </pre>
             </div>
             <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex justify-between items-center">
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 Geprüft am: {parseUtcDate(selectedRawResponse.checkedAt).toLocaleString('de-DE')} Uhr
               </span>
               <button
@@ -6068,12 +6082,12 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* KI-Qualitätsanalyse Modal Overlay */}
       {qualityAnalysisModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-center animate-fade-in">
+        <Dialog title="Qualitätsanalyse" onClose={() => setQualityAnalysisModal(null)}>
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl h-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex flex-col shadow-2xl overflow-hidden relative">
             
             {/* Header */}
@@ -6100,7 +6114,7 @@ export default function AdminDashboardPage() {
               ) : (
                 <div className="space-y-5">
                   <div 
-                    className="markdown-content text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-850"
+                    className="markdown-content text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800"
                     dangerouslySetInnerHTML={{ __html: safeParseMarkdown(qualityAnalysisModal?.report || 'Keine Ergebnisse.') }}
                   />
 
@@ -6112,7 +6126,7 @@ export default function AdminDashboardPage() {
                           <i className="fa-solid fa-lightbulb"></i>
                           <span>Fehlendes Wissen als internes Wissen nachtragen</span>
                         </h5>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-400 mt-0.5">
                           {qualityAnalysisModal.suggestedKnowledge 
                             ? `KI-Vorschlag: "${qualityAnalysisModal.suggestedKnowledge.title}" (${qualityAnalysisModal.suggestedKnowledge.category})`
                             : "Trage neues oder fehlendes Wissen direkt als internes Wissen in die Wissensdatenbank nach."}
@@ -6143,7 +6157,7 @@ export default function AdminDashboardPage() {
             </div>
 
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* Loading Overlay für Chat-in-Ticket Übertragung */}
@@ -6173,7 +6187,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">
                     {toast.type === 'new_ticket' ? 'Neues Support-Ticket' : 'Neue Nachricht'}
                   </span>
                   <button 
@@ -6197,7 +6211,7 @@ export default function AdminDashboardPage() {
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-400 hover:text-violet-300 mt-2.5 transition-colors"
                   >
                     <span>Zum Ticket wechseln</span>
-                    <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
                   </Link>
                 )}
               </div>

@@ -1,59 +1,55 @@
-# Authentifizierungs-Dokumentation (JWT & Setup)
+# Anmeldung und Benutzerkontext
 
-Dieses Dokument beschreibt die Funktionsweise der Authentifizierung im IT-Helpdesk, die auf JSON Web Tokens (JWT) basiert, sowie den Prozess der Ersteinrichtung (Setup).
+Alle unten genannten Anwendungsrouten liegen unter `/helpdesk`.
 
----
+## Einrichtung und Schulportal
 
-## 1. Ersteinrichtung (Setup-Prozess)
-Wenn die Anwendung mit einer leeren Datenbank oder ohne konfigurierten Administrator gestartet wird, greift die automatische Setup-Erkennung.
+`/api/setup` erlaubt die Anlage des ersten Administrators, solange kein Administrator existiert. Prüfung und Anlage erfolgen in einer Datenbanktransaktion. Die Einrichtung bestätigt keine E-Mail-Adresse.
 
-### Ablauf:
-1. Der API-Endpunkt `/api/setup` prüft per `GET`, ob ein Benutzer mit der Rolle `'admin'` existiert.
-2. Falls nein, leitet das Frontend (`/` und `/login`) den Benutzer automatisch auf die Seite `/setup` um.
-3. Auf `/setup` gibt der Betreiber Folgendes an:
-   * **Admin E-Mail-Adresse:** Die primäre E-Mail des System-Administrators.
-   * **Admin Name (optional):** Der Anzeigename des Administrators.
-   * **JWT Secret:** Ein Schlüssel zur Signierung der JWTs (wird standardmäßig sicher und zufällig generiert).
-4. Nach dem Absenden:
-   * Wird der Admin-User in der Tabelle `users` angelegt.
-   * Wird das JWT Secret in den `settings` unter dem Schlüssel `idp_config` gespeichert.
-   * Wird eine direkte Anmeldesession erstellt und der Benutzer an `/admin` weitergeleitet.
+Das Schulportal leitet zur Route `/api/auth/callback?token=...` weiter. Externe JWTs werden ausschließlich mit dem Schlüssel `idp_config.jwtSecret` und HS256 geprüft. Eine E-Mail-Adresse ist erforderlich; vorhandene Ablaufzeiten werden geprüft. Die externe Rolle `user` entspricht `customer`. Nur die ausdrücklich vereinbarten Rollen `customer`, `agent` und `admin` werden bei einer neuen Benutzeranlage berücksichtigt. Bei bestehenden Konten gilt die aktuell gespeicherte Helpdesk-Rolle.
 
----
+Der öffentlich erreichbare Testtoken-Endpunkt wurde deaktiviert und antwortet mit 404.
 
-## 2. Token-basiertes Session-Management (JWT)
-Nach erfolgreichem Login wird dem Browser ein verschlüsseltes Session-Cookie übergeben.
+## Interne Sitzung
 
-### Cookie-Spezifikationen:
-* **Name:** `session`
-* **Inhalt:** Ein mit dem konfigurierten JWT Secret signierter JWT.
-* **Payload:**
-  ```json
-  {
-    "id": "admin-123456",
-    "email": "admin@schule.de",
-    "role": "admin"
-  }
-  ```
-* **Gültigkeit:** 7 Tage (Erneuerung bei Aktivität bzw. neuem Login).
-* **Flags:** `httpOnly: true`, `secure: true` (in Produktion), `sameSite: 'lax'`, `path: '/'`.
+Das `session`-Cookie enthält einen **signierten**, nicht verschlüsselten JWT. Ein eigener, zufällig erzeugter und persistent gespeicherter Schlüssel `internal_session_secret` trennt interne Sitzungen von externen IdP-Tokens. Der Schlüssel wird nicht über die Einstellungs-API ausgegeben.
 
----
+Sitzungen enthalten `type=session`, `id`, `version`, `authMethod`, `verifiedAt` und die begrenzte Liste `schoolAffiliations`. Zusätzlich werden `iss=helpdesk`, `aud=helpdesk-session` und eine maximale Laufzeit von sieben Tagen geprüft. Cookie-Eigenschaften: HttpOnly, SameSite=Lax, Pfad `/helpdesk`, Secure im Produktionsmodus.
 
-## 3. Schnittstellen-Authentifizierung (API-Tokens)
-Um die API des IT-Helpdesks von externen Systemen oder Clients (z. B. Postman, curl, externe Support-Tools) aufzurufen, wird der `Authorization`-Header unterstützt.
+E-Mail, Name und Rolle werden bei jeder Anfrage aus der aktuellen Benutzerzeile gelesen. Ein gelöschtes Konto ist sofort gesperrt; eine Rollenänderung gilt sofort. Logout erhöht `session_version` und widerruft dadurch alle bestehenden Sitzungen desselben Kontos. Das Gastzugangscookie wird ebenfalls entfernt.
 
-### Verwendung:
-Jede Next.js API-Route, die die Funktion `getSessionUser()` aufruft, prüft automatisch:
-1. Ob ein gültiges `session`-Cookie existiert.
-2. Falls nicht, ob ein `Authorization: Bearer <token>` Header mit einem gültigen, signierten JWT übergeben wurde.
+Durch die neue Signaturprüfung sind Sitzungen aus früheren Versionen ungültig. Nach dem Update einmal neu anmelden.
 
-Dies ermöglicht nahtlose Integrationsszenarien, ohne auf Cookies angewiesen zu sein.
+## E-Mail-Anmeldelinks
 
----
+Magic Links gelten **30 Minuten** und können **einmal** eingelöst werden. Sie verwenden `type=magic_link`, `aud=helpdesk-login`, eine eindeutige `jti` und denselben ausschließlich internen Signaturschlüssel. Die Prüfung und der Verbrauch der Kennung erfolgen transaktional. Alte unbegrenzt gültige Links werden nicht mehr akzeptiert.
 
-## 4. Auto-Login über URL-Parameter
-Für die Integration in Portale oder Lernplattformen (LMS) kann ein signierter JWT-Token direkt über die URL übergeben werden:
-`http://localhost:3000/?token=<JWT>` oder `http://localhost:3000/login?token=<JWT>`
+Ein Magic Link ist kein API-Bearer-Token. Nach erfolgreicher Einlösung wird eine reguläre Sitzung mit `authMethod=email` angelegt. Dieser Weg steht auch Mitarbeitern für ihre bisherigen E-Mail-Benachrichtigungen zur Verfügung; er wird nicht als Schulportal-Anmeldung ausgewiesen.
 
-Das Frontend erkennt den Parameter `token`, leitet die Anfrage an `/api/auth/callback?token=...` weiter, verifiziert den Token, erstellt das Session-Cookie und meldet den Benutzer ohne manuelle Passworteingabe oder Klicks an.
+## Gastzugriff und Verifikationsanzeige
+
+Gast-Chats besitzen ein zufälliges HttpOnly-Zugriffsgeheimnis; in der Datenbank liegt nur dessen Hash. Eine Chat-ID, angegebene E-Mail-Adresse, IP-Adresse oder ein Fingerprint reicht nicht für den Zugriff. Angemeldete Chats gehören zur geprüften Benutzer-ID. Ein bestätigter Ticketbesitzer kann auch den verknüpften Chat lesen.
+
+Bei der Ticketanlage werden Anmeldemethode, Eigentümer-ID und Bestätigungszeitpunkt gespeichert. Bei einer Anfrage im Auftrag werden ausführender Mitarbeiter und betroffene Person getrennt behandelt.
+
+| Nachweis bei Anlage | Anzeige |
+| --- | --- |
+| Schulportal-JWT | Schulkonto bestätigt |
+| Eingelöster E-Mail-Link | E-Mail bestätigt |
+| Nur selbst angegebene Kontaktdaten | Gast · E-Mail unbestätigt |
+| Historische Daten ohne belastbaren Nachweis | Verifikation unbekannt |
+
+Eine Benutzerzeile oder ein ID-Präfix ist kein Identitätsnachweis. Der aktuelle Online-Status wird separat angezeigt.
+
+## Schüler- und Lehrerzugehörigkeit für den Bot
+
+Der verifizierte Schulportal-Login wertet ausschließlich diese Gruppen aus:
+
+- `mso_schüler` → `student` / Schüler
+- `mso_lehrer` → `teacher` / Lehrer
+
+Vollständige AD-DNs (`CN=mso_lehrer,OU=…`) und reine Gruppennamen werden exakt und unabhängig von Groß-/Kleinschreibung verglichen. Beide Zugehörigkeiten oder eine leere Liste sind möglich. Andere Gruppen verleihen keine Zugehörigkeit; Schüler-/Lehrergruppen verleihen keine Helpdesk-Berechtigung.
+
+Bei jeder regulären KI-Anfrage erhält der Bot Name, E-Mail-Adresse und bekannte Zugehörigkeit aus der geprüften Sitzung. Bekannte Angaben sollen nicht erneut erfragt werden. Weder der JWT noch die vollständige AD-Gruppenliste werden an die KI übertragen. Bei Gästen werden nur fehlende notwendige Angaben erfragt. Im Auftragsmodus wird das Profil des Mitarbeiters nicht als Identität der betroffenen Person verwendet. Eine reine E-Mail-Anmeldung liefert keine AD-Gruppen.
+
+Im direkten Supportmodus findet keine KI-Verarbeitung dieses Verlaufs statt. Der Modus wird an Chat und Ticket gespeichert. Historische Verläufe werden vorsichtig als ohne KI behandelt; ein späterer KI-Dialog erhält einen neuen Verlauf. Privates Wissen bleibt für den Bot verwendbar und wird ausschließlich in der öffentlichen Wissensliste ausgeblendet.

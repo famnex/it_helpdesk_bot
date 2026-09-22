@@ -8,6 +8,7 @@ let cronInterval = null;
  */
 export async function categorizeOneChat(chatId) {
   try {
+    if (!db.prepare('SELECT ai_enabled FROM chats WHERE id=?').get(chatId)?.ai_enabled) return null;
     const chatMessages = db.prepare(`
       SELECT sender, text FROM chat_messages 
       WHERE chat_id = ? 
@@ -54,14 +55,14 @@ export async function categorizeChats({ mode = 'uncategorized', totalLimit = 500
     if (mode === 'all') {
       targetChats = db.prepare(`
         SELECT id FROM chats 
-        WHERE id NOT LIKE 'link-%' AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
+        WHERE ai_enabled = 1 AND id NOT LIKE 'link-%' AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
         ORDER BY created_at ASC 
         LIMIT ?
       `).all(totalLimit);
     } else {
       targetChats = db.prepare(`
         SELECT id FROM chats 
-        WHERE id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
+        WHERE ai_enabled = 1 AND id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
         ORDER BY created_at ASC 
         LIMIT ?
       `).all(totalLimit);
@@ -70,7 +71,7 @@ export async function categorizeChats({ mode = 'uncategorized', totalLimit = 500
     if (targetChats.length === 0) {
       const remainingRow = db.prepare(`
         SELECT COUNT(*) as count FROM chats 
-        WHERE id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
+        WHERE ai_enabled = 1 AND id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
       `).get();
       return { processedCount: 0, remainingCount: remainingRow?.count || 0, durationMs: 0 };
     }
@@ -137,7 +138,7 @@ export async function categorizeChats({ mode = 'uncategorized', totalLimit = 500
 
     const remainingRow = db.prepare(`
       SELECT COUNT(*) as count FROM chats 
-      WHERE id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
+      WHERE ai_enabled = 1 AND id NOT LIKE 'link-%' AND (category IS NULL OR category = '') AND EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id)
     `).get();
 
     return {

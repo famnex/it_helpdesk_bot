@@ -62,6 +62,8 @@ export async function POST(request) {
     // 1. Admin-User in der Datenbank anlegen
     const adminId = `admin-${crypto.randomInt(100000, 999999)}`;
     
+    db.transaction(() => {
+    if (!isSetupRequired()) throw new Error('Setup bereits abgeschlossen.');
     db.prepare(`
       INSERT INTO users (id, email, role, name) 
       VALUES (?, ?, 'admin', ?)
@@ -78,6 +80,7 @@ export async function POST(request) {
     
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
       .run('idp_config', JSON.stringify(idpConfig));
+    }).immediate();
 
     // 3. Admin-Session erstellen (direkter Login)
     const adminUser = {

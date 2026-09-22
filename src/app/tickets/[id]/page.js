@@ -1,4 +1,9 @@
 'use client';
+import { mergeConversation } from '@/lib/conversations';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import Dialog from '@/components/Dialog';
+import { notify } from '@/lib/feedback';
+import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment } from '@/lib/attachments';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -30,7 +35,18 @@ export default function CustomerTicketDetailPage() {
 
   const [ticket, setTicket] = useState(null);
   const [messages, setMessages] = useState([]);
+  const uploadedAttachment = useRef(null);
+  const [attachment, setAttachment] = useState(null);
+  const selectAttachment = file => {
+    if (!file) return;
+    const error = attachmentError(file);
+    if (error) { notify(error); return; }
+    if (attachment && !window.confirm('Den gewählten Anhang ersetzen?')) return;
+    setAttachment(file); uploadedAttachment.current = null; replyId.current = null;
+  };
+  const replyId = useRef(null);
   const [replyText, setReplyText] = useState('');
+  useUnsavedChanges(!!replyText.trim() || !!attachment);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [user, setUser] = useState(null);
@@ -66,6 +82,7 @@ export default function CustomerTicketDetailPage() {
   const lastTypedTimeRef = useRef(0);
   const router = useRouter();
 
+  const isNearBottomRef = useRef(true);
   useEffect(() => {
     // Session prüfen
     fetch('/api/auth/me')
@@ -101,7 +118,7 @@ export default function CustomerTicketDetailPage() {
 
     let eventSource = null;
     try {
-      eventSource = new EventSource(`/api/live/sse?roomType=ticket&roomId=${id}&myRole=customer&myEmail=${encodeURIComponent(user.email || '')}`);
+      eventSource = new EventSource(`/helpdesk/api/live/sse?roomType=ticket&roomId=${id}&myRole=customer&myEmail=${encodeURIComponent(user.email || '')}`);
       
       eventSource.addEventListener('messages', (e) => {
         try {
@@ -116,7 +133,7 @@ export default function CustomerTicketDetailPage() {
                 senderRole: m.senderRole || 'agent',
                 senderEmail: m.senderEmail,
                 senderName: m.senderName || 'Support-Mitarbeiter',
-                text: m.text,
+                text: m.text, imageUrl: m.imageUrl || null, attachmentName: m.attachmentName,
                 createdAt: m.createdAt
               }));
               return [...prev, ...formattedToAdd];
@@ -203,7 +220,7 @@ export default function CustomerTicketDetailPage() {
                 senderRole: m.senderRole || 'agent',
                 senderEmail: m.senderEmail,
                 senderName: m.senderName || 'Support-Mitarbeiter',
-                text: m.text,
+                text: m.text, imageUrl: m.imageUrl || null, attachmentName: m.attachmentName,
                 createdAt: m.createdAt
               }));
               return [...prev, ...formattedToAdd];
@@ -220,7 +237,7 @@ export default function CustomerTicketDetailPage() {
 
   const handleReplyInputChange = (e) => {
     const val = e.target.value;
-    setReplyText(val);
+    setReplyText(val); replyId.current = null;
 
     const now = Date.now();
     if (now - lastTypedTimeRef.current > 2000) {
@@ -239,7 +256,7 @@ export default function CustomerTicketDetailPage() {
     }
   };
 
-  const isNearBottomRef = useRef(true);
+
 
   const handleScroll = (e) => {
     const el = e.target;
@@ -248,13 +265,13 @@ export default function CustomerTicketDetailPage() {
     }
   };
 
-  const scrollToBottom = (force = false) => {
+  function scrollToBottom(force = false) {
     if (force || isNearBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }
 
-  const loadTicketDetails = async () => {
+  async function loadTicketDetails() {
     try {
       const res = await fetch(`/api/tickets/${id}`);
       if (res.ok) {
@@ -271,103 +288,13 @@ export default function CustomerTicketDetailPage() {
         }
         
         let ticketMessages = data.messages || [];
+        let history = [];
         if (data.ticket.chatId) {
-          try {
-            const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
-            if (chatRes.ok) {
-              const chatData = await chatRes.json();
-              const chatMessages = chatData.messages || [];
-              const ticketCreatedEventIndex = chatMessages.findIndex(m => m.text && m.text.startsWith('[SYSTEM_EVENT: TICKET_CREATED:'));
-              
-              let preTicketMessages = [];
-              let postTicketMessages = [];
-              
-              if (ticketCreatedEventIndex !== -1) {
-                preTicketMessages = chatMessages.slice(0, ticketCreatedEventIndex);
-                postTicketMessages = chatMessages.slice(ticketCreatedEventIndex + 1);
-              } else {
-                preTicketMessages = chatMessages;
-              }
-
-              const chatHistory = preTicketMessages.map(m => ({
-                ...m,
-                isPreTicket: true,
-                senderRole: m.sender === 'user' ? 'customer' : 'bot',
-                senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
-                senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
-                text: m.text,
-                createdAt: m.createdAt
-              }));
-
-              const missingPostMessages = postTicketMessages
-                .map(m => ({
-                  ...m,
-                  isPreTicket: false,
-                  senderRole: m.sender === 'user' ? 'customer' : 'bot',
-                  senderEmail: m.sender === 'user' ? (data.ticket.creatorEmail || 'Kunde') : 'KI-Bot',
-                  senderName: m.sender === 'user' ? (data.ticket.creatorName || 'Kunde') : 'IT-Helpdesk-Bot',
-                  text: m.text,
-                  createdAt: m.createdAt
-                }))
-                .filter(pm => {
-                  const existsInTicket = ticketMessages.some(tm => 
-                    tm.senderRole === pm.senderRole && 
-                    tm.text === pm.text
-                  );
-                  return !existsInTicket;
-                });
-
-              const combined = [...chatHistory, ...missingPostMessages, ...ticketMessages];
-              
-              const seenMap = new Set();
-              const deduplicated = [];
-              for (const m of combined) {
-                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-                if (!seenMap.has(key)) {
-                  seenMap.add(key);
-                  deduplicated.push(m);
-                }
-              }
-
-              deduplicated.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-              setMessages(deduplicated);
-            } else {
-              const seenMap = new Set();
-              const deduplicated = [];
-              for (const m of ticketMessages) {
-                const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-                if (!seenMap.has(key)) {
-                  seenMap.add(key);
-                  deduplicated.push(m);
-                }
-              }
-              setMessages(deduplicated);
-            }
-          } catch (e) {
-            console.error('Fehler beim Laden des Pre-Ticket-Chats:', e);
-            const seenMap = new Set();
-            const deduplicated = [];
-            for (const m of ticketMessages) {
-              const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-              if (!seenMap.has(key)) {
-                seenMap.add(key);
-                deduplicated.push(m);
-              }
-            }
-            setMessages(deduplicated);
-          }
-        } else {
-          const seenMap = new Set();
-          const deduplicated = [];
-          for (const m of ticketMessages) {
-            const key = `${m.senderRole || m.sender}_${(m.text || '').trim()}_${m.imageUrl || ''}`;
-            if (!seenMap.has(key)) {
-              seenMap.add(key);
-              deduplicated.push(m);
-            }
-          }
-          setMessages(deduplicated);
+          const chatRes = await fetch(`/api/chat?chatId=${data.ticket.chatId}`);
+          if (chatRes.ok) history = (await chatRes.json()).messages || [];
         }
+        setMessages(mergeConversation(history,ticketMessages,data.ticket));
+
       } else {
         router.push('/tickets');
       }
@@ -376,7 +303,7 @@ export default function CustomerTicketDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
   const handleFlagMessage = (messageId, msgIndex) => {
     if (!messageId) return;
     setFlaggingMessageId(messageId);
@@ -442,24 +369,35 @@ export default function CustomerTicketDetailPage() {
 
   const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim() || isSending) return;
+    if ((!replyText.trim() && !attachment) || isSending) return;
 
     setIsSending(true);
+    replyId.current ||= crypto.randomUUID();
     try {
+      let imageUrl = uploadedAttachment.current;
+      if (attachment && !imageUrl) {
+        const form = new FormData(); form.append('file',attachment); form.append('ticketId',id);
+        const upload = await fetch('/api/tickets/upload',{method:'POST',body:form});
+        const data = await upload.json();
+        if (!upload.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
+        imageUrl = data.url; uploadedAttachment.current = data.url;
+      }
       const res = await fetch(`/api/tickets/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: replyText })
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': replyId.current },
+        body: JSON.stringify({ text: replyText, imageUrl })
       });
       if (res.ok) {
-        setReplyText('');
+        setReplyText(''); replyId.current = null;
+        setAttachment(null); uploadedAttachment.current = null;
         // Verlauf neu laden
         await loadTicketDetails();
       } else {
         const data = await res.json();
-        alert(data.error || 'Fehler beim Senden der Antwort.');
+        notify(data.error || 'Fehler beim Senden der Antwort.');
       }
     } catch (err) {
+      notify(err.message + ' Dein Entwurf ist erhalten.');
       console.error('Fehler beim Senden der Antwort:', err);
     } finally {
       setIsSending(false);
@@ -500,12 +438,12 @@ export default function CustomerTicketDetailPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold text-white max-w-xs sm:max-w-md md:max-w-xl truncate">{ticket.title}</h1>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-[10px] text-slate-400">Ticket ID: <span className="font-mono">{ticket.id}</span></p>
+              <p className="text-xs text-slate-400">Ticket ID: <span className="font-mono">{ticket.id}</span></p>
               {partnerPresence && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-[10px] font-medium shadow-inner">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-xs font-medium shadow-inner">
                   <span className={`w-1.5 h-1.5 rounded-full ${
                     partnerPresence.isOnline 
                       ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]' 
@@ -552,11 +490,11 @@ export default function CustomerTicketDetailPage() {
                     </div>
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-white">Wie zufrieden warst du mit unserem Support?</h4>
-                      <p className="text-[11px] text-slate-400">Klicke auf die Sterne, um deine Bewertung abzugeben oder jederzeit anzupassen.</p>
+                      <p className="text-xs text-slate-400">Klicke auf die Sterne, um deine Bewertung abzugeben oder jederzeit anzupassen.</p>
                     </div>
                   </div>
                   {(ticket.rating || selectedRating > 0) && (
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                    <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                       {ticket.rating || selectedRating}/5 Sterne
                     </span>
                   )}
@@ -667,14 +605,14 @@ export default function CustomerTicketDetailPage() {
                     {showDateDivider && (
                       <div className="flex items-center gap-4 py-2 justify-center my-2">
                         <div className="h-px bg-slate-800 flex-1"></div>
-                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                        <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                           {getDateDividerLabel(msg.createdAt)}
                         </span>
                         <div className="h-px bg-slate-800 flex-1"></div>
                       </div>
                     )}
                     <div className="flex justify-center">
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-500 px-3.5 py-1.5 rounded-xl shadow-sm font-bold tracking-wide uppercase">
                         {msg.text}
                       </span>
                     </div>
@@ -704,7 +642,7 @@ export default function CustomerTicketDetailPage() {
                   {showDateDivider && (
                     <div className="flex items-center gap-4 py-2 justify-center my-2">
                       <div className="h-px bg-slate-800 flex-1"></div>
-                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
+                      <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 font-semibold px-3 py-1 rounded-full shadow-sm tracking-wide">
                         {getDateDividerLabel(msg.createdAt)}
                       </span>
                       <div className="h-px bg-slate-800 flex-1"></div>
@@ -765,23 +703,23 @@ export default function CustomerTicketDetailPage() {
                                 className="inline-flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/60 text-sky-400 hover:text-sky-300 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all shadow-sm"
                               >
                                 <i className="fa-solid fa-paperclip text-slate-400"></i>
-                                <span>Anhang öffnen ({msg.imageUrl.split('/').pop() || 'Datei'})</span>
-                                <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                                <span>Anhang öffnen ({msg.attachmentName || 'Datei'})</span>
+                                <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                               </a>
                             </div>
                           )
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-1 mx-1">
-                        <span className="text-[9px] text-slate-500">
+                        <span className="text-xs text-slate-500">
                           {isBot ? 'IT-Helpdesk-Bot' : isMyMessage ? 'Du' : isSupportTeam ? 'Support-Team' : (msg.senderRole === 'customer' ? (msg.senderName || 'Kunde') : `${msg.senderName || 'Support-Mitarbeiter'} (${msg.senderRole === 'admin' ? 'IT-Administrator' : 'IT-Support'})`)} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                         </span>
                         {isBot && msg.id && (
                           <button
                             type="button"
-                            onClick={() => handleFlagMessage(msg.id, index)}
+                            onClick={() => handleFlagMessage(msg.sourceChatMessageId, index)}
                             disabled={msg.isFlagged}
-                            className={`text-[9px] flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
+                            className={`text-xs flex items-center gap-1 transition-all ${msg.isFlagged ? 'text-red-500 font-bold' : 'text-slate-500 hover:text-red-400 cursor-pointer'}`}
                             title={msg.isFlagged ? "Diese Antwort wurde gemeldet" : "Diese Antwort als fehlerhaft/komisch melden"}
                           >
                             <i className={`fa-${msg.isFlagged ? 'solid' : 'regular'} fa-flag`}></i>
@@ -816,9 +754,14 @@ export default function CustomerTicketDetailPage() {
           {/* Antworten Form */}
           {ticket.status !== 'closed' ? (
             <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 z-10 shadow-lg w-full">
+              <div className="max-w-4xl mx-auto py-2 flex gap-3 items-center text-sm">
+                <label className="cursor-pointer rounded-lg border border-slate-600 p-2">📎 Anhang<input aria-label="Anhang auswählen" type="file" className="hidden" accept={ATTACHMENT_ACCEPT} onChange={e => selectAttachment(e.target.files?.[0])} /></label>
+                {attachment && <><span>{attachment.name}</span><button type="button" onClick={() => { setAttachment(null); uploadedAttachment.current = null; replyId.current = null; }}>Entfernen</button></>}
+              </div>
               <form onSubmit={handleSendReply} className="max-w-4xl mx-auto flex items-end gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
                 <textarea 
                   value={replyText}
+                  onPaste={e => pasteAttachment(e,selectAttachment,message => notify(message))}
                   onChange={handleReplyInputChange}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -833,7 +776,7 @@ export default function CustomerTicketDetailPage() {
                 />
                 <button 
                   type="submit"
-                  disabled={!replyText.trim() || isSending}
+                  disabled={(!replyText.trim() && !attachment) || isSending}
                   className="p-3 bg-sky-600 hover:bg-sky-700 text-white transition-colors rounded-xl shrink-0 w-11 h-11 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-md"
                 >
                   <i className="fa-solid fa-paper-plane text-sm"></i>
@@ -851,7 +794,7 @@ export default function CustomerTicketDetailPage() {
 
         {/* Modal zum Melden einer Antwort (global positioniert) */}
         {showFlagModal && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <Dialog title="Antwort melden" onClose={() => setShowFlagModal(false)}>
             <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
               <div className="flex items-center gap-3">
                 <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-red-500 animate-pulse">
@@ -859,19 +802,19 @@ export default function CustomerTicketDetailPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Antwort melden</h3>
-                  <p className="text-[10px] text-slate-400">Hilf uns, den IT-Helpdesk-Bot zu verbessern. Was ist an dieser Antwort falsch oder unpassend?</p>
+                  <p className="text-xs text-slate-400">Hilf uns, den IT-Helpdesk-Bot zu verbessern. Was ist an dieser Antwort falsch oder unpassend?</p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Problembeschreibung (Optional)</label>
+                  <label className="text-xs text-slate-400 font-bold block mb-1">Problembeschreibung (Optional)</label>
                   <textarea 
                     value={flagReasonText}
                     onChange={(e) => setFlagReasonText(e.target.value)}
                     placeholder="z.B. Die genannte Tastenkombination ist falsch, die Lösung passt nicht zu meinem Drucker-Problem, etc."
                     rows="3"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:border-red-500 transition-colors"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-red-500 transition-colors"
                   />
                 </div>
                 
@@ -882,22 +825,22 @@ export default function CustomerTicketDetailPage() {
                       setShowFlagModal(false);
                       setFlagReasonText('');
                     }}
-                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
                   >
                     Abbrechen
                   </button>
                   <button 
                     type="button"
                     onClick={submitFlagMessage}
-                    className="flex-1 py-2 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                    <i className="fa-solid fa-paper-plane text-xs"></i>
                     <span>Meldung absenden</span>
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+          </Dialog>
         )}
       </div>
 
