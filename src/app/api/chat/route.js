@@ -52,7 +52,7 @@ export async function GET(request) {
         SELECT id, sender, text, image_url as imageUrl, is_flagged as isFlagged, created_at as createdAt 
         FROM chat_messages 
         WHERE chat_id = ? 
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC, id ASC
       `).all(chatId);
       
       const messagesWithPrefix = messages.map(m => {
@@ -492,7 +492,7 @@ async function createMessage(request) {
       SELECT sender, text, image_url as imageUrl 
       FROM chat_messages 
       WHERE chat_id = ? 
-      ORDER BY created_at ASC
+      ORDER BY created_at ASC, id ASC
     `).all(chatId);
 
     // 4. Gemini aufrufen
@@ -600,7 +600,7 @@ async function createMessage(request) {
                   const chatHistoryMsgs = db.prepare(`
                     SELECT sender, text FROM chat_messages 
                     WHERE chat_id = ? 
-                    ORDER BY created_at ASC
+                    ORDER BY created_at ASC, id ASC
                   `).all(chatId);
                   matchedAgentId = await determineAgentAssignment(finalTitle, chatHistoryMsgs, potentialAgents);
                   if (matchedAgentId) {

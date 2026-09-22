@@ -482,7 +482,9 @@ REGELN FÜR DIE ERSTELLUNG UND DAS ANBIETEN VON IT-SUPPORT-TICKETS:
     const parts = [];
     
     // Textteil hinzufügen (falls leer, leerer String)
-    parts.push({ text: msg.text || "" });
+    parts.push({ text: msg.text?.trim() || (msg.sender === 'user' && msg.imageUrl
+      ? (isImageAttachment(msg.imageUrl) ? 'Ich habe ein Bild angehängt.' : 'Ich habe ein Dokument für den IT-Support angehängt. Der Dokumentinhalt steht dir nicht zur Verfügung. Frage bei Bedarf nach einer Beschreibung des Problems.')
+      : '') });
     
     // Bildteil hinzufügen, falls vorhanden
     if (msg.imageUrl && isImageAttachment(msg.imageUrl)) {

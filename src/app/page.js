@@ -708,11 +708,6 @@ export default function CustomerChatPage() {
       setMessages(prev => prev.filter(m => m.localId !== failedId));
       setSendError(err.message + ' Dein Entwurf ist erhalten. Bitte erneut senden.');
       console.error('Chat-Fehler:', err);
-      const isAdmin = user && user.role === 'admin';
-      const displayMsg = (isAdmin && err.message && err.message !== 'API-Fehler')
-        ? `⚠️ Admin-Hinweis: ${err.message}`
-        : 'Entschuldigung, meine Serververbindung klemmt gerade.';
-      setMessages(prev => [...prev, { sender: 'bot', text: displayMsg }]);
       setIsTyping(false);
     }
   };
@@ -1658,15 +1653,27 @@ export default function CustomerChatPage() {
               </div>
 
               {isChatbotDisabled && <p className="max-w-4xl mx-auto w-full text-sm text-sky-200">Schritt 1 von 2: Beschreibe das betroffene Gerät oder System und den Fehler. Ein Anhang ist optional. Anschließend prüfen wir Name und E-Mail. Erst im nächsten Schritt sendest du das Ticket verbindlich ein.</p>}
-              <p role="status" className="text-sm text-slate-300">{isTyping ? 'Wird gesendet …' : sendError ? 'Senden fehlgeschlagen' : sendStatus}</p>
-              {sendError && <p role="alert" className="max-w-4xl mx-auto p-3 text-sm text-amber-300">{sendError}</p>}
-              {selectedPhoto && !isImageAttachment(selectedPhoto.name) && <p className="text-sm text-slate-300">Diese Datei wird an den Support weitergegeben. Der Bot wertet Dokumente nicht aus.</p>}
+              <span role="status" className="sr-only">{isTyping ? 'Wird gesendet …' : sendStatus}</span>
               <form onSubmit={handleSend} className="max-w-4xl mx-auto w-full flex flex-col bg-slate-950 border border-slate-800 rounded-2xl p-1.5 sm:p-2.5 focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-inner">
                 
+                {sendError && (
+                  <div role="alert" className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <i aria-hidden="true" className="fa-solid fa-circle-exclamation mt-0.5 text-amber-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-amber-200">Bitte prüfe deinen Entwurf</p>
+                        <p className="mt-1 text-slate-200">{/Gemini|API|Antwortgenerierung|fetch|Serververbindung/i.test(sendError) ? 'Die Nachricht konnte nicht vollständig verarbeitet werden. Dein Text und dein Anhang bleiben erhalten.' : sendError}</p>
+                        {user?.role === 'admin' && /Gemini|API|Antwortgenerierung/i.test(sendError) && <details className="mt-2 text-xs text-slate-400"><summary className="cursor-pointer">Technische Details</summary><p className="mt-1 break-words">{sendError}</p></details>}
+                        <button type="button" onClick={e => { setSendError(''); e.currentTarget.closest('form')?.querySelector('textarea')?.focus(); }} disabled={isTyping} className="mt-2 rounded-lg bg-amber-400/15 px-3 py-1.5 font-semibold text-amber-200 hover:bg-amber-400/25 disabled:hidden">Entwurf bearbeiten</button>
+                      </div>
+                      <button type="button" aria-label="Hinweis schließen" onClick={() => setSendError('')} className="shrink-0 rounded-lg p-1 text-slate-400 hover:text-white"><i aria-hidden="true" className="fa-solid fa-xmark" /></button>
+                    </div>
+                  </div>
+                )}
                 {/* Foto-Vorschau */}
                 {selectedPhoto && (
                   <div className="flex items-center gap-2.5 p-1.5 border-b border-slate-900 pb-1.5 mb-1.5 animate-fade-in">
-                    <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
+                    <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-slate-800 shadow">
                       {photoPreview ? <img src={photoPreview} alt="Vorschau" className="w-full h-full object-cover" /> : <span aria-hidden="true">📎</span>}
                       <button 
                         type="button" 
@@ -1677,9 +1684,10 @@ export default function CustomerChatPage() {
                         <i className="fa-solid fa-xmark"></i>
                       </button>
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Anhang gewählt</p>
-                      <p className="text-xs text-slate-300 truncate max-w-xs">{selectedPhoto?.name}</p>
+                      <p className="text-sm text-slate-200 truncate" title={selectedPhoto.name}>{selectedPhoto.name}</p>
+                      {!isImageAttachment(selectedPhoto.name) && <p className="mt-1 text-xs text-slate-400">Für den IT-Support · keine KI-Auswertung des Dokuments</p>}
                     </div>
                   </div>
                 )}
