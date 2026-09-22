@@ -126,6 +126,7 @@ export default function CustomerChatPage() {
   const [flagReasonText, setFlagReasonText] = useState('');
   
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   // Frage-Vorschläge (dynamisch aus der Datenbank)
   const [suggestions, setSuggestions] = useState([]);
@@ -437,6 +438,16 @@ export default function CustomerChatPage() {
 
   const isNearBottomRef = useRef(true);
 
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      if (isNearBottomRef.current) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isLoadingInitialCheck, isIpBanned]);
+
   const handleScroll = (e) => {
     const el = e.target;
     if (el) {
@@ -446,7 +457,8 @@ export default function CustomerChatPage() {
 
   function scrollToBottom(force = false) {
     if (force || isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const container = messagesContainerRef.current;
+      if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }
 
@@ -1035,10 +1047,10 @@ export default function CustomerChatPage() {
   }
 
   return (
-    <div className="min-h-screen h-[100dvh] w-full flex flex-col bg-slate-950 font-sans text-slate-100 relative overflow-hidden">
+    <div className="h-[100dvh] min-h-0 w-full flex flex-col bg-slate-950 font-sans text-slate-100 relative overflow-hidden">
       
       {/* Header (Fest am oberen Bildschirmland fixiert) */}
-      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3.5 flex justify-between items-center z-30 fixed top-0 left-0 right-0 shadow-lg h-14 sm:h-[72px] w-full">
+      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3.5 flex justify-between items-center z-30 relative shrink-0 shadow-lg h-14 sm:h-[72px] w-full">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="bg-sky-500 text-white p-1.5 sm:p-2.5 rounded-xl shadow-md flex items-center justify-center shrink-0">
             <i className="fa-solid fa-graduation-cap text-lg sm:text-2xl"></i>
@@ -1233,7 +1245,7 @@ export default function CustomerChatPage() {
       </header>
  
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950 relative w-full pt-14 sm:pt-[72px] pb-[100px] sm:pb-[140px]">
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden bg-slate-950 relative w-full">
         
         {/* Magic link feedback notice */}
         {(magicSuccess || magicError) && (
@@ -1260,7 +1272,7 @@ export default function CustomerChatPage() {
         )}
  
         {/* Chat History */}
-        <div onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
+        <div ref={messagesContainerRef} onLoadCapture={() => scrollToBottom()} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
           <div className="flex justify-center">
             <span className="text-xs sm:text-xs text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
               Verschlüsselte KI-Sitzung
@@ -1561,8 +1573,8 @@ export default function CustomerChatPage() {
           <div ref={messagesEndRef} />
         </div>
  
-        {/* Input Area (Fest am unteren Bildschirmrand fixiert) */}
-        <div className="p-2 sm:p-4 bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-20 shadow-lg flex flex-col gap-1.5 sm:gap-3 w-full">
+        {/* Input Area (Höhe wird im Flex-Layout berücksichtigt) */}
+        <div className="p-2 sm:p-4 bg-slate-900 border-t border-slate-800 relative shrink-0 max-h-[60%] overflow-y-auto z-20 shadow-lg flex flex-col gap-1.5 sm:gap-3 w-full">
           
           {isIpBanned ? (
             <div className="max-w-4xl mx-auto w-full bg-red-950/70 border border-red-500/40 rounded-2xl p-4 text-center space-y-3 animate-fade-in shadow-xl">

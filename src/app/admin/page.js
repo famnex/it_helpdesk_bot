@@ -4233,11 +4233,11 @@ export default function AdminDashboardPage() {
 
             {/* Mobile Modal Inspector (Nur auf kleinen Bildschirmen < lg) */}
             {showMobileChatModal && (
-              <Dialog title="Chatdetails" onClose={() => setShowMobileChatModal(false)}>
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg h-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex flex-col shadow-2xl overflow-hidden relative">
+              <Dialog mediaQuery="(width < 64rem)" className="max-w-lg overflow-hidden" title="Chatdetails" onClose={() => setShowMobileChatModal(false)}>
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg h-[88dvh] min-h-0 flex flex-col shadow-2xl overflow-hidden relative">
                   
                   {/* Modal Header */}
-                  <div className="flex justify-between items-start p-4 border-b border-slate-800 bg-slate-950/40">
+                  <div className="flex justify-between items-start shrink-0 p-4 border-b border-slate-800 bg-slate-950/40">
                     <div>
                       {selectedChatDetails ? (
                         <>
@@ -4274,7 +4274,7 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Modal Body */}
-                  <div className="p-4 overflow-y-auto flex-1 space-y-4">
+                  <div className="p-4 overflow-y-auto flex-1 min-h-0 space-y-4">
                     {chatDetailsLoading ? (
                       <div className="flex justify-center items-center py-12">
                         <div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
@@ -4405,7 +4405,7 @@ export default function AdminDashboardPage() {
 
                   {/* Modal Footer (Aufreihen ohne redundanten Schließen-Button) */}
                   {selectedChatDetails && (
-                    <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <div className="p-4 shrink-0 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
                       <div className="flex items-center gap-2 w-full">
                         {/* Ticket erstellen (nur wenn E-Mail bekannt ist) / öffnen mit Text */}
                         {((selectedChatDetails.exactTicketId || selectedChatIdentityTrace?.directTicket?.id) || Boolean(getKnownChatEmail(selectedChatDetails, selectedChatIdentityTrace))) && (
