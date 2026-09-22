@@ -4,6 +4,8 @@ import { cookies, headers } from 'next/headers';
 import db from './db';
 import { normalizeSchoolAffiliations } from './chatUserContext';
 
+const SESSION_COOKIE = 'helpdesk_session';
+
 export function getJwtSecret() {
   const config = JSON.parse(db.prepare('SELECT value FROM settings WHERE key = ?').get('idp_config')?.value || '{}');
   if (!config.jwtSecret || config.jwtSecret === 'default-fallback-secret') throw new Error('IdP-Schlüssel nicht eingerichtet.');
@@ -27,7 +29,7 @@ export async function createSession(user) {
     authMethod: user.authMethod || 'unknown', verifiedAt: new Date().toISOString(),
     schoolAffiliations: normalizeSchoolAffiliations(user.schoolAffiliations)
   }, sessionSecret(), { expiresIn: '7d', issuer: 'helpdesk', audience: 'helpdesk-session' });
-  (await cookies()).set('session', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 604800, path: '/helpdesk' });
+  (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 604800, path: '/helpdesk' });
 }
 export function validateSessionToken(token) {
   try {
@@ -38,12 +40,18 @@ export function validateSessionToken(token) {
     return { ...payload, ...user };
   } catch { return null; }
 }
-export async function getSessionUser() {
+export async function getSessionToken() {
   let token;
-  try { token = (await cookies()).get('session')?.value; } catch {}
+  // The old generic name collides with root cookies from previous releases
+  // and other applications on the same host. Never use it for authentication.
+  try { token = (await cookies()).get(SESSION_COOKIE)?.value; } catch {}
   if (!token) {
     try { token = (await headers()).get('authorization')?.replace(/^Bearer /, ''); } catch {}
   }
+  return token;
+}
+export async function getSessionUser() {
+  const token = await getSessionToken();
   const user = token ? validateSessionToken(token) : null;
   if (user) db.prepare('UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
   return user;
@@ -53,7 +61,7 @@ export async function destroySession() {
   if (user) db.prepare('UPDATE users SET session_version = session_version + 1 WHERE id = ?').run(user.id);
   const store = await cookies();
   store.set('helpdesk_guest','',{httpOnly:true,expires:new Date(0),path:'/helpdesk'});
-  for (const path of ['/', '/helpdesk']) store.set('session', '', { httpOnly: true, expires: new Date(0), path });
+  store.set(SESSION_COOKIE, '', { httpOnly: true, expires: new Date(0), path: '/helpdesk' });
 }
 export function generateMagicLinkToken(email) {
   return jwt.sign({ email: email.trim().toLowerCase(), type: 'magic_link' }, sessionSecret(), {

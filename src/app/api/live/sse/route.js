@@ -1,6 +1,5 @@
 import { withAttachmentMetadata } from '@/lib/uploads';
-import { cookies, headers } from 'next/headers';
-import { getSessionUser, validateSessionToken } from '@/lib/auth';
+import { getSessionUser, getSessionToken, validateSessionToken } from '@/lib/auth';
 import { canAccessRoom, isStaff, guestHash } from '@/lib/access';
 import db from '@/lib/db';
 
@@ -46,7 +45,7 @@ export async function GET(request) {
   const roomType = searchParams.get('roomType') || 'ticket'; // 'ticket', 'chat', 'dashboard'
   const roomId = searchParams.get('roomId') || '';
   const initialUser = await getSessionUser();
-  const sessionToken = (await cookies()).get('session')?.value || (await headers()).get('authorization')?.replace(/^Bearer /,'');
+  const sessionToken = await getSessionToken();
   const guest = await guestHash();
   if (!(roomType === 'dashboard' ? isStaff(initialUser) : await canAccessRoom(roomType,roomId,initialUser))) return new Response(null,{status:403});
   let myRole = initialUser?.role || 'customer';

@@ -12,9 +12,9 @@ Der öffentlich erreichbare Testtoken-Endpunkt wurde deaktiviert und antwortet m
 
 ## Interne Sitzung
 
-Das `session`-Cookie enthält einen **signierten**, nicht verschlüsselten JWT. Ein eigener, zufällig erzeugter und persistent gespeicherter Schlüssel `internal_session_secret` trennt interne Sitzungen von externen IdP-Tokens. Der Schlüssel wird nicht über die Einstellungs-API ausgegeben.
+Das `helpdesk_session`-Cookie enthält einen **signierten**, nicht verschlüsselten JWT. Ein eigener, zufällig erzeugter und persistent gespeicherter Schlüssel `internal_session_secret` trennt interne Sitzungen von externen IdP-Tokens. Der Schlüssel wird nicht über die Einstellungs-API ausgegeben.
 
-Sitzungen enthalten `type=session`, `id`, `version`, `authMethod`, `verifiedAt` und die begrenzte Liste `schoolAffiliations`. Zusätzlich werden `iss=helpdesk`, `aud=helpdesk-session` und eine maximale Laufzeit von sieben Tagen geprüft. Cookie-Eigenschaften: HttpOnly, SameSite=Lax, Pfad `/helpdesk`, Secure im Produktionsmodus.
+Sitzungen enthalten `type=session`, `id`, `version`, `authMethod`, `verifiedAt` und die begrenzte Liste `schoolAffiliations`. Zusätzlich werden `iss=helpdesk`, `aud=helpdesk-session` und eine maximale Laufzeit von sieben Tagen geprüft. Der eigene Cookie-Name verhindert Kollisionen mit alten `session`-Cookies und anderen Anwendungen derselben Domain. Alte generische Cookies werden weder zur Anmeldung verwendet noch beim Logout fremder Anwendungen gelöscht. Nach dieser Umstellung ist eine erneute Anmeldung nötig. Cookie-Eigenschaften: HttpOnly, SameSite=Lax, Pfad `/helpdesk`, Secure im Produktionsmodus.
 
 E-Mail, Name und Rolle werden bei jeder Anfrage aus der aktuellen Benutzerzeile gelesen. Ein gelöschtes Konto ist sofort gesperrt; eine Rollenänderung gilt sofort. Logout erhöht `session_version` und widerruft dadurch alle bestehenden Sitzungen desselben Kontos. Das Gastzugangscookie wird ebenfalls entfernt.
 
