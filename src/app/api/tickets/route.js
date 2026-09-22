@@ -169,6 +169,13 @@ async function createMessage(request) {
       }, { status: 400 });
     }
 
+    if (data.direct_submission && (typeof data.creator_name !== 'string' || !data.creator_name.trim() || data.creator_name.trim().length > 200)) {
+      return NextResponse.json({error:'Bitte deinen Namen angeben (höchstens 200 Zeichen).'}, {status:400});
+    }
+    if (data.direct_submission && sourceChat && !sourceChat.ai_enabled) {
+      db.prepare('UPDATE chats SET user_name = ?, user_email = ? WHERE id = ?').run(data.creator_name.trim(),email,sourceChat.id);
+    }
+
     // Falls der Kunde noch nicht in der Tabelle 'users' existiert (oder sein Name aktualisiert werden muss)
     if (email) {
       const userExists = db.prepare('SELECT id, name FROM users WHERE LOWER(email) = LOWER(?)').get(email);

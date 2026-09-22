@@ -88,6 +88,7 @@ export default function CustomerChatPage() {
  
   // Ticket Creation States
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [contactName, setContactName] = useState('');
   const [showConfirmTicket, setShowConfirmTicket] = useState(false);
   const [pendingTicketTitle, setPendingTicketTitle] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -554,7 +555,12 @@ export default function CustomerChatPage() {
         if (data.imageUrl) setDirectTicketPhotos(prev => [...prev,data.imageUrl]);
         const sentId = sendId.current;
         setMessages(prev => prev.map(m => m.localId === sentId ? {...m,id:data.userMessageId,imageUrl:data.imageUrl || null} : m));
-        setInputValue(''); handleDiscardPhoto(); sendId.current = null; setSendStatus('Gesendet');
+        setInputValue(''); handleDiscardPhoto(); sendId.current = null;
+        setSendStatus('Beschreibung gespeichert – das Ticket ist noch nicht eingesendet.');
+        setGuestEmail(user?.email || guestEmail);
+        setContactName(user?.name || contactName);
+        setPendingTicketTitle('Support-Anfrage');
+        setShowEmailPrompt(true);
         return true;
       } catch (err) {
         const failedId = sendId.current;
@@ -822,47 +828,10 @@ export default function CustomerChatPage() {
       if (!sent) return;
     }
 
-    setTicketCreationLoading(true);
-    const emailToUse = user ? user.email : guestEmail;
-
-    if (!emailToUse) {
-      setPendingTicketTitle('Support-Anfrage');
-      setShowEmailPrompt(true);
-      setTicketCreationLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          title: 'Support-Anfrage', 
-          creator_email: emailToUse, 
-          chat_id: chatId
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessages(prev => [...prev, {
-          sender: 'system',
-          text: `Dein Support-Ticket ${data.ticketId} wurde erfolgreich erstellt! Ein IT-Administrator wird sich darum kümmern.`,
-          isTicketUI: true,
-          ticketId: data.ticketId
-        }]);
-
-        setDirectTicketStep(0);
-        setDirectTicketTitle('');
-        setDirectTicketTexts([]);
-        setDirectTicketPhotos([]);
-        setIsChatbotDisabled(true);
-      }
-    } catch (err) {
-      console.error(err);
-      notify('Fehler beim Erstellen des Tickets.');
-    } finally {
-      setTicketCreationLoading(false);
-    }
+    setGuestEmail(user?.email || guestEmail);
+    setContactName(user?.name || contactName);
+    setPendingTicketTitle('Support-Anfrage');
+    setShowEmailPrompt(true);
   };
 
   // Chatbot Toggle Handler
@@ -889,7 +858,7 @@ export default function CustomerChatPage() {
   // Ticket als Gast erstellen (nach E-Mail-Eingabe)
   const handleCreateGuestTicket = async (e) => {
     e.preventDefault();
-    if (!guestEmail.trim()) return;
+    if (!guestEmail.trim() || (isChatbotDisabled && !contactName.trim())) return;
  
     setTicketCreationLoading(true);
     try {
@@ -898,16 +867,18 @@ export default function CustomerChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           title: pendingTicketTitle || 'Support-Anfrage', 
-          creator_email: guestEmail, 
+          ...(user ? {} : { creator_email: guestEmail.trim() }),
+          ...(isChatbotDisabled ? { creator_name: contactName.trim(), direct_submission: true } : {}), 
           chat_id: chatId
         })
       });
       
       const data = await res.json();
       setTicketCreationLoading(false);
-      setShowEmailPrompt(false);
+
  
-      if (data.success) {
+      if (res.ok && data.success) {
+        setShowEmailPrompt(false);
         setMessages(prev => [...prev, { 
           sender: 'system', 
           text: `Support-Ticket ${data.ticketId} wurde erfolgreich für ${guestEmail} erstellt! Ein IT-Administrator wird sich darum kümmern.`,
@@ -921,7 +892,8 @@ export default function CustomerChatPage() {
           setDirectTicketTitle('');
           setDirectTicketTexts([]);
           setDirectTicketPhotos([]);
-          setIsChatbotDisabled(false);
+          setIsChatbotDisabled(true);
+          setSendStatus('Ticket eingesendet. Den weiteren Verlauf findest du über den Ticket-Link.');
         } else {
           await sendSystemEventToBot(`[SYSTEM_EVENT: TICKET_CREATED: ${data.ticketId}]`);
         }
@@ -1667,7 +1639,7 @@ export default function CustomerChatPage() {
                   <div className="flex flex-col">
                     <span className="text-xs sm:text-xs font-semibold text-slate-200">KI-Support-Assistenten ausschalten</span>
                     <span className="text-xs sm:text-xs text-slate-500 hidden sm:inline">
-                      Deaktiviert die automatische KI. Du wirst direkt durch den Anlegeprozess für ein Support-Ticket geleitet.
+                      Ohne KI: 1. Problem beschreiben → 2. Kontakt prüfen und Ticket einsenden.
                     </span>
                   </div>
                 </label>
@@ -1679,11 +1651,12 @@ export default function CustomerChatPage() {
                     className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <i className="fa-solid fa-paper-plane"></i>
-                    <span>{ticketCreationLoading ? 'Sende...' : 'Ticket jetzt einsenden'}</span>
+                    <span>{ticketCreationLoading ? 'Sende...' : 'Weiter: Kontakt prüfen'}</span>
                   </button>
                 )}
               </div>
 
+              {isChatbotDisabled && <p className="max-w-4xl mx-auto w-full text-sm text-sky-200">Schritt 1 von 2: Beschreibe das betroffene Gerät oder System und den Fehler. Ein Anhang ist optional. Anschließend prüfen wir Name und E-Mail. Erst im nächsten Schritt sendest du das Ticket verbindlich ein.</p>}
               <p role="status" className="text-sm text-slate-300">{isTyping ? 'Wird gesendet …' : sendError ? 'Senden fehlgeschlagen' : sendStatus}</p>
               {sendError && <p role="alert" className="max-w-4xl mx-auto p-3 text-sm text-amber-300">{sendError}</p>}
               {selectedPhoto && !isImageAttachment(selectedPhoto.name) && <p className="text-sm text-slate-300">Diese Datei wird an den Support weitergegeben. Der Bot wertet Dokumente nicht aus.</p>}
@@ -1819,12 +1792,19 @@ export default function CustomerChatPage() {
                 <i className="fa-solid fa-circle-question text-xl"></i>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">E-Mail für IT-Ticket benötigt</h3>
-                <p className="text-xs text-slate-400">Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.</p>
+                <h3 className="text-sm font-bold text-white">{isChatbotDisabled ? 'Schritt 2 von 2: Kontakt prüfen' : 'E-Mail für IT-Ticket benötigt'}</h3>
+                <p className="text-xs text-slate-400">{isChatbotDisabled ? 'Deine Beschreibung ist gespeichert. Prüfe deine Angaben und sende das Ticket anschließend ein. Es wird keine KI verwendet.' : 'Um dein Ticket zu eröffnen, benötigen wir deine E-Mail-Adresse.'}</p>
               </div>
             </div>
 
             <div className="space-y-3">
+              {isChatbotDisabled && <>
+                <div className="max-h-40 overflow-y-auto rounded-xl bg-slate-950 p-3 text-sm whitespace-pre-wrap" aria-label="Zusammenfassung">{directTicketTexts.join('\n\n') || 'Beschreibung und Anhänge siehe Chatverlauf.'}{directTicketPhotos.length > 0 && `\nAnhänge: ${directTicketPhotos.length}`}</div>
+                <label className="block text-sm">Name
+                  <input value={contactName} onChange={e => setContactName(e.target.value)} required maxLength={200} autoComplete="name" disabled={ticketCreationLoading} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5" />
+                </label>
+              </>}
+              <label className="block text-sm">E-Mail-Adresse
               <input 
                 type="email"
                 value={guestEmail}
@@ -1832,8 +1812,10 @@ export default function CustomerChatPage() {
                 placeholder="deine.adresse@schule.de"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
                 required
+                readOnly={!!user}
                 disabled={ticketCreationLoading}
               />
+              </label>
               <div className="flex gap-2">
                 <button 
                   type="button" 
@@ -1841,7 +1823,7 @@ export default function CustomerChatPage() {
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
                   disabled={ticketCreationLoading}
                 >
-                  Abbrechen
+                  {isChatbotDisabled ? 'Zurück zur Beschreibung' : 'Abbrechen'}
                 </button>
                 <button 
                   type="submit" 
@@ -1854,7 +1836,7 @@ export default function CustomerChatPage() {
                       <span>Erstelle Ticket...</span>
                     </>
                   ) : (
-                    <span>Ticket erstellen</span>
+                    <span>{isChatbotDisabled ? 'Ticket verbindlich einsenden' : 'Ticket erstellen'}</span>
                   )}
                 </button>
               </div>
