@@ -191,3 +191,19 @@ export function isDifferentDay(d1, d2) {
     dateA.getDate() !== dateB.getDate()
   );
 }
+
+// Missing timestamps must neither create empty dividers nor reset the current day.
+export function getDateDividerIndices(messages) {
+  const days = new Set();
+  const indices = new Set();
+  messages.forEach((message, index) => {
+    if (!message.createdAt) return;
+    const date = parseUtcDate(message.createdAt);
+    if (Number.isNaN(date.getTime())) return;
+    const day = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    if (days.has(day)) return;
+    days.add(day);
+    indices.add(index);
+  });
+  return indices;
+}

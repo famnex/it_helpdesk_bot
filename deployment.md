@@ -6,7 +6,7 @@ Diese Anleitung beschreibt Schritt für Schritt, wie der IT-Helpdesk auf dem Pro
 
 ## Voraussetzungen
 Stelle sicher, dass folgende Software auf dem Server installiert ist:
-* **Node.js** (Version 18.x oder 20.x empfohlen)
+* **Node.js** (Version 22 LTS)
 * **npm** (wird mit Node geliefert)
 * **PM2** (Prozess-Manager, global installiert)
 * **Nginx** (Webserver & Reverse Proxy)
@@ -22,7 +22,7 @@ Kopiere das gesamte Projektverzeichnis (`it_helpdesk`) auf den Server in das gew
 ## Schritt 2: Abhängigkeiten installieren
 Navigiere in das Projektverzeichnis auf dem Server und installiere die node-Module:
 ```bash
-npm install
+npm ci
 ```
 *Da `better-sqlite3` native C++ Bindungen kompiliert, muss dieser Befehl zwingend auf der Zielmaschine ausgeführt werden.*
 
@@ -148,3 +148,22 @@ Vor dem ersten Start eine vollständige Sicherung von Datenbank, Uploads und Kon
 Das Update sperrt parallele Durchläufe, validiert den Branchnamen und baut in einem neuen Release mit isolierter Build-Datenbank. Erst nach erfolgreichem Build wird der Symlink atomar umgestellt und PM2 neu gestartet. Eine fehlgeschlagene Vorbereitung verändert das aktive Release nicht. Für einen manuellen Code-Rollback den Symlink auf das vorige Release umstellen und PM2 neu starten. Daten nur aus einer zusammengehörigen Sicherung wiederherstellen; vorher neue seitdem eingegangene Tickets sichern. Ein nach Prozessabbruch verbliebenes `update.lock` darf erst nach Prüfung auf einen tatsächlich noch laufenden Update-Prozess entfernt werden.
 
 Vor produktiver Freigabe Login am echten Schulportal, SMTP-Zertifikate und Versand sowie Zwischenablage unter den tatsächlich eingesetzten Browsern prüfen. Privates Wissen bleibt für Bot-Antworten verfügbar und wird weiterhin nur aus der öffentlichen Wissensliste ausgeblendet.
+
+
+## Bestehende PM2-Installation einmalig umstellen
+
+Für die Installation `/var/www/it_helpdesk` mit PM2-Prozess `it-helpdesk` (als derselbe Benutzer ausführen, der den PM2-Prozess verwaltet):
+
+```bash
+cd /var/www/it_helpdesk
+git pull --ff-only origin main
+bash scripts/setup-release.sh /var/www/it_helpdesk /srv/helpdesk it-helpdesk
+```
+
+Das Ziel `/srv/helpdesk` darf noch nicht existieren. Das Skript installiert Node 22 ausschließlich unter diesem Ziel, kopiert und baut zunächst ein eigenes Release mit einer isolierten Build-Datenbank. Erst danach stoppt es den Helpdesk kurz, kopiert Datenbank einschließlich vorhandener WAL/SHM-Dateien und beide bisherigen Uploadverzeichnisse und startet den neuen Prozess. Unterschiedliche Dateien mit gleichem Uploadpfad werden nicht überschrieben. Bei einem Fehler während der Umschaltung versucht es, die alte PM2-Konfiguration wieder zu starten. Andere PM2-Anwendungen und das systemweite Node werden nicht verändert.
+
+Der ursprüngliche Ordner bleibt unverändert als Rückfallstand bestehen. Nach erfolgreicher Umschaltung liegen neue Tickets und Dateien ausschließlich unter `/srv/helpdesk/shared`; die alte Datenbank ist dann keine aktuelle Sicherung mehr. Nach einem fehlgeschlagenen Durchlauf zuerst die Meldung und den PM2-Status prüfen; ein vorhandenes Zielverzeichnis wird nicht automatisch gelöscht oder wiederverwendet.
+
+Der stabile Starter `/srv/helpdesk/start.cjs` lädt Next bei jedem Neustart über `current`, sodass PM2 auch nach dem nächsten Update tatsächlich das neue Release startet. Ab jetzt den Update-Button verwenden; manuelle Änderungen im ursprünglichen Projektordner ändern die laufende Installation nicht mehr.
+
+Die Einrichtung wurde mit simuliertem npm/PM2 einschließlich Uploadkonflikt und Rückkehr zur alten Konfiguration geprüft. Die tatsächliche Zielserver-Umstellung ist damit nicht vorweggenommen. Benutzerdefinierte Datenpfade und interpolierte `.env`-Werte erfordern eine individuelle Übernahme; das Skript bricht in diesen Fällen ab.

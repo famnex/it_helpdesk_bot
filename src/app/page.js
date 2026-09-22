@@ -8,7 +8,7 @@ import Dialog from '@/components/Dialog';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
-import { renderMarkdownWithLinks, getDateDividerLabel, isDifferentDay, parseUtcDate } from '@/lib/formatting';
+import { renderMarkdownWithLinks, getDateDividerLabel, getDateDividerIndices, parseUtcDate } from '@/lib/formatting';
 import UserNavMenu from '@/components/UserNavMenu';
 import { getOrCreateDeviceFingerprint } from '@/lib/fingerprint';
 
@@ -955,6 +955,8 @@ export default function CustomerChatPage() {
     }
   };
  
+  const dateDividerIndices = getDateDividerIndices(messages);
+
   if (isLoadingInitialCheck) {
     return (
       <div className="min-h-screen h-[100dvh] w-full flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans p-4">
@@ -1255,8 +1257,7 @@ export default function CustomerChatPage() {
 
           {/* Nachrichten-Liste */}
           {messages.map((msg, index) => {
-            const prevMsg = index > 0 ? messages[index - 1] : null;
-            const showDateDivider = !prevMsg || isDifferentDay(msg.createdAt, prevMsg?.createdAt);
+            const showDateDivider = dateDividerIndices.has(index);
 
             if (msg.isTicketUI) {
               return (
