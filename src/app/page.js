@@ -1906,7 +1906,7 @@ export default function CustomerChatPage() {
 
       {/* DSGVO Consent Modal */}
       {showConsentModal && (
-        <Dialog title="Supportweg wählen" onClose={() => { setIsChatbotDisabled(true); setDirectTicketStep(2); setShowConsentModal(false); }}>
+        <Dialog title="Nutzungshinweis & Datenschutz (DSGVO)">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
             <div className="flex items-center gap-3 text-sky-400">
               <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
@@ -1944,7 +1944,7 @@ export default function CustomerChatPage() {
                 </span>
               </label>
               
-              <button type="button" onClick={() => { setIsChatbotDisabled(true); setDirectTicketStep(2); setShowConsentModal(false); }} className="w-full rounded-xl border border-slate-500 p-3 text-sm">Direkt an die IT schreiben · ohne KI</button>
+
               <button
                 type="button"
                 disabled={!consentCheckbox}
