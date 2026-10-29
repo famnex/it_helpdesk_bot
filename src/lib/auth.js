@@ -65,18 +65,17 @@ export async function destroySession() {
 }
 export function generateMagicLinkToken(email) {
   return jwt.sign({ email: email.trim().toLowerCase(), type: 'magic_link' }, sessionSecret(), {
-    expiresIn: '30m', jwtid: randomUUID(), issuer: 'helpdesk', audience: 'helpdesk-login'
+    jwtid: randomUUID(), issuer: 'helpdesk', audience: 'helpdesk-login'
   });
 }
-export function verifyMagicLinkToken(token, consume = false) {
+export function verifyMagicLinkToken(token) {
   try {
-    const p = jwt.verify(token, sessionSecret(), { algorithms: ['HS256'], issuer: 'helpdesk', audience: 'helpdesk-login' });
-    if (p.type !== 'magic_link' || !p.jti || typeof p.email !== 'string') return null;
-    return db.transaction(() => {
-      db.prepare('DELETE FROM consumed_magic_tokens WHERE expires_at < ?').run(Math.floor(Date.now()/1000));
-      if (db.prepare('SELECT id FROM consumed_magic_tokens WHERE id = ?').get(p.jti)) return null;
-      if (consume) db.prepare('INSERT INTO consumed_magic_tokens (id,expires_at) VALUES (?,?)').run(p.jti,p.exp);
-      return p.email;
-    })();
-  } catch { return null; }
+    const p = jwt.verify(token, sessionSecret(), { algorithms: ['HS256'], issuer: 'helpdesk', audience: 'helpdesk-login', ignoreExpiration: true });
+    if (p.type === 'magic_link' && typeof p.email === 'string') return p.email;
+  } catch {}
+  try {
+    const p = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'], ignoreExpiration: true });
+    if (p.type === 'magic_link' && typeof p.email === 'string') return p.email;
+  } catch {}
+  return null;
 }

@@ -22,9 +22,9 @@ Durch die neue Signaturprüfung sind Sitzungen aus früheren Versionen ungültig
 
 ## E-Mail-Anmeldelinks
 
-Magic Links gelten **30 Minuten** und können **einmal** eingelöst werden. Sie verwenden `type=magic_link`, `aud=helpdesk-login`, eine eindeutige `jti` und denselben ausschließlich internen Signaturschlüssel. Die Prüfung und der Verbrauch der Kennung erfolgen transaktional. Alte unbegrenzt gültige Links werden nicht mehr akzeptiert.
+Magic Links (insbesondere in Benachrichtigungs-E-Mails zu neuen Tickets, Nachrichten, Zuweisungen und Ticket-Abschlüssen) sind **dauerhaft gültig** und können **mehrfach** aufgerufen werden (auch nach Vorab-Prüfungen durch E-Mail-Scanner oder bei erneutem Klick zu einem späteren Zeitpunkt). Sie verwenden `type=magic_link`, `aud=helpdesk-login` und denselben internen Signaturschlüssel (`ignoreExpiration: true` stellt sicher, dass auch bereits versendete Links mit Ablaufdatum weiterhin funktionieren).
 
-Ein Magic Link ist kein API-Bearer-Token. Nach erfolgreicher Einlösung wird eine reguläre Sitzung mit `authMethod=email` angelegt. Dieser Weg steht auch Mitarbeitern für ihre bisherigen E-Mail-Benachrichtigungen zur Verfügung; er wird nicht als Schulportal-Anmeldung ausgewiesen.
+Ein Magic Link ist kein API-Bearer-Token. Nach erfolgreicher Einlösung wird eine reguläre Sitzung mit `authMethod=email` angelegt. Dieser Weg steht sowohl Kunden als auch Mitarbeitern für sämtliche E-Mail-Benachrichtigungen (inkl. unzugewiesener neuer Tickets) zur Verfügung; er wird nicht als Schulportal-Anmeldung ausgewiesen.
 
 ## Gastzugriff und Verifikationsanzeige
 

@@ -182,7 +182,8 @@ export async function sendAgentReplyNotification(customerEmail, ticketId, ticket
  */
 export async function sendCustomerReplyNotification(agentEmail, ticketId, ticketTitle) {
   const host = getBaseAppUrl();
-  const link = `${host}/agent/tickets/${ticketId}`;
+  const loginToken = generateMagicLinkToken(agentEmail);
+  const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/agent/tickets/${ticketId}`;
   
   const subject = `Kundenantwort zu Ticket ${ticketId}`;
   const text = `Hallo,\n\nder Kunde hat auf das Ticket "${ticketTitle}" (${ticketId}) geantwortet.\n\nKlicken Sie auf den folgenden Link, um das Ticket zu bearbeiten:\n\n${link}`;
@@ -229,26 +230,28 @@ export async function sendAssignmentNotification(agentEmail, ticketId, ticketTit
  */
 export async function sendUnassignedTicketNotification(agentEmails, ticketId, ticketTitle) {
   const host = getBaseAppUrl();
-  const link = `${host}/agent/tickets/${ticketId}`;
-  
   const subject = `Neues unzugewiesenes Ticket: ${ticketId}`;
-  const text = `Hallo,\n\nes wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:\n\n"${ticketTitle}" (${ticketId})\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen und zu übernehmen:\n\n${link}`;
-  const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333;">
-      <h2>Neues unzugewiesenes Ticket ${ticketId}</h2>
-      <p>Hallo,</p>
-      <p>es wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:</p>
-      <p style="margin: 10px 0; font-style: italic; color: #555;">
-        "${ticketTitle}"
-      </p>
-      <p style="margin: 30px 0;">
-        <a href="${link}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket ansehen & übernehmen</a>
-      </p>
-    </div>
-  `;
 
-  // Alle Agenten informieren (parallel)
-  await Promise.all((agentEmails || []).map(email => sendMail({ to: email, subject, html, text })));
+  // Alle Agenten informieren (parallel, jeweils mit eigenem dauerhaftem Login-Link)
+  await Promise.all((agentEmails || []).map(email => {
+    const loginToken = generateMagicLinkToken(email);
+    const link = `${host}/api/auth/magic?token=${loginToken}&redirect=/agent/tickets/${ticketId}`;
+    const text = `Hallo,\n\nes wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:\n\n"${ticketTitle}" (${ticketId})\n\nKlicken Sie auf den folgenden Link, um das Ticket anzusehen und zu übernehmen:\n\n${link}`;
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px; color: #333;">
+        <h2>Neues unzugewiesenes Ticket ${ticketId}</h2>
+        <p>Hallo,</p>
+        <p>es wurde ein neues Ticket erstellt, das keinem Mitarbeiter direkt zugewiesen werden konnte:</p>
+        <p style="margin: 10px 0; font-style: italic; color: #555;">
+          "${ticketTitle}"
+        </p>
+        <p style="margin: 30px 0;">
+          <a href="${link}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ticket ansehen & übernehmen</a>
+        </p>
+      </div>
+    `;
+    return sendMail({ to: email, subject, html, text });
+  }));
 }
 
 /**
