@@ -472,7 +472,7 @@ export default function AgentDashboardPage() {
           </div>
           <div>
             <h1 className="text-sm md:text-base font-bold text-white leading-tight">IT-Helpdesk Agenten-Portal</h1>
-            <p className="text-xs md:text-xs text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
+            <p className="text-[9px] md:text-[10px] text-violet-400 font-bold uppercase tracking-wider">Mitarbeiter-Bereich</p>
           </div>
         </div>
 
@@ -511,36 +511,36 @@ export default function AgentDashboardPage() {
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'active' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Aktiv</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'active' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.active}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'active' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.active}</span>
               </button>
               <button 
                 onClick={() => setFilter('unread')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'unread' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <i className="fa-solid fa-envelope text-amber-400 text-xs"></i>
+                <i className="fa-solid fa-envelope text-amber-400 text-[10px]"></i>
                 <span>Ungelesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'unread' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unread}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unread' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unread}</span>
               </button>
               <button 
                 onClick={() => setFilter('mine')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'mine' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Mir zugewiesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.mine}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.mine}</span>
               </button>
               <button 
                 onClick={() => setFilter('unassigned')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'unassigned' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Unzugewiesen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'unassigned' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unassigned}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'unassigned' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.unassigned}</span>
               </button>
               <button 
                 onClick={() => setFilter('closed')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${filter === 'closed' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 <span>Geschlossen</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filter === 'closed' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.closed}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === 'closed' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-slate-400'}`}>{ticketCounts.closed}</span>
               </button>
             </div>
 
@@ -577,9 +577,9 @@ export default function AgentDashboardPage() {
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto no-scrollbar">
               <table className="w-full text-left text-xs text-slate-300">
-                <thead className="bg-slate-950/50 text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+                <thead className="bg-slate-950/50 text-slate-400 text-[11px] font-bold uppercase border-b border-slate-800">
                   <tr>
                     <th className="px-3 sm:px-4 py-3">ID</th>
                     <th className="px-3 sm:px-4 py-3">Betreff</th>
@@ -607,11 +607,11 @@ export default function AgentDashboardPage() {
                         <td className="px-3 sm:px-4 py-2.5 font-mono text-violet-400 font-bold whitespace-nowrap">
                           {tk.id}
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 max-w-[180px] sm:max-w-xs md:max-w-md">
+                        <td className="px-3 sm:px-4 py-2.5 max-w-[180px] sm:max-w-xs md:max-w-sm lg:max-w-md">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {tk.hasUnread === 1 && tk.status !== 'closed' && (
                               <span 
-                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md text-xs font-bold shrink-0 shadow-sm"
+                                className="inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 shadow-sm"
                                 title="Ungelesene Nachrichten vorhanden"
                               >
                                 <i className="fa-solid fa-envelope text-amber-400 animate-bounce"></i>
@@ -625,19 +625,19 @@ export default function AgentDashboardPage() {
                               {tk.title}
                             </Link>
                           </div>
-                          <span className="text-xs text-slate-500 block mt-0.5">
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
                             Aktualisiert: {parseUtcDate(tk.updatedAt || tk.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr
                           </span>
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 text-slate-400 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <span className="text-slate-300 font-semibold">{tk.creatorName || tk.creatorEmail.split('@')[0]}</span>
+                        <td className="px-3 sm:px-4 py-2.5 text-slate-400 whitespace-nowrap max-w-[160px] sm:max-w-[200px] md:max-w-[240px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-slate-300 font-semibold truncate">{tk.creatorName || tk.creatorEmail.split('@')[0]}</span>
                             <VerificationBadge method={tk.creatorAuthMethod} />
                           </div>
-                          <span className="text-xs text-slate-500 block truncate">{tk.creatorEmail}</span>
+                          <span className="text-[10px] text-slate-500 block truncate">{tk.creatorEmail}</span>
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${statusClass}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}>
                             {statusLabel}
                           </span>
                         </td>
@@ -646,7 +646,7 @@ export default function AgentDashboardPage() {
                             <select
                               value={tk.assignedAgentId || ''}
                               onChange={(e) => handleQuickAssign(tk.id, e.target.value)}
-                              className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 font-medium cursor-pointer"
+                              className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 font-medium cursor-pointer"
                             >
                               <option value="">(Nicht zugewiesen)</option>
                               {agents.map((ag) => (
@@ -656,17 +656,17 @@ export default function AgentDashboardPage() {
                               ))}
                             </select>
                           ) : (
-                            <span className="text-xs text-slate-500 italic">
+                            <span className="text-[11px] text-slate-500 italic">
                               Geschlossen
                               {tk.closedByName && (
-                                <span className="block not-italic text-xs text-slate-400 font-medium">
+                                <span className="block not-italic text-[10px] text-slate-400 font-medium">
                                   von {tk.closedByName}
                                 </span>
                               )}
                             </span>
                           )}
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 text-right">
+                        <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
                           <div className="flex justify-end items-center gap-1.5">
                             {tk.status === 'closed' && (
                               <button
@@ -705,7 +705,7 @@ export default function AgentDashboardPage() {
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="bg-slate-950/60 border-t border-slate-800 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-                <div className="text-xs">
+                <div className="text-[11px]">
                   Zeige <span className="font-bold text-slate-200">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> bis <span className="font-bold text-slate-200">{Math.min(currentPage * ITEMS_PER_PAGE, filteredTickets.length)}</span> von <span className="font-bold text-slate-200">{filteredTickets.length}</span> Tickets
                 </div>
                 <div className="flex items-center gap-2">
@@ -714,10 +714,10 @@ export default function AgentDashboardPage() {
                     disabled={currentPage === 1}
                     className="bg-slate-800 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-700 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
                   >
-                    <i className="fa-solid fa-chevron-left text-xs"></i>
+                    <i className="fa-solid fa-chevron-left text-[10px]"></i>
                     <span>Zurück</span>
                   </button>
-                  <span className="px-2 text-xs font-bold text-slate-300">
+                  <span className="px-2 text-[11px] font-bold text-slate-300">
                     Seite {currentPage} von {totalPages}
                   </span>
                   <button
@@ -726,7 +726,7 @@ export default function AgentDashboardPage() {
                     className="bg-slate-800 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 border border-slate-700 px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <span>Weiter</span>
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                    <i className="fa-solid fa-chevron-right text-[10px]"></i>
                   </button>
                 </div>
               </div>
