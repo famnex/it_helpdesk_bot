@@ -10,9 +10,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   function redirectUser(role) {
-    if (role === 'admin') {
-      router.push('/admin');
-    } else if (role === 'agent') {
+    if (role === 'admin' || role === 'agent') {
       router.push('/agent');
     } else {
       router.push('/');

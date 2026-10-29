@@ -54,11 +54,9 @@ export async function GET(request) {
       schoolAffiliations: getSchoolAffiliations(decoded.groups)
     });
 
-    // Weiterleiten basierend auf der Rolle
+    // Weiterleiten basierend auf der Rolle (Admins und Agenten landen standardmäßig in der Agentenansicht)
     const host = getBaseAppUrl();
-    if (user.role === 'admin') {
-      return NextResponse.redirect(`${host}/admin`);
-    } else if (user.role === 'agent') {
+    if (user.role === 'admin' || user.role === 'agent') {
       return NextResponse.redirect(`${host}/agent`);
     } else {
       return NextResponse.redirect(`${host}/`);

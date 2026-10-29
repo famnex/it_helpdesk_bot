@@ -32,9 +32,10 @@ export async function GET(request) {
     // Session erstellen
     await createSession({ ...user, authMethod: 'email' });
 
-    // Weiterleiten zur gewünschten Seite (z.B. Ticket-Details) oder Standard-Portalseite (Chat)
-    const redirectPath = searchParams.get('redirect') || '/';
-    const safeRedirect = redirectPath.startsWith('/') && !redirectPath.startsWith('//') && !redirectPath.includes('\\') ? redirectPath : '/';
+    // Weiterleiten zur gewünschten Seite (z.B. Ticket-Details) oder Standard-Ansicht (Agentenansicht für Mitarbeiter/Admins, Chat für Kunden)
+    const defaultPath = (user.role === 'admin' || user.role === 'agent') ? '/agent' : '/';
+    const redirectPath = searchParams.get('redirect') || defaultPath;
+    const safeRedirect = redirectPath.startsWith('/') && !redirectPath.startsWith('//') && !redirectPath.includes('\\') ? redirectPath : defaultPath;
 
     const host = getBaseAppUrl();
     return NextResponse.redirect(`${host}${safeRedirect}`);
