@@ -19,6 +19,7 @@ export function migrateSecurity(db) {
     add('ticket_messages', 'chat_message_id', 'INTEGER');
     add('chats', 'guest_secret_hash', 'TEXT');
     add('tickets', 'created_by_user_id', 'TEXT');
+    add('tickets', 'last_customer_read_at', 'DATETIME');
     db.exec(`CREATE TABLE IF NOT EXISTS consumed_magic_tokens (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS private_uploads (id TEXT PRIMARY KEY, filename TEXT NOT NULL, mime TEXT NOT NULL, owner_user_id TEXT, chat_id TEXT, ticket_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS request_receipts (scope TEXT NOT NULL, request_id TEXT NOT NULL, response TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(scope, request_id));`);

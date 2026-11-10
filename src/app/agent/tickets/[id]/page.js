@@ -163,6 +163,7 @@ export default function AgentTicketDetailPage() {
           const data = await res.json();
           setIsOtherPartyTyping(!!data.isOtherPartyTyping);
           if (data.partnerPresence) setPartnerPresence(data.partnerPresence);
+          if (data.ticketMeta) setTicket(prev => prev ? { ...prev, ...data.ticketMeta } : prev);
 
           if (data.newMessages && data.newMessages.length > 0) {
             const newNumericIds = data.newMessages.map(m => typeof m.id === 'number' ? m.id : 0);
@@ -765,7 +766,7 @@ export default function AgentTicketDetailPage() {
                         />
                       </div>
                       <span className="text-xs text-slate-500 mt-1 mx-1">
-                        {isBot ? 'IT-Helpdesk-Bot' : isCustomerOrCreator ? `${msg.senderName || msg.senderEmail?.split('@')[0] || 'Kunde'} (Kunde)` : (msg.senderName || msg.senderEmail?.split('@')[0] || 'Support-Mitarbeiter')} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                        {isBot ? 'IT-Helpdesk-Bot' : isCustomerOrCreator ? `${msg.senderName || msg.senderEmail?.split('@')[0] || 'Kunde'} (Kunde)` : (msg.senderName || msg.senderEmail?.split('@')[0] || 'Support-Mitarbeiter')} - {parseUtcDate(msg.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr{isRightAligned && !isInternalMessage && !isBot && ((ticket?.lastCustomerReadAt && msg.createdAt && parseUtcDate(ticket.lastCustomerReadAt) >= parseUtcDate(msg.createdAt)) || messages.slice(index + 1).some(m => m.senderRole === 'customer') ? <span className="ml-2 inline-flex items-center gap-1 text-sky-400 font-medium" title={ticket?.lastCustomerReadAt ? `Vom Nutzer gelesen (${parseUtcDate(ticket.lastCustomerReadAt).toLocaleString('de-DE')})` : 'Vom Nutzer gelesen'}><i className="fa-solid fa-check-double text-[11px]"></i><span>Gelesen</span></span> : <span className="ml-2 inline-flex items-center gap-1 text-slate-500" title="Noch nicht vom Nutzer gelesen"><i className="fa-solid fa-check text-[11px]"></i><span>Ungelesen</span></span>)}
                       </span>
                     </div>
                   </div>

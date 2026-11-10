@@ -88,6 +88,7 @@ export async function GET(request) {
           }
 
           if (roomType === 'ticket' && roomId) {
+            if (myRole === 'customer') { try { db.prepare('UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(roomId); } catch {} }
             // Neue Ticket-Nachrichten abfragen
             const rows = db.prepare(`
               SELECT m.id, m.ticket_id as ticketId, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail,
@@ -160,6 +161,7 @@ export async function GET(request) {
             controller.enqueue(encoder.encode(eventSync));
 
           } else if (roomType === 'chat') {
+            if (myRole === 'customer' && roomId) { try { db.prepare('UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE chat_id = ?').run(roomId); } catch {} }
             const newMessages = db.prepare('SELECT id,sender,text,image_url as imageUrl,created_at as createdAt,is_flagged as isFlagged FROM chat_messages WHERE chat_id=? AND id>? ORDER BY id').all(roomId,lastMsgId);
             const linked = db.prepare('SELECT id FROM tickets WHERE chat_id=? ORDER BY created_at DESC LIMIT 1').get(roomId);
             const newTicketMessages = linked ? db.prepare('SELECT id,chat_message_id as sourceChatMessageId,sender_email as senderEmail,sender_role as senderRole,text,image_url as imageUrl,created_at as createdAt FROM ticket_messages WHERE ticket_id=? AND id>? AND is_internal=0 ORDER BY id').all(linked.id,lastTicketMsgId) : [];

@@ -28,7 +28,7 @@ export async function GET(request, { params }) {
              t.closed_by_email as closedByEmail, t.closed_by_name as closedByName,
              t.closed_by_user_id as closedByUserId, t.closed_at as closedAt,
              t.chat_id as chatId, t.is_authenticated_creator as isAuthenticatedCreator,
-             t.solution, t.created_at as createdAt, t.updated_at as updatedAt,
+             t.solution, t.last_customer_read_at as lastCustomerReadAt, t.created_at as createdAt, t.updated_at as updatedAt,
              COALESCE(cu.name, ch.user_name) as creatorName,
              t.auth_method as creatorAuthMethod, (CASE WHEN t.auth_method IN ('idp','email') THEN 1 ELSE 0 END) as isRegisteredUser
       FROM tickets t
@@ -59,6 +59,8 @@ export async function GET(request, { params }) {
     // Nachrichten laden (Kunden dürfen keine internen Vermerke sehen)
     let messages;
     if (user.role === 'customer') {
+      try { db.prepare('UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id); } catch {}
+      delete ticket.lastCustomerReadAt;
       messages = db.prepare(`
         SELECT m.id, m.chat_message_id as sourceChatMessageId, m.sender_email as senderEmail, m.sender_role as senderRole,
                m.text, m.image_url as imageUrl, m.created_at as createdAt,
@@ -137,11 +139,13 @@ async function createMessage(request, { params }) {
     if (user.role === 'agent' || user.role === 'admin') {
       db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP, last_agent_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
     } else {
-      db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+      db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP, last_customer_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
     }
 
     // E-Mail-Benachrichtigungen über den 5-Minuten-Puffer einreihen (Debouncing)
     if (user.role === 'customer') {
+      try { db.prepare('UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE id = ?').run(id); } catch {}
+      delete ticket.lastCustomerReadAt;
       if (ticket.assigned_agent_id) {
         const agent = db.prepare('SELECT email, name FROM users WHERE id = ?').get(ticket.assigned_agent_id);
         if (agent) {

@@ -68,12 +68,12 @@ export async function GET(request) {
           SELECT t.id, t.status, t.solution, t.assigned_agent_id as assignedAgentId,
                  u.name as assignedAgentName, u.email as assignedAgentEmail,
                  t.closed_at as closedAt, t.closed_by_name as closedByName,
-                 t.rating, t.rating_feedback as ratingFeedback, t.rated_at as ratedAt
+                 t.rating, t.rating_feedback as ratingFeedback, t.rated_at as ratedAt, t.last_customer_read_at as lastCustomerReadAt
           FROM tickets t
           LEFT JOIN users u ON t.assigned_agent_id = u.id
           WHERE t.id = ?
         `).get(roomId);
-        if (tRow) {
+        if (tRow) { if (!isStaff(user)) delete tRow.lastCustomerReadAt;
           ticketMeta = tRow;
         }
       } catch (e) {}
@@ -161,6 +161,9 @@ export async function GET(request) {
     }
     if (roomType === 'chat' && roomId && myRole === 'customer') {
       db.prepare("UPDATE chats SET customer_last_active_at = CURRENT_TIMESTAMP, last_active_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
+      db.prepare("UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE chat_id = ?").run(roomId);
+    } else if (roomType === 'ticket' && roomId && myRole === 'customer') {
+      db.prepare("UPDATE tickets SET last_customer_read_at = CURRENT_TIMESTAMP WHERE id = ?").run(roomId);
     }
 
     // Hilfsfunktion zum korrekten Parsen von UTC-Strings aus SQLite (verhindert 2-Stunden-Offset)

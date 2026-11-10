@@ -37,6 +37,7 @@ Speichert Support-Tickets.
 | `solution_forgotten` | BOOLEAN | DEFAULT 0 | Kennzeichnet, ob die Lösung aus der Wissensbasis entfernt wurde |
 | `solution_context` | TEXT | NULL | KI-generierte Zusammenfassung der Lösung |
 | `last_agent_read_at` | DATETIME | NULL | Zeitpunkt des letzten Lesens / Öffnens durch einen Agenten/Admin |
+| `last_customer_read_at` | DATETIME | NULL | Zeitpunkt des letzten Lesens / Öffnens durch den Kunden (Lesebestätigung für Agenten) |
 | `closed_by_email` | TEXT | NULL | E-Mail-Adresse des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
 | `closed_by_name` | TEXT | NULL | Name des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
 | `closed_by_user_id` | TEXT | NULL | User-ID des Benutzers/Agenten/Admins, der das Ticket geschlossen hat |
@@ -220,3 +221,4 @@ Speichert IP-Prüfergebnisse von ProxyCheck.io für 30 Tage, um externe API-Abfr
 - **Tabelle `proxycheck_cache` erstellt**: Intelligentes 30-Tage-Caching für ProxyCheck.io-Prüfergebnisse zur Blockade von VPNs, Proxies, TOR-Knoten und Risiko-IPs bei minimalem Kontingentverbrauch.
 - **Spalte `asn` zu `proxycheck_cache` hinzugefügt**: Speichert die Autonome Systemnummer (AS-Nummer) für schnelles Whitelisting von Netzwerken wie Apple Private Relay (Cloudflare, Fastly, Akamai).
 - **Spalten `fingerprint` zu `ip_bans` und `user_fingerprint` zu `chats` hinzugefügt**: Ermöglicht gerätespezifisches Fingerprinting und Sperren missbräuchlicher Nutzer, ohne geteilte IP-Adressen wie Apple Private Relay für andere Nutzer zu blockieren.
+- **Spalte `last_customer_read_at` zu `tickets` hinzugefügt**: Speichert den letzten Zeitpunkt, an dem der Kunde das Ticket oder den verknüpften Chat gelesen hat, um Agenten eine Lesebestätigung bei gesendeten Nachrichten anzuzeigen.
