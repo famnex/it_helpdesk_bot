@@ -4,6 +4,7 @@ import { notify } from '@/lib/feedback';
 import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment, isImageAttachment } from '@/lib/attachments';
 import AttachmentView from '@/components/AttachmentView';
 import Dialog from '@/components/Dialog';
+import CopyBubbleButton from '@/components/CopyBubbleButton';
  
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -1241,7 +1242,7 @@ export default function CustomerChatPage() {
         )}
  
         {/* Chat History */}
-        <div ref={messagesContainerRef} onLoadCapture={() => scrollToBottom()} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20">
+        <div ref={messagesContainerRef} onLoadCapture={() => scrollToBottom()} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth bg-slate-950/20 select-none">
           <div className="flex justify-center">
             <span className="text-xs sm:text-xs text-slate-500 font-bold uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-0.5 rounded-full shadow-inner">
               Verschlüsselte KI-Sitzung
@@ -1405,13 +1406,14 @@ export default function CustomerChatPage() {
                   <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}>
                     {isUser ? (
                       <div 
-                        className="bg-sky-600 text-white rounded-tr-none p-4 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed flex flex-col gap-2"
+                        data-bubble className="bg-sky-600 text-white rounded-tr-none p-4 rounded-2xl shadow-md text-sm whitespace-pre-wrap leading-relaxed flex flex-col gap-2 select-none"
                       >
                         <AttachmentView url={msg.imageUrl} name={msg.attachmentName} />
-                        {msg.text && <span>{msg.text}</span>}
+                        {msg.text && <span data-bubble-content>{msg.text}</span>}
+                        <CopyBubbleButton text={msg.text} light />
                       </div>
                     ) : (
-                      <div className={`border text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-2 ${
+                      <div data-bubble className={`border text-slate-100 rounded-tl-none p-4 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-2 select-none ${
                         isAgent 
                           ? 'bg-slate-900 border-emerald-500/30' 
                           : isSupportTeam 
@@ -1420,8 +1422,8 @@ export default function CustomerChatPage() {
                       }`}>
                         <AttachmentView url={msg.imageUrl} name={msg.attachmentName} />
                         <div 
-                          className="markdown-content"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }} 
+                          data-bubble-content className="markdown-content select-none"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }} /><CopyBubbleButton text={msg.text} /><span className="hidden"
                         />
                       </div>
                     )}

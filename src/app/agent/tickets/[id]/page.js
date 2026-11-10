@@ -1,6 +1,7 @@
 'use client';
 import { mergeConversation } from '@/lib/conversations';
 import Dialog from '@/components/Dialog';
+import CopyBubbleButton from '@/components/CopyBubbleButton';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { notify } from '@/lib/feedback';
 import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment } from '@/lib/attachments';
@@ -598,7 +599,7 @@ export default function AgentTicketDetailPage() {
           )}
 
           {/* Messages scroll list */}
-          <div onScroll={handleScroll} className="flex-grow overflow-y-auto p-6 space-y-6">
+          <div onScroll={handleScroll} className="flex-grow overflow-y-auto p-6 space-y-6 select-none">
             
             {ticket.status === 'closed' && ticket.solution && (
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 shadow-lg max-w-2xl mx-auto flex items-start gap-4 mb-2 animate-fade-in">
@@ -731,7 +732,7 @@ export default function AgentTicketDetailPage() {
                         </span>
                       )}
                       <div 
-                        className={`${isRightAligned ? (isInternalMessage ? 'bg-amber-950/40 text-amber-100 border-2 border-amber-500/50 rounded-tr-none shadow-amber-950/30' : isBot ? 'bg-slate-800/85 border border-slate-700 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                        data-bubble className={`${isRightAligned ? (isInternalMessage ? 'bg-amber-950/40 text-amber-100 border-2 border-amber-500/50 rounded-tr-none shadow-amber-950/30' : isBot ? 'bg-slate-800/85 border border-slate-700 text-slate-200 rounded-tr-none' : 'bg-violet-600 text-white rounded-tr-none') : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'} p-3.5 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-1.5 select-none`}
                       >
                         {msg.imageUrl && (
                           msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
@@ -759,8 +760,8 @@ export default function AgentTicketDetailPage() {
                           )
                         )}
                         <div 
-                          className="markdown-content"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
+                          data-bubble-content className="markdown-content select-none"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }} /><CopyBubbleButton text={msg.text} light={isRightAligned && !isInternalMessage && !isBot} /><span className="hidden"
                         />
                       </div>
                       <span className="text-xs text-slate-500 mt-1 mx-1">

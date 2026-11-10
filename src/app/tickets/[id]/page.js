@@ -2,6 +2,7 @@
 import { mergeConversation } from '@/lib/conversations';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import Dialog from '@/components/Dialog';
+import CopyBubbleButton from '@/components/CopyBubbleButton';
 import { notify } from '@/lib/feedback';
 import { attachmentError, ATTACHMENT_ACCEPT, pasteAttachment } from '@/lib/attachments';
 
@@ -466,7 +467,7 @@ export default function CustomerTicketDetailPage() {
         <main className="flex-1 flex flex-col justify-between overflow-hidden bg-slate-950/20 min-h-0 w-full">
           
           {/* Nachrichtenhistorie */}
-          <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
+          <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6 select-none">
             
             {/* Lösungsbox oben anzeigen, falls geschlossen */}
             {ticket.status === 'closed' && ticket.solution && (
@@ -680,11 +681,11 @@ export default function CustomerTicketDetailPage() {
                               : isSupportTeam 
                                 ? 'bg-slate-900 border border-violet-500/30 text-slate-200 rounded-tl-none' 
                                 : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                        } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed`}
+                        } p-3.5 rounded-2xl shadow-md text-sm leading-relaxed flex flex-col gap-1.5 select-none`} data-bubble
                       >
                         <div 
-                          className="markdown-content"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }}
+                          data-bubble-content className="markdown-content select-none"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownWithLinks(msg.text || '') }} /><CopyBubbleButton text={msg.text} light={isMyMessage} /><span className="hidden"
                         />
                         {msg.imageUrl && (
                           msg.imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i) || msg.imageUrl.startsWith('data:image/') ? (
